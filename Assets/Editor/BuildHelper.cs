@@ -18,7 +18,7 @@ using System.Xml;
 public class BuildHelper
 {
     /// <summary>
-    /// ¹¤³ÌÄ¿Â¼Â·¾¶£¬AssetsÉÏÒ»²ã
+    /// å·¥ç¨‹ç›®å½•è·¯å¾„ï¼ŒAssetsä¸Šä¸€å±‚
     /// </summary>
     public static string ProjectPath = Application.dataPath.Replace("Assets", "");
 
@@ -30,12 +30,12 @@ public class BuildHelper
 
     public static string HotUpdateDllPath = string.Format("{0}HotUpdateDll/", HotUpdateAssetsPath);
     /// <summary>
-    /// °æ±¾ÎÄ¼şÃû
+    /// ç‰ˆæœ¬æ–‡ä»¶å
     /// </summary>
     public static string VersionFileName = "/VERSION.txt";
 
     /// <summary>
-    /// ÈÈ¸üĞÂÅäÖÃµÄGroupÃû³Æ£¬ÓÃÀ´²éÕÒÈÈ¸üĞÂdll´æ·ÅÎ»ÖÃ
+    /// çƒ­æ›´æ–°é…ç½®çš„Groupåç§°ï¼Œç”¨æ¥æŸ¥æ‰¾çƒ­æ›´æ–°dllå­˜æ”¾ä½ç½®
     /// </summary>
     public static string HotFixDllGroupName = "HotUpdateDll";
 
@@ -54,10 +54,10 @@ public class BuildHelper
         return names.ToArray();
     }
 
-    [MenuItem("ÕûºÏ¹¤¾ß/´òAPK°ü")]
+    [MenuItem("æ•´åˆå·¥å…·/æ‰“APKåŒ…")]
     public static void BuildAPK()
     {
-        //ÏÈÉú³ÉAOTÎÄ¼ş£¬ÔÙ½øĞĞ´ò°ü£¬ÒÔÈ·±£ËùÓĞÒıÓÃ¿â¶¼±»ÒıÓÃ,·ÏÆú£¬ÒòHybridCLR»áĞŞ¸Ä¹¹½¨¹ÜÏß£¬×Ô¶¯Ö´ĞĞÒ»´ÎGenerateALL
+        //å…ˆç”ŸæˆAOTæ–‡ä»¶ï¼Œå†è¿›è¡Œæ‰“åŒ…ï¼Œä»¥ç¡®ä¿æ‰€æœ‰å¼•ç”¨åº“éƒ½è¢«å¼•ç”¨,åºŸå¼ƒï¼Œå› HybridCLRä¼šä¿®æ”¹æ„å»ºç®¡çº¿ï¼Œè‡ªåŠ¨æ‰§è¡Œä¸€æ¬¡GenerateALL
         PrebuildCommand.GenerateAll();
 
         BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions();
@@ -77,131 +77,131 @@ public class BuildHelper
         buildPlayerOptions.locationPathName = buildPath;
         buildPlayerOptions.target = buildTarget;
         buildPlayerOptions.options = BuildOptions.None;
-        //Ö´ĞĞ´ò°ü ³¡¾°Ãû×Ö£¬´ò°üÂ·¾¶
+        //æ‰§è¡Œæ‰“åŒ… åœºæ™¯åå­—ï¼Œæ‰“åŒ…è·¯å¾„
         BuildPipeline.BuildPlayer(buildPlayerOptions);
 
         EditorUtility.ClearProgressBar();
     }
-    [MenuItem("ÕûºÏ¹¤¾ß/´ò³õÊ¼AB°ü")]
-    public static void BuildOriginAssetBundle()
-    {
-        #region »ñÈ¡×ÊÔ´°æ±¾
-        CreateVersionFile();
-        var versionString = File.ReadAllText(Application.streamingAssetsPath + VersionFileName);
-        //var versionStringArray = versionString.Split(".");
-        //var version = int.Parse(String.Join("", versionStringArray));
-
-        #endregion
-
-        #region ´ò°üDLL²¢ÖØÃüÃû,·ÅÈëÈÈ¸üĞÂÎÄ¼ş¼Ğ×÷ÎªRawFile´ò°ü
-        GenerateAOTDllListFile();
-        BuildAndCopyHotUpdateDll();
-        #endregion
-
-        #region 
-        //version++;
-        string defaultOutputRoot = AssetBundleBuilderHelper.GetDefaultOutputRoot();
-        BuildParameters buildParameters = new BuildParameters();
-        buildParameters.OutputRoot = defaultOutputRoot;
-        buildParameters.BuildTarget = EditorUserBuildSettings.activeBuildTarget;
-        buildParameters.BuildPipeline = AssetBundleBuilderSettingData.Setting.BuildPipeline;
-        buildParameters.BuildMode = EBuildMode.ForceRebuild;
-        buildParameters.PackageName = AssetBundleBuilderSettingData.Setting.BuildPackage;
-
-        //versionString = version + "";
-        //var length = versionString.Length * 2 - 1;
-        //for (int i = 1; i < length; i += 2)
-        //{
-        //    versionString = versionString.Insert(i, ".");
-        //}
-
-        buildParameters.PackageVersion = versionString;
-        buildParameters.VerifyBuildingResult = true;
-        buildParameters.ShareAssetPackRule = new DefaultShareAssetPackRule();
-        var esct = GetEncryptionServicesClassTypes();
-        buildParameters.EncryptionServices = (IEncryptionServices)Activator.CreateInstance(esct[0]);
-        buildParameters.CompressOption = AssetBundleBuilderSettingData.Setting.CompressOption;
-        buildParameters.OutputNameStyle = AssetBundleBuilderSettingData.Setting.OutputNameStyle;
-        buildParameters.CopyBuildinFileOption = AssetBundleBuilderSettingData.Setting.CopyBuildinFileOption;
-        buildParameters.CopyBuildinFileTags = AssetBundleBuilderSettingData.Setting.CopyBuildinFileTags;
-        if (AssetBundleBuilderSettingData.Setting.BuildPipeline == EBuildPipeline.BuiltinBuildPipeline)
-        {
-            buildParameters.SBPParameters = new BuildParameters.SBPBuildParameters();
-            buildParameters.SBPParameters.WriteLinkXML = true;
-        }
-
-        var builder = new AssetBundleBuilder();
-        var buildResult = builder.Run(buildParameters);
-        if (buildResult.Success)
-        {
-            File.WriteAllText(Application.streamingAssetsPath + VersionFileName, versionString);
-            Debug.Log("³õÊ¼AB°ü´òÍê");
-            EditorUtility.RevealInFinder(buildResult.OutputPackageDirectory);
-        }
-        #endregion
-    }
-    [MenuItem("ÕûºÏ¹¤¾ß/´òÔöÁ¿AB°ü")]
-    public static void BuildIncreasinglyAssetBundle()
-    {
-        #region »ñÈ¡×ÊÔ´°æ±¾
-        var versionString = File.ReadAllText(Application.streamingAssetsPath + VersionFileName);
-        var versionStringArray = versionString.Split(".");
-        var version = int.Parse(String.Join("", versionStringArray));
-
-        #endregion
-
-        #region ´ò°üDLL²¢ÖØÃüÃû,·ÅÈëÈÈ¸üĞÂÎÄ¼ş¼Ğ×÷ÎªRawFile´ò°ü
-        //GenerateAOTDllListFile();
-        BuildAndCopyHotUpdateDll();
-        #endregion
-
-        #region 
-        version++;
-        string defaultOutputRoot = AssetBundleBuilderHelper.GetDefaultOutputRoot();
-        BuildParameters buildParameters = new BuildParameters();
-        buildParameters.OutputRoot = defaultOutputRoot;
-        buildParameters.BuildTarget = EditorUserBuildSettings.activeBuildTarget;
-        buildParameters.BuildPipeline = AssetBundleBuilderSettingData.Setting.BuildPipeline;
-        buildParameters.BuildMode = EBuildMode.IncrementalBuild;
-        buildParameters.PackageName = AssetBundleBuilderSettingData.Setting.BuildPackage;
-
-        versionString = version + "";
-        var length = versionString.Length * 2 - 1;
-        for (int i = 1; i < length; i += 2)
-        {
-            versionString = versionString.Insert(i, ".");
-        }
-
-        buildParameters.PackageVersion = versionString;
-        buildParameters.VerifyBuildingResult = true;
-        buildParameters.ShareAssetPackRule = new DefaultShareAssetPackRule();
-        var esct = GetEncryptionServicesClassTypes();
-        buildParameters.EncryptionServices = (IEncryptionServices)Activator.CreateInstance(esct[0]);
-        buildParameters.CompressOption = AssetBundleBuilderSettingData.Setting.CompressOption;
-        buildParameters.OutputNameStyle = AssetBundleBuilderSettingData.Setting.OutputNameStyle;
-        buildParameters.CopyBuildinFileOption = AssetBundleBuilderSettingData.Setting.CopyBuildinFileOption;
-        buildParameters.CopyBuildinFileTags = AssetBundleBuilderSettingData.Setting.CopyBuildinFileTags;
-
-        if (AssetBundleBuilderSettingData.Setting.BuildPipeline == EBuildPipeline.ScriptableBuildPipeline)
-        {
-            buildParameters.SBPParameters = new BuildParameters.SBPBuildParameters();
-            buildParameters.SBPParameters.WriteLinkXML = true;
-        }
-
-        var builder = new AssetBundleBuilder();
-        var buildResult = builder.Run(buildParameters);
-        if (buildResult.Success)
-        {
-            File.WriteAllText(Application.streamingAssetsPath + VersionFileName, versionString);
-            Debug.Log("ÔöÁ¿AB°ü´òÍê");
-            EditorUtility.RevealInFinder(buildResult.OutputPackageDirectory);
-        }
-        #endregion
-    }
-    [MenuItem("ÕûºÏ¹¤¾ß/Éú³ÉAOT²¹³äÎÄ¼ş²¢¸´ÖÆ½øÎÄ¼ş¼Ğ")]
+    // [MenuItem("æ•´åˆå·¥å…·/æ‰“åˆå§‹ABåŒ…")]
+    // public static void BuildOriginAssetBundle()
+    // {
+    //     #region è·å–èµ„æºç‰ˆæœ¬
+    //     CreateVersionFile();
+    //     var versionString = File.ReadAllText(Application.streamingAssetsPath + VersionFileName);
+    //     //var versionStringArray = versionString.Split(".");
+    //     //var version = int.Parse(String.Join("", versionStringArray));
+    //
+    //     #endregion
+    //
+    //     #region æ‰“åŒ…DLLå¹¶é‡å‘½å,æ”¾å…¥çƒ­æ›´æ–°æ–‡ä»¶å¤¹ä½œä¸ºRawFileæ‰“åŒ…
+    //     GenerateAOTDllListFile();
+    //     BuildAndCopyHotUpdateDll();
+    //     #endregion
+    //
+    //     #region 
+    //     //version++;
+    //     string defaultOutputRoot = AssetBundleBuilderHelper.GetDefaultBuildOutputRoot();
+    //     BuildParameters buildParameters = new ScriptableBuildParameters();
+    //     buildParameters.BuildOutputRoot = defaultOutputRoot;
+    //     buildParameters.BuildTarget = EditorUserBuildSettings.activeBuildTarget;
+    //     buildParameters.BuildPipeline = AssetBundleBuilderSetting.GetPackageBuildPipeline();
+    //     buildParameters.BuildMode = EBuildMode.ForceRebuild;
+    //     buildParameters.PackageName = AssetBundleBuilderSettingData.Setting.BuildPackage;
+    //
+    //     //versionString = version + "";
+    //     //var length = versionString.Length * 2 - 1;
+    //     //for (int i = 1; i < length; i += 2)
+    //     //{
+    //     //    versionString = versionString.Insert(i, ".");
+    //     //}
+    //
+    //     buildParameters.PackageVersion = versionString;
+    //     buildParameters.VerifyBuildingResult = true;
+    //     buildParameters.ShareAssetPackRule = new DefaultShareAssetPackRule();
+    //     var esct = GetEncryptionServicesClassTypes();
+    //     buildParameters.EncryptionServices = (IEncryptionServices)Activator.CreateInstance(esct[0]);
+    //     buildParameters.CompressOption = AssetBundleBuilderSettingData.Setting.CompressOption;
+    //     buildParameters.OutputNameStyle = AssetBundleBuilderSettingData.Setting.OutputNameStyle;
+    //     buildParameters.CopyBuildinFileOption = AssetBundleBuilderSettingData.Setting.CopyBuildinFileOption;
+    //     buildParameters.CopyBuildinFileTags = AssetBundleBuilderSettingData.Setting.CopyBuildinFileTags;
+    //     if (AssetBundleBuilderSettingData.Setting.BuildPipeline == EBuildPipeline.BuiltinBuildPipeline)
+    //     {
+    //         buildParameters.SBPParameters = new BuildParameters.SBPBuildParameters();
+    //         buildParameters.SBPParameters.WriteLinkXML = true;
+    //     }
+    //
+    //     var builder = new AssetBundleBuilder();
+    //     var buildResult = builder.Run(buildParameters);
+    //     if (buildResult.Success)
+    //     {
+    //         File.WriteAllText(Application.streamingAssetsPath + VersionFileName, versionString);
+    //         Debug.Log("åˆå§‹ABåŒ…æ‰“å®Œ");
+    //         EditorUtility.RevealInFinder(buildResult.OutputPackageDirectory);
+    //     }
+    //     #endregion
+    // }
+    // [MenuItem("æ•´åˆå·¥å…·/æ‰“å¢é‡ABåŒ…")]
+    // public static void BuildIncreasinglyAssetBundle()
+    // {
+    //     #region è·å–èµ„æºç‰ˆæœ¬
+    //     var versionString = File.ReadAllText(Application.streamingAssetsPath + VersionFileName);
+    //     var versionStringArray = versionString.Split(".");
+    //     var version = int.Parse(String.Join("", versionStringArray));
+    //
+    //     #endregion
+    //
+    //     #region æ‰“åŒ…DLLå¹¶é‡å‘½å,æ”¾å…¥çƒ­æ›´æ–°æ–‡ä»¶å¤¹ä½œä¸ºRawFileæ‰“åŒ…
+    //     //GenerateAOTDllListFile();
+    //     BuildAndCopyHotUpdateDll();
+    //     #endregion
+    //
+    //     #region 
+    //     version++;
+    //     string defaultOutputRoot = AssetBundleBuilderHelper.GetDefaultOutputRoot();
+    //     BuildParameters buildParameters = new BuildParameters();
+    //     buildParameters.OutputRoot = defaultOutputRoot;
+    //     buildParameters.BuildTarget = EditorUserBuildSettings.activeBuildTarget;
+    //     buildParameters.BuildPipeline = AssetBundleBuilderSettingData.Setting.BuildPipeline;
+    //     buildParameters.BuildMode = EBuildMode.IncrementalBuild;
+    //     buildParameters.PackageName = AssetBundleBuilderSettingData.Setting.BuildPackage;
+    //
+    //     versionString = version + "";
+    //     var length = versionString.Length * 2 - 1;
+    //     for (int i = 1; i < length; i += 2)
+    //     {
+    //         versionString = versionString.Insert(i, ".");
+    //     }
+    //
+    //     buildParameters.PackageVersion = versionString;
+    //     buildParameters.VerifyBuildingResult = true;
+    //     buildParameters.ShareAssetPackRule = new DefaultShareAssetPackRule();
+    //     var esct = GetEncryptionServicesClassTypes();
+    //     buildParameters.EncryptionServices = (IEncryptionServices)Activator.CreateInstance(esct[0]);
+    //     buildParameters.CompressOption = AssetBundleBuilderSettingData.Setting.CompressOption;
+    //     buildParameters.OutputNameStyle = AssetBundleBuilderSettingData.Setting.OutputNameStyle;
+    //     buildParameters.CopyBuildinFileOption = AssetBundleBuilderSettingData.Setting.CopyBuildinFileOption;
+    //     buildParameters.CopyBuildinFileTags = AssetBundleBuilderSettingData.Setting.CopyBuildinFileTags;
+    //
+    //     if (AssetBundleBuilderSettingData.Setting.BuildPipeline == EBuildPipeline.ScriptableBuildPipeline)
+    //     {
+    //         buildParameters.SBPParameters = new BuildParameters.SBPBuildParameters();
+    //         buildParameters.SBPParameters.WriteLinkXML = true;
+    //     }
+    //
+    //     var builder = new AssetBundleBuilder();
+    //     var buildResult = builder.Run(buildParameters);
+    //     if (buildResult.Success)
+    //     {
+    //         File.WriteAllText(Application.streamingAssetsPath + VersionFileName, versionString);
+    //         Debug.Log("å¢é‡ABåŒ…æ‰“å®Œ");
+    //         EditorUtility.RevealInFinder(buildResult.OutputPackageDirectory);
+    //     }
+    //     #endregion
+    // }
+    [MenuItem("æ•´åˆå·¥å…·/ç”ŸæˆAOTè¡¥å……æ–‡ä»¶å¹¶å¤åˆ¶è¿›æ–‡ä»¶å¤¹")]
     public static void GenerateAOTDllListFile()
     {
-        //ÏÈÉú³ÉAOTÎÄ¼ş£¬ÔÙ½øĞĞ´ò°ü£¬ÒÔÈ·±£ËùÓĞÒıÓÃ¿â¶¼±»ÒıÓÃ
+        //å…ˆç”ŸæˆAOTæ–‡ä»¶ï¼Œå†è¿›è¡Œæ‰“åŒ…ï¼Œä»¥ç¡®ä¿æ‰€æœ‰å¼•ç”¨åº“éƒ½è¢«å¼•ç”¨
         PrebuildCommand.GenerateAll();
 
         List<string> dllNames = new List<string>();
@@ -242,7 +242,7 @@ public class BuildHelper
             var dllPath = dllExportPath + "/" + dllName;
             if (!File.Exists(dllPath))
             {
-                Debug.Log($"{dllName}²»´æÔÚ");
+                Debug.Log($"{dllName}ä¸å­˜åœ¨");
                 continue;
             }
             var dllData = File.ReadAllBytes(dllPath);
@@ -257,9 +257,9 @@ public class BuildHelper
 
         File.WriteAllText($"{path}/AOTDLLList.txt", json);
         AssetDatabase.Refresh();
-        Debug.Log("AOT²¹³äÎÄ¼şÉú³ÉÍê±Ï");
+        Debug.Log("AOTè¡¥å……æ–‡ä»¶ç”Ÿæˆå®Œæ¯•");
     }
-    [MenuItem("ÕûºÏ¹¤¾ß/Éú³ÉÈÈ¸üĞÂDll²¢¸´ÖÆ½øÎÄ¼ş¼Ğ")]
+    [MenuItem("æ•´åˆå·¥å…·/ç”Ÿæˆçƒ­æ›´æ–°Dllå¹¶å¤åˆ¶è¿›æ–‡ä»¶å¤¹")]
     public static void BuildAndCopyHotUpdateDll()
     {
         List<string> dllNames = new List<string>();
@@ -289,7 +289,7 @@ public class BuildHelper
             var dllPath = dllExportPath + "/" + dllName;
             if (!File.Exists(dllPath))
             {
-                Debug.Log($"{dllName}²»´æÔÚ");
+                Debug.Log($"{dllName}ä¸å­˜åœ¨");
                 continue;
             }
             var dllData = File.ReadAllBytes(dllPath);
@@ -317,14 +317,14 @@ public class BuildHelper
             File.WriteAllBytes(dllPath, dllDatas[dllName]);
         }
         AssetDatabase.Refresh();
-        Debug.Log("Éú³ÉÈÈ¸üĞÂDll³É¹¦");
+        Debug.Log("ç”Ÿæˆçƒ­æ›´æ–°DllæˆåŠŸ");
     }
     private static List<Type> GetEncryptionServicesClassTypes()
     {
         return EditorTools.GetAssignableTypes(typeof(IEncryptionServices));
     }
 
-    //[MenuItem("ÕûºÏ¹¤¾ß/É¾³ı±¾µØÉ³ºĞÎÄ¼ş¼Ğ")]
+    //[MenuItem("æ•´åˆå·¥å…·/åˆ é™¤æœ¬åœ°æ²™ç›’æ–‡ä»¶å¤¹")]
     public static void DeleteSandBoxDirectory()
     {
         var path = $"{ProjectPath}/SandBox";
@@ -332,24 +332,24 @@ public class BuildHelper
         {
             Directory.Delete(path, true);
         }
-        Debug.Log("É³ºĞÎÄ¼ş¼ĞÉ¾³ı³É¹¦");
+        Debug.Log("æ²™ç›’æ–‡ä»¶å¤¹åˆ é™¤æˆåŠŸ");
     }
-    [MenuItem("ÕûºÏ¹¤¾ß/É¾³ı±¾µØAB°üÊı¾İ²¢ÖØĞÂ´´½¨°æ±¾ÎÄ¼ş")]
+    [MenuItem("æ•´åˆå·¥å…·/åˆ é™¤æœ¬åœ°ABåŒ…æ•°æ®å¹¶é‡æ–°åˆ›å»ºç‰ˆæœ¬æ–‡ä»¶")]
     public static void DeleteAssetBundlesDataAndVersionFile()
     {
         DeleteSandBoxDirectory();
         CreateVersionFile();
     }
 
-    [MenuItem("ÕûºÏ¹¤¾ß/´´½¨°æ±¾ÎÄ¼ş")]
+    [MenuItem("æ•´åˆå·¥å…·/åˆ›å»ºç‰ˆæœ¬æ–‡ä»¶")]
     public static void CreateVersionFile()
     {
         string version = "1.0.0";
         File.WriteAllText(Application.streamingAssetsPath + VersionFileName, version);
-        Debug.Log("´´½¨°æ±¾ÎÄ¼şÍê³É£¬µ±Ç°°æ±¾Îª:" + version);
+        Debug.Log("åˆ›å»ºç‰ˆæœ¬æ–‡ä»¶å®Œæˆï¼Œå½“å‰ç‰ˆæœ¬ä¸º:" + version);
     }
 
-    [MenuItem("ÕûºÏ¹¤¾ß/²¹È«ÈÈ¸üĞÂÔ¤ÖÆÌåÒÀÀµ")]
+    [MenuItem("æ•´åˆå·¥å…·/è¡¥å…¨çƒ­æ›´æ–°é¢„åˆ¶ä½“ä¾èµ–")]
     public static void SupplementPrefabDependent()
     {
         EditorUtility.DisplayProgressBar("Progress", "Find Class...", 0);
@@ -357,14 +357,14 @@ public class BuildHelper
         var asstIds = AssetDatabase.FindAssets("t:Prefab", dirs);
         var count = 0;
         Dictionary<string, List<string>> increasinglyAssemblyDic = new Dictionary<string, List<string>>();
-        //±éÀúËùÓĞÔ¤ÖÆÌå
+        //éå†æ‰€æœ‰é¢„åˆ¶ä½“
         for (int i = 0; i < asstIds.Length; i++)
         {
             string path = AssetDatabase.GUIDToAssetPath(asstIds[i]);
             var pfb = AssetDatabase.LoadAssetAtPath<GameObject>(path);
 
             var coms = pfb.GetComponentsInChildren<Component>();
-            //±éÀúÔ¤ÖÆÌåËùÓĞ×é¼ş
+            //éå†é¢„åˆ¶ä½“æ‰€æœ‰ç»„ä»¶
             foreach (var com in coms)
             {
                 var type = com.GetType();
@@ -382,7 +382,7 @@ public class BuildHelper
                         increasinglyAssemblyDic[assemblyName.Name].Add(typeName);
                     }
                     var properties = type.GetProperties();
-                    //»ñÈ¡×é¼şµÄÊôĞÔ£¬Èç¹ûÊôĞÔÊÇUnity¶ÔÏó£¬ÔòÔÙ»ñÈ¡Ò»´ÎÊôĞÔ
+                    //è·å–ç»„ä»¶çš„å±æ€§ï¼Œå¦‚æœå±æ€§æ˜¯Unityå¯¹è±¡ï¼Œåˆ™å†è·å–ä¸€æ¬¡å±æ€§
                     foreach (var propertyInfo in properties)
                     {
                         var propertyInfoAssemblyName = propertyInfo.PropertyType.Assembly.GetName().Name;
@@ -400,7 +400,7 @@ public class BuildHelper
                         }
                         if (propertyInfo.PropertyType.BaseType == typeof(UnityEngine.Object))
                         {
-                            //ÎªÁËÈ·±£´ó²¿·ÖÀà¶¼±»»ñÈ¡µ½£¬Ö±½Ó»ñÈ¡×é¼şµÄÊôĞÔÀà
+                            //ä¸ºäº†ç¡®ä¿å¤§éƒ¨åˆ†ç±»éƒ½è¢«è·å–åˆ°ï¼Œç›´æ¥è·å–ç»„ä»¶çš„å±æ€§ç±»
                             foreach (var property in propertyInfo.PropertyType.GetProperties())
                             {
                                 var propertyType = property.PropertyType.GetType();
@@ -524,7 +524,7 @@ public class BuildHelper
             }
         }
     }
-    //[MenuItem("ÕûºÏ¹¤¾ß/¶ÁÈ¡XML²âÊÔ")]
+    //[MenuItem("æ•´åˆå·¥å…·/è¯»å–XMLæµ‹è¯•")]
     public static void ReadXML()
     {
         string filePath = @$"{Application.dataPath}\HybridCLRData\Generated\link.xml";
@@ -563,7 +563,7 @@ public class BuildHelper
         xml.Save($"{Application.dataPath}/Test.xml");
         AssetDatabase.Refresh();
     }
-    //[MenuItem("ÕûºÏ¹¤¾ß/¶ÁÈ¡Ô¤ÖÆÌå²âÊÔ")]
+    //[MenuItem("æ•´åˆå·¥å…·/è¯»å–é¢„åˆ¶ä½“æµ‹è¯•")]
     public static void ReadPrefabs()
     {
         EditorUtility.DisplayProgressBar("Progress", "Find Class...", 0);
@@ -621,6 +621,6 @@ public class BuildHelper
             classList[i] = string.Format("<type fullname=\"{0}\" preserve=\"all\"/>", classList[i]);
         }
         EditorUtility.ClearProgressBar();
-        Debug.Log("Íê³É¶ÁÈ¡Ô¤ÖÆÌå");
+        Debug.Log("å®Œæˆè¯»å–é¢„åˆ¶ä½“");
     }
 }

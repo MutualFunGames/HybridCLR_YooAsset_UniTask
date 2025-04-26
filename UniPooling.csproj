@@ -287,6 +287,9 @@
      <Reference Include="UnityEditor.Graphs">
      <HintPath>E:\Unity\Unity.3.24f1c2\2021.3.5f1c1\Editor\Data\Managed\UnityEditor.Graphs.dll</HintPath>
      </Reference>
+     <Reference Include="UnityEditor.WebGL.Extensions">
+     <HintPath>E:\Unity\Unity.3.24f1c2\2021.3.5f1c1\Editor\Data\PlaybackEngines\WebGLSupport\UnityEditor.WebGL.Extensions.dll</HintPath>
+     </Reference>
      <Reference Include="UnityEditor.OSXStandalone.Extensions">
      <HintPath>E:\Unity\Unity.3.24f1c2\2021.3.5f1c1\Editor\Data\PlaybackEngines\MacStandaloneSupport\UnityEditor.OSXStandalone.Extensions.dll</HintPath>
      </Reference>
@@ -302,20 +305,8 @@
      <Reference Include="LZ4">
      <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\PackageCache\com.focus-creative-games.hybridclr_unity@07b52bed05\Plugins\LZ4.dll</HintPath>
      </Reference>
-     <Reference Include="Unity.VisualScripting.YamlDotNet">
-     <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\PackageCache\com.unity.visualscripting@1.8.0\Editor\VisualScripting.Core\Dependencies\YamlDotNet\Unity.VisualScripting.YamlDotNet.dll</HintPath>
-     </Reference>
-     <Reference Include="Unity.VisualScripting.TextureAssets">
-     <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\PackageCache\com.unity.visualscripting@1.8.0\Editor\VisualScripting.Core\EditorAssetResources\Unity.VisualScripting.TextureAssets.dll</HintPath>
-     </Reference>
-     <Reference Include="Unity.VisualScripting.IonicZip">
-     <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\PackageCache\com.unity.visualscripting@1.8.0\Editor\VisualScripting.Core\Dependencies\DotNetZip\Unity.VisualScripting.IonicZip.dll</HintPath>
-     </Reference>
      <Reference Include="dnlib">
      <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\PackageCache\com.focus-creative-games.hybridclr_unity@07b52bed05\Plugins\dnlib.dll</HintPath>
-     </Reference>
-     <Reference Include="Unity.VisualScripting.Antlr3.Runtime">
-     <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\PackageCache\com.unity.visualscripting@1.8.0\Runtime\VisualScripting.Flow\Dependencies\NCalc\Unity.VisualScripting.Antlr3.Runtime.dll</HintPath>
      </Reference>
      <Reference Include="ReportGeneratorMerged">
      <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\PackageCache\com.unity.testtools.codecoverage@1.0.1\lib\ReportGenerator\ReportGeneratorMerged.dll</HintPath>
