@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using Cysharp.Threading.Tasks;
 using UnityEngine.UI;
-using UnityEngine.Networking;
 using System.Threading;
 using System;
 using YooAsset;

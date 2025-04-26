@@ -9,7 +9,7 @@ using UnityEngine;
 public static class SceneHelper
 {
     public static string StartSceneName = "StartScene";
-    public const string MenuName = "整合工具/场景管理/自动运行初始场景";
+    public const string MenuName = "鏁村悎宸ュ叿/鍦烘櫙绠＄悊/鑷姩杩愯鍒濆鍦烘櫙";
     static SceneHelper()
     {
         EditorApplication.playModeStateChanged += OnPlayerModeStateChanged;
