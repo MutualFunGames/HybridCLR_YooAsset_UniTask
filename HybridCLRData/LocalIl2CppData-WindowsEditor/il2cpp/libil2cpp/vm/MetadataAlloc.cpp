@@ -69,5 +69,10 @@ namespace vm
     {
         return (Il2CppGenericMethod*)s_GenericMethodMemoryPool->Calloc(1, sizeof(Il2CppGenericMethod));
     }
+
+    bool MetadataContains(const void* data)
+    {
+        return s_MetadataMemoryPool->Contains(data);
+    }
 }
 }

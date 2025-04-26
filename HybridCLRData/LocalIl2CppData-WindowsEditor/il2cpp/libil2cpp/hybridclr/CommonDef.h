@@ -6,9 +6,11 @@
 
 #include "Il2CppCompatibleDef.h"
 
-#include "codegen/il2cpp-codegen.h"
 #include "utils/Memory.h"
 #include "utils/StringView.h"
+#include "utils/Il2CppHashSet.h"
+#include "utils/Il2CppHashMap.h"
+#include "utils/HashUtils.h"
 #include "vm/GlobalMetadataFileInternals.h"
 #include "vm/Exception.h"
 #include "vm/Class.h"
@@ -72,8 +74,7 @@ namespace hybridclr
 
 	inline std::string GetKlassCStringFullName(const Il2CppType* type)
 	{
-		Il2CppString* typeName = GetKlassFullName(type);
-		return il2cpp::utils::StringUtils::Utf16ToUtf8(typeName->chars);
+		return GetKlassFullName2(type);
 	}
 
 	inline void RaiseNotSupportedException(const char* msg)

@@ -8,7 +8,7 @@
 // any given point in time. Tokens submitted that exceed this value may silently be discarded.
 static const int64_t Baselib_HighCapacitySemaphore_MaxGuaranteedCount = UINT64_C(1) << 61;
 
-#if PLATFORM_FUTEX_NATIVE_SUPPORT
+#if PLATFORM_HAS_NATIVE_FUTEX
 #include "Internal/Baselib_HighCapacitySemaphore_FutexBased.inl.h"
 #else
 #include "Internal/Baselib_HighCapacitySemaphore_SemaphoreBased.inl.h"
@@ -34,7 +34,22 @@ BASELIB_INLINE_API void Baselib_HighCapacitySemaphore_Acquire(Baselib_HighCapaci
 // When successful this function is guaranteed to emit an acquire barrier.
 //
 // \returns          true if token was consumed. false if not.
-BASELIB_INLINE_API bool Baselib_HighCapacitySemaphore_TryAcquire(Baselib_HighCapacitySemaphore* semaphore);
+COMPILER_WARN_UNUSED_RESULT
+BASELIB_FORCEINLINE_API bool Baselib_HighCapacitySemaphore_TryAcquire(Baselib_HighCapacitySemaphore* semaphore)
+{
+    return Baselib_HighCapacitySemaphore_TrySpinAcquire(semaphore, 0);
+}
+
+// Try to consume a token.
+//
+// When successful this function is guaranteed to emit an acquire barrier.
+//
+// \param maxSpinCount  Max number of times to spin in user space before falling back to the kernel. The actual number
+//                      may differ depending on the underlying implementation but will never exceed the maxSpinCount
+//                      value.
+// \returns          true if token was consumed. false if not.
+COMPILER_WARN_UNUSED_RESULT
+BASELIB_INLINE_API bool Baselib_HighCapacitySemaphore_TrySpinAcquire(Baselib_HighCapacitySemaphore* semaphore, uint32_t maxSpinCount);
 
 // Wait for semaphore token to become available
 //
@@ -49,7 +64,8 @@ BASELIB_INLINE_API bool Baselib_HighCapacitySemaphore_TryAcquire(Baselib_HighCap
 // \param timeout   Time to wait for token to become available.
 //
 // \returns          true if token was consumed or was woken up by Baselib_HighCapacitySemaphore_ResetAndReleaseWaitingThreads. false if timeout was reached.
-BASELIB_INLINE_API bool Baselib_HighCapacitySemaphore_TryTimedAcquire(Baselib_HighCapacitySemaphore* semaphore, const uint32_t timeoutInMilliseconds);
+COMPILER_WARN_UNUSED_RESULT
+BASELIB_INLINE_API bool Baselib_HighCapacitySemaphore_TryTimedAcquire(Baselib_HighCapacitySemaphore* semaphore, uint32_t timeoutInMilliseconds);
 
 // Submit tokens to the semaphore.
 //
@@ -57,7 +73,7 @@ BASELIB_INLINE_API bool Baselib_HighCapacitySemaphore_TryTimedAcquire(Baselib_Hi
 //
 // Increase the number of available tokens on the semaphore by `count`. Any waiting threads will be notified there are new tokens available.
 // If count reach `Baselib_HighCapacitySemaphore_MaxGuaranteedCount` this function may silently discard any overflow.
-BASELIB_INLINE_API void Baselib_HighCapacitySemaphore_Release(Baselib_HighCapacitySemaphore* semaphore, const uint32_t count);
+BASELIB_INLINE_API void Baselib_HighCapacitySemaphore_Release(Baselib_HighCapacitySemaphore* semaphore, uint32_t count);
 
 // If threads are waiting on Baselib_HighCapacitySemaphore_Acquire / Baselib_HighCapacitySemaphore_TryTimedAcquire,
 // releases enough tokens to wake them up. Otherwise consumes all available tokens.

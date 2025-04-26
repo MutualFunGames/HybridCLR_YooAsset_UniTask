@@ -49,7 +49,7 @@
 //  The values of 'expected' and 'obj' value to determine if SC should succeed and store 'value'.
 //
 // Example:
-//  struct Data { BASELIB_ALIGN_AS(PLATFORM_CACHE_LINE_SIZE) int32_t obj = 0; } data;
+//  struct Data { BASELIB_ALIGN_AS(PLATFORM_PROPERTY_CACHE_LINE_SIZE) int32_t obj = 0; } data;
 //  int32_t expected = 1, value = 2;
 //  Baselib_atomic_llsc_32_relaxed_relaxed_v(&data.obj, &expected, &value, { if (expected == 0) value = 3; } );
 //  <-- obj is now 3
@@ -85,7 +85,6 @@
 #define Baselib_atomic_llsc_ptr_seq_cst_seq_cst_v(obj, expected, value, code) detail_Baselib_atomic_llsc_v(obj, expected, value, code, ptr, seq_cst, seq_cst)
 
 #if PLATFORM_ARCH_64
-
 #define Baselib_atomic_llsc_ptr2x_relaxed_relaxed_v(obj, expected, value, code) detail_Baselib_atomic_llsc_128_v(obj, expected, value, code, relaxed, relaxed)
 #define Baselib_atomic_llsc_ptr2x_acquire_relaxed_v(obj, expected, value, code) detail_Baselib_atomic_llsc_128_v(obj, expected, value, code, acquire, relaxed)
 #define Baselib_atomic_llsc_ptr2x_relaxed_release_v(obj, expected, value, code) detail_Baselib_atomic_llsc_128_v(obj, expected, value, code, relaxed, release)
@@ -108,26 +107,17 @@
 
 #endif
 
-// Enable LLSC native support for supported compilers and architectures/profiles
-#ifndef PLATFORM_LLSC_NATIVE_SUPPORT
-    #if (COMPILER_CLANG) && ((__ARM_ARCH >= 7) && (__ARM_ARCH < 9) && (__ARM_ARCH_PROFILE == 'A'))
-        #define PLATFORM_LLSC_NATIVE_SUPPORT 1
-    #else
-        #define PLATFORM_LLSC_NATIVE_SUPPORT 0
-    #endif
-#endif
-
-#if PLATFORM_LLSC_NATIVE_SUPPORT
+#if PLATFORM_HAS_NATIVE_LLSC
 // Arm specific implementation of LLSC macros
 #include "Internal/Compiler/Baselib_Atomic_LLSC_Gcc.inl.h"
 #else
 // Generic implementation of LLSC macros
 #include "Baselib_Atomic.h"
 
-// LLSC exlusive state access break implementation (nop)
+// LLSC exclusive state access break implementation (nop)
 #define detail_Baselib_atomic_llsc_break()
 
-// LLSC implementation using load/cmp_xcgh
+// LLSC implementation using load/cmp_xchg
 #define detail_Baselib_atomic_llsc_cmpxchg_v(obj, expected, value, code, size, loadbarrier, storebarrier)                   \
     do {                                                                                                                    \
         Baselib_atomic_load_##size##_##loadbarrier##_v(obj, expected);                                                      \
@@ -148,4 +138,4 @@
 #define detail_Baselib_atomic_llsc_128_v(obj, expected, value, code, loadbarrier, storebarrier) \
     detail_Baselib_atomic_llsc_v(obj, expected, value, code, 128, loadbarrier, storebarrier)
 
-#endif // PLATFORM_LLSC_NATIVE_SUPPORT
+#endif // PLATFORM_HAS_NATIVE_LLSC

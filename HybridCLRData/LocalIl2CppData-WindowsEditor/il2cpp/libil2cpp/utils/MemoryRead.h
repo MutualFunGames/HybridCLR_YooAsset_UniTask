@@ -18,7 +18,7 @@ namespace utils
     static inline double ReadDouble(const char* p) { double val; memcpy(&val, p, sizeof(double)); return val; }
 
     static inline Il2CppChar ReadChar(const char** p) { Il2CppChar val; memcpy(&val, *p, sizeof(Il2CppChar)); *p += sizeof(Il2CppChar); return val; }
-    static inline uint8_t Read8(const char** p) { uint8_t val; memcpy(&val, *p, sizeof(uint8_t)); *p += sizeof(uint8_t); return val; }
+    static inline uint8_t Read8(const char** p) { uint8_t val; val = **(uint8_t**)p; *p += sizeof(uint8_t); return val; }
     static inline uint16_t Read16(const char** p) { uint16_t val; memcpy(&val, *p, sizeof(uint16_t)); *p += sizeof(uint16_t); return val; }
     static inline uint32_t Read32(const char** p) { uint32_t val; memcpy(&val, *p, sizeof(uint32_t)); *p += sizeof(uint32_t); return val; }
     static inline uint64_t Read64(const char** p) { uint64_t val; memcpy(&val, *p, sizeof(uint64_t)); *p += sizeof(uint64_t); return val; }

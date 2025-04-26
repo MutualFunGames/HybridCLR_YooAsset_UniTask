@@ -23,7 +23,7 @@ namespace metadata
 
 	void AOTHomologousImage::RegisterLocked(AOTHomologousImage* image, il2cpp::os::FastAutoLock& lock)
 	{
-		IL2CPP_ASSERT(FindImageByAssemblyLocked(image->_aotAssembly, lock) == nullptr);
+		IL2CPP_ASSERT(FindImageByAssemblyLocked(image->_targetAssembly, lock) == nullptr);
 		s_images.push_back(image);
 	}
 
@@ -31,7 +31,7 @@ namespace metadata
 	{
 		for (AOTHomologousImage* image : s_images)
 		{
-			if (image->_aotAssembly == ass)
+			if (image->_targetAssembly == ass)
 			{
 				return image;
 			}
@@ -41,14 +41,15 @@ namespace metadata
 
 	LoadImageErrorCode AOTHomologousImage::Load(const byte* imageData, size_t length)
 	{
-		LoadImageErrorCode err = _rawImage.Load(imageData, length);
+		_rawImage = new RawImage();
+		LoadImageErrorCode err = _rawImage->Load(imageData, length);
 		if (err != LoadImageErrorCode::OK)
 		{
 			return err;
 		}
 
-		TbAssembly data = _rawImage.ReadAssembly(1);
-		const char* assName = _rawImage.GetStringFromRawIndex(data.name);
+		TbAssembly data = _rawImage->ReadAssembly(1);
+		const char* assName = _rawImage->GetStringFromRawIndex(data.name);
 		const Il2CppAssembly* aotAss = GetLoadedAssembly(assName);
 		// FIXME. not free memory.
 		if (!aotAss)
@@ -59,34 +60,32 @@ namespace metadata
 		{
 			return LoadImageErrorCode::HOMOLOGOUS_ONLY_SUPPORT_AOT_ASSEMBLY;
 		}
-		_aotAssembly = aotAss;
+		_targetAssembly = aotAss;
 
 		return LoadImageErrorCode::OK;
 	}
 
-	bool AOTHomologousImage::GetModuleIl2CppType(Il2CppType& resultType, uint32_t moduleRowIndex, uint32_t typeNamespace, uint32_t typeName, bool raiseExceptionIfNotFound)
+	const Il2CppType* AOTHomologousImage::GetModuleIl2CppType(uint32_t moduleRowIndex, uint32_t typeNamespace, uint32_t typeName, bool raiseExceptionIfNotFound)
 	{
 		IL2CPP_ASSERT(moduleRowIndex == 1);
-		const char* typeNameStr = _rawImage.GetStringFromRawIndex(typeName);
-		const char* typeNamespaceStr = _rawImage.GetStringFromRawIndex(typeNamespace);
-		
-		const Il2CppImage* aotImage = il2cpp::vm::Assembly::GetImage(_aotAssembly);
+		const char* typeNameStr = _rawImage->GetStringFromRawIndex(typeName);
+		const char* typeNamespaceStr = _rawImage->GetStringFromRawIndex(typeNamespace);
+
+		const Il2CppImage* aotImage = il2cpp::vm::Assembly::GetImage(_targetAssembly);
 		Il2CppClass* klass = il2cpp::vm::Class::FromName(aotImage, typeNamespaceStr, typeNameStr);
 		if (klass)
 		{
-			resultType = klass->byval_arg;
-			return true;
+			return &klass->byval_arg;
 		}
-		resultType = {};
 		if (!raiseExceptionIfNotFound)
 		{
-			return false;
+			return nullptr;
 		}
 		il2cpp::vm::Exception::Raise(il2cpp::vm::Exception::GetTypeLoadException(
 			CStringToStringView(typeNamespaceStr),
 			CStringToStringView(typeNameStr),
 			CStringToStringView(aotImage->nameNoExt)));
-		return false;
+		return nullptr;
 	}
 }
 }

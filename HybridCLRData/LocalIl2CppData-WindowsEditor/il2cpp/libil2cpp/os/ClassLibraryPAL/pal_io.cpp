@@ -225,7 +225,11 @@ static void ConvertDirent(const struct dirent* entry, struct DirectoryEntry* out
 #endif
 
 #if IL2CPP_HAVE_DIRENT_NAME_LEN
+#if !defined(IL2CPP_DIRENT_MEMBER_NAME_LEN)
     outputEntry->NameLength = entry->d_namlen;
+#else
+    outputEntry->NameLength = entry->IL2CPP_DIRENT_MEMBER_NAME_LEN;
+#endif
 #else
     outputEntry->NameLength = -1; // sentinel value to mean we have to walk to find the first \0
 #endif

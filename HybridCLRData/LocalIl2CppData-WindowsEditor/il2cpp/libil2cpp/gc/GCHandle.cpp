@@ -10,28 +10,72 @@ namespace il2cpp
 {
 namespace gc
 {
-    typedef struct
+#if IL2CPP_SIZEOF_VOID_P == 4
+#define HANDLE_COUNT 992
+#define HANDLE_DATA_ALIGNMENT 4096
+#else
+#define HANDLE_COUNT 992
+#define HANDLE_DATA_ALIGNMENT 8192
+#endif
+
+    typedef struct HandleData HandleData;
+    struct HandleData
     {
-        uint32_t  *bitmap;
-        void* *entries;
+        HandleData *next; //immutable
+        HandleData *next_free; // next free
+        uint32_t   *bitmap;
+        uint32_t   in_use;
         uint32_t   size;
         uint8_t    type;
-        uint32_t     slot_hint : 24;/* starting slot for search */
-        /* 2^16 appdomains should be enough for everyone (though I know I'll regret this in 20 years) */
-        /* we alloc this only for weak refs, since we can get the domain directly in the other cases */
-        uint16_t  *domain_ids;
-    } HandleData;
-
-/* weak and weak-track arrays will be allocated in malloc memory
- */
-    static HandleData gc_handles[] =
-    {
-        {NULL, NULL, 0, HANDLE_WEAK, 0},
-        {NULL, NULL, 0, HANDLE_WEAK_TRACK, 0},
-        {NULL, NULL, 0, HANDLE_NORMAL, 0},
-        {NULL, NULL, 0, HANDLE_PINNED, 0}
+        uint32_t   slot_hint : 24; /* starting slot for search in bitmap */
+        void*      entries[HANDLE_COUNT];
     };
 
+
+    static HandleData* gc_handles[HANDLE_PINNED + 1];
+    static HandleData* gc_handles_free[HANDLE_PINNED + 1];
+
+    inline bool HandleTypeIsWeak(GCHandleType type)
+    {
+        return type == GCHandleType::HANDLE_WEAK || type == GCHandleType::HANDLE_WEAK_TRACK;
+    }
+
+#define BITMAP_SIZE (sizeof (*((HandleData *)NULL)->bitmap) * CHAR_BIT)
+
+    static bool
+    slot_occupied(HandleData* handles, uint32_t slot)
+    {
+        return handles->bitmap[slot / BITMAP_SIZE] & (1 << (slot % BITMAP_SIZE));
+    }
+
+    static void
+    vacate_slot(HandleData* handles, uint32_t slot)
+    {
+        handles->in_use--;
+        handles->bitmap[slot / BITMAP_SIZE] &= ~(1 << (slot % BITMAP_SIZE));
+
+        if (handles->in_use == (handles->size - 1))
+        {
+            uint8_t type = handles->type;
+            HandleData* first = gc_handles_free[type];
+            handles->next_free = first;
+            gc_handles_free[type] = handles;
+        }
+    }
+
+    static void
+    occupy_slot(HandleData* handles, uint32_t slot)
+    {
+        handles->in_use++;
+        handles->bitmap[slot / BITMAP_SIZE] |= 1 << (slot % BITMAP_SIZE);
+
+        if (handles->in_use == handles->size)
+        {
+            uint8_t type = handles->type;
+            IL2CPP_ASSERT(handles == gc_handles_free[type]);
+            gc_handles_free[type] = gc_handles_free[type]->next_free;
+        }
+    }
 
     static int
     find_first_unset(uint32_t bitmap)
@@ -45,166 +89,186 @@ namespace gc
         return -1;
     }
 
+    static HandleData*
+    handle_data_alloc_entries(int type)
+    {
+        IL2CPP_ASSERT(sizeof(HandleData) < HANDLE_DATA_ALIGNMENT);
+        IL2CPP_ASSERT(HANDLE_COUNT % BITMAP_SIZE == 0);
+        HandleData* handles = (HandleData*)utils::Memory::AlignedMalloc(sizeof(HandleData), HANDLE_DATA_ALIGNMENT);
+        memset(handles, 0, sizeof(HandleData));
+        handles->type = type;
+        handles->size = HANDLE_COUNT;
+        if (!HandleTypeIsWeak((GCHandleType)handles->type))
+        {
+            GarbageCollector::RegisterRoot((char*)&handles->entries[0], HANDLE_COUNT * sizeof(void*));
+        }
+        handles->bitmap = (uint32_t*)utils::Memory::Calloc(sizeof(char), handles->size / CHAR_BIT);
+
+        return handles;
+    }
+
+    static int32_t
+    handle_data_next_unset(HandleData* handles)
+    {
+        uint32_t slot;
+        for (slot = handles->slot_hint; slot < handles->size / BITMAP_SIZE; ++slot)
+        {
+            if (handles->bitmap[slot] == 0xffffffff)
+                continue;
+            handles->slot_hint = slot;
+            return find_first_unset(handles->bitmap[slot]);
+        }
+        return -1;
+    }
+
+    static int32_t
+    handle_data_first_unset(HandleData* handles)
+    {
+        uint32_t slot;
+        for (slot = 0; slot < handles->slot_hint; ++slot)
+        {
+            if (handles->bitmap[slot] == 0xffffffff)
+                continue;
+            handles->slot_hint = slot;
+            return find_first_unset(handles->bitmap[slot]);
+        }
+        return -1;
+    }
+
+    static int32_t
+    handle_data_find_slot(HandleData* handles)
+    {
+        int32_t slot = 0;
+        int32_t i = handle_data_next_unset(handles);
+        if (i == -1 && handles->slot_hint != 0)
+            i = handle_data_first_unset(handles);
+
+        IL2CPP_ASSERT(i != -1);
+
+        slot = handles->slot_hint * BITMAP_SIZE + i;
+        return slot;
+    }
+
+    static Il2CppGCHandle
+    handle_tag_weak(Il2CppGCHandle handle)
+    {
+        return (Il2CppGCHandle)((uintptr_t)handle | (uintptr_t)1);
+    }
+
+    static Il2CppGCHandle
+    handle_untag_weak(Il2CppGCHandle handle)
+    {
+        return (Il2CppGCHandle)((uintptr_t)handle & ~(uintptr_t)1);
+    }
+
+    static uintptr_t AlignDownTo(uintptr_t size, uintptr_t align)
+    {
+        return size & ~(align - 1);
+    }
+
+    static HandleData*
+    get_handle_data_from_handle(Il2CppGCHandle handle)
+    {
+        HandleData* handles = (HandleData*)AlignDownTo((uintptr_t)handle, HANDLE_DATA_ALIGNMENT);
+        return handles;
+    }
+
+    static HandleData*
+    handle_lookup(Il2CppGCHandle handle, uint32_t* slot)
+    {
+        HandleData* handles = get_handle_data_from_handle(handle);
+        if (slot)
+            *slot = (uint32_t)(ptrdiff_t)((void**)handle_untag_weak(handle) - &handles->entries[0]);
+        return handles;
+    }
+
     static baselib::ReentrantLock g_HandlesMutex;
 
 #define lock_handles(handles) g_HandlesMutex.Acquire ()
 #define unlock_handles(handles) g_HandlesMutex.Release ()
 
-    static uint32_t
-    alloc_handle(HandleData *handles, Il2CppObject *obj, bool track)
+    static Il2CppGCHandle
+    alloc_handle(GCHandleType type, Il2CppObject *obj, bool track)
     {
-        uint32_t slot;
-        int i;
+        int32_t slot = 0;
+        Il2CppGCHandle res = 0;
+        HandleData* handles = gc_handles[type];
         lock_handles(handles);
-        if (!handles->size)
+        handles = gc_handles_free[type];
+        if (!handles)
         {
-            handles->size = 32;
-            if (handles->type > HANDLE_WEAK_TRACK)
-            {
-                handles->entries = (void**)GarbageCollector::AllocateFixed(sizeof(void*) * handles->size, NULL);
-            }
-            else
-            {
-                handles->entries = (void**)IL2CPP_MALLOC_ZERO(sizeof(void*) * handles->size);
-                handles->domain_ids = (uint16_t*)IL2CPP_MALLOC_ZERO(sizeof(uint16_t) * handles->size);
-            }
-            handles->bitmap = (uint32_t*)IL2CPP_MALLOC_ZERO(handles->size / 8);
+            handles = handle_data_alloc_entries(type);
+            handles->next = gc_handles[type];
+            gc_handles[type] = handles;
+
+            handles->next_free = gc_handles_free[type];
+            gc_handles_free[type] = handles;
         }
-        i = -1;
-        for (slot = handles->slot_hint; slot < handles->size / 32; ++slot)
-        {
-            if (handles->bitmap[slot] != 0xffffffff)
-            {
-                i = find_first_unset(handles->bitmap[slot]);
-                handles->slot_hint = slot;
-                break;
-            }
-        }
-        if (i == -1 && handles->slot_hint != 0)
-        {
-            for (slot = 0; slot < handles->slot_hint; ++slot)
-            {
-                if (handles->bitmap[slot] != 0xffffffff)
-                {
-                    i = find_first_unset(handles->bitmap[slot]);
-                    handles->slot_hint = slot;
-                    break;
-                }
-            }
-        }
-        if (i == -1)
-        {
-            uint32_t *new_bitmap;
-            uint32_t new_size = handles->size * 2; /* always double: we memset to 0 based on this below */
+        slot = handle_data_find_slot(handles);
+        occupy_slot(handles, slot);
 
-            /* resize and copy the bitmap */
-            new_bitmap = (uint32_t*)IL2CPP_MALLOC_ZERO(new_size / 8);
-            memcpy(new_bitmap, handles->bitmap, handles->size / 8);
-            IL2CPP_FREE(handles->bitmap);
-            handles->bitmap = new_bitmap;
-
-            /* resize and copy the entries */
-            if (handles->type > HANDLE_WEAK_TRACK)
-            {
-                void* *entries;
-                entries = (void**)GarbageCollector::AllocateFixed(sizeof(void*) * new_size, NULL);
-                memcpy(entries, handles->entries, sizeof(void*) * handles->size);
-
-                GarbageCollector::SetWriteBarrier(entries, sizeof(void*) * handles->size);
-
-                void** previous_entries = handles->entries;
-                handles->entries = entries;
-                GarbageCollector::FreeFixed(previous_entries);
-            }
-            else
-            {
-                void* *entries;
-                uint16_t *domain_ids;
-                domain_ids = (uint16_t*)IL2CPP_MALLOC_ZERO(sizeof(uint16_t) * new_size);
-                entries = (void**)IL2CPP_MALLOC(sizeof(void*) * new_size);
-                /* we disable GC because we could lose some disappearing link updates */
-                GarbageCollector::Disable();
-                memcpy(entries, handles->entries, sizeof(void*) * handles->size);
-                memset(entries + handles->size, 0, sizeof(void*) * handles->size);
-                memcpy(domain_ids, handles->domain_ids, sizeof(uint16_t) * handles->size);
-                for (i = 0; i < (int32_t)handles->size; ++i)
-                {
-                    Il2CppObject *obj = GarbageCollector::GetWeakLink(&(handles->entries[i]));
-                    if (handles->entries[i])
-                        GarbageCollector::RemoveWeakLink(&(handles->entries[i]));
-                    /*g_print ("reg/unreg entry %d of type %d at %p to object %p (%p), was: %p\n", i, handles->type, &(entries [i]), obj, entries [i], handles->entries [i]);*/
-                    if (obj)
-                    {
-                        GarbageCollector::AddWeakLink(&(entries[i]), obj, track);
-                    }
-                }
-                IL2CPP_FREE(handles->entries);
-                IL2CPP_FREE(handles->domain_ids);
-                handles->entries = entries;
-                handles->domain_ids = domain_ids;
-                GarbageCollector::Enable();
-            }
-
-            /* set i and slot to the next free position */
-            i = 0;
-            slot = (handles->size + 1) / 32;
-            handles->slot_hint = handles->size + 1;
-            handles->size = new_size;
-        }
-        handles->bitmap[slot] |= 1 << i;
-        slot = slot * 32 + i;
-        handles->entries[slot] = obj;
-        GarbageCollector::SetWriteBarrier(handles->entries + slot);
-
+        handles->entries[slot] = NULL;
         if (handles->type <= HANDLE_WEAK_TRACK)
         {
             if (obj)
                 GarbageCollector::AddWeakLink(&(handles->entries[slot]), obj, track);
         }
+        else
+        {
+            handles->entries[slot] = obj;
+            GarbageCollector::SetWriteBarrier(handles->entries + slot);
+        }
 
         //mono_perfcounters->gc_num_handles++;
         unlock_handles(handles);
-        /*g_print ("allocated entry %d of type %d to object %p (in slot: %p)\n", slot, handles->type, obj, handles->entries [slot]);*/
-        return (slot << 3) | (handles->type + 1);
+
+        res = (Il2CppGCHandle) & handles->entries[slot];
+        if (HandleTypeIsWeak((GCHandleType)handles->type))
+        {
+            /*
+             * Use lowest bit as an optimization to indicate weak GC handle.
+             * This allows client code to simply dereference strong GCHandle
+             * when the bit is not set.
+            */
+            res = handle_tag_weak(res);
+        }
+        return res;
     }
 
-    uint32_t GCHandle::New(Il2CppObject *obj, bool pinned)
+    Il2CppGCHandle GCHandle::New(Il2CppObject *obj, bool pinned)
     {
-        return alloc_handle(&gc_handles[pinned ? HANDLE_PINNED : HANDLE_NORMAL], obj, false);
+        return alloc_handle(pinned ? HANDLE_PINNED : HANDLE_NORMAL, obj, false);
     }
 
-    utils::Expected<uint32_t> GCHandle::NewWeakref(Il2CppObject *obj, bool track_resurrection)
+    utils::Expected<Il2CppGCHandle> GCHandle::NewWeakref(Il2CppObject *obj, bool track_resurrection)
     {
-        uint32_t handle = alloc_handle(&gc_handles[track_resurrection ? HANDLE_WEAK_TRACK : HANDLE_WEAK], obj, track_resurrection);
+        Il2CppGCHandle handle = alloc_handle(track_resurrection ? HANDLE_WEAK_TRACK : HANDLE_WEAK, obj, track_resurrection);
 
 #ifndef HAVE_SGEN_GC
         if (track_resurrection)
             return utils::Il2CppError(utils::NotSupported, "IL2CPP does not support resurrection for weak references. Pass the trackResurrection with a value of false.");
 #endif
 
-        return handle;
+        return (Il2CppGCHandle)handle;
     }
 
-    GCHandleType GCHandle::GetHandleType(uint32_t gchandle)
+    GCHandleType GCHandle::GetHandleType(Il2CppGCHandle gchandle)
     {
-        return static_cast<GCHandleType>((gchandle & 7) - 1);
+        HandleData* handles = handle_lookup(gchandle, NULL);
+        return (GCHandleType)handles->type;
     }
 
-    static inline uint32_t GetHandleSlot(uint32_t gchandle)
+    Il2CppObject* GCHandle::GetTarget(Il2CppGCHandle gchandle)
     {
-        return gchandle >> 3;
-    }
-
-    Il2CppObject* GCHandle::GetTarget(uint32_t gchandle)
-    {
-        uint32_t slot = GetHandleSlot(gchandle);
-        uint32_t type = GetHandleType(gchandle);
-        HandleData *handles = &gc_handles[type];
+        uint32_t slot = 0;
+        HandleData* handles = handle_lookup(gchandle, &slot);
         Il2CppObject *obj = NULL;
-        if (type > 3)
+
+        if (handles->type >= HANDLE_TYPE_MAX)
             return NULL;
+
         lock_handles(handles);
-        if (slot < handles->size && (handles->bitmap[slot / 32] & (1 << (slot % 32))))
+        if (slot < handles->size && slot_occupied(handles, slot))
         {
             if (handles->type <= HANDLE_WEAK_TRACK)
             {
@@ -225,17 +289,16 @@ namespace gc
     }
 
     static void
-    il2cpp_gchandle_set_target(uint32_t gchandle, Il2CppObject *obj)
+    il2cpp_gchandle_set_target(Il2CppGCHandle gchandle, Il2CppObject *obj)
     {
-        uint32_t slot = GetHandleSlot(gchandle);
-        uint32_t type = GCHandle::GetHandleType(gchandle);
-        HandleData *handles = &gc_handles[type];
+        uint32_t slot = 0;
+        HandleData* handles = handle_lookup(gchandle, &slot);
         Il2CppObject *old_obj = NULL;
 
-        if (type > 3)
-            return;
+
+        IL2CPP_ASSERT(handles->type < HANDLE_TYPE_MAX);
         lock_handles(handles);
-        if (slot < handles->size && (handles->bitmap[slot / 32] & (1 << (slot % 32))))
+        if (slot < handles->size && slot_occupied(handles, slot))
         {
             if (handles->type <= HANDLE_WEAK_TRACK)
             {
@@ -255,49 +318,41 @@ namespace gc
             /* print a warning? */
         }
         unlock_handles(handles);
-
-#ifndef HAVE_SGEN_GC
-        if (type == HANDLE_WEAK_TRACK)
-            IL2CPP_NOT_IMPLEMENTED(il2cpp_gchandle_set_target);
-#endif
     }
 
-    void GCHandle::Free(uint32_t gchandle)
+    void GCHandle::Free(Il2CppGCHandle gchandle)
     {
-        uint32_t slot = GetHandleSlot(gchandle);
-        uint32_t type = GetHandleType(gchandle);
-        HandleData *handles = &gc_handles[type];
-        if (type > 3)
+        if (!gchandle)
             return;
-#ifndef HAVE_SGEN_GC
-        if (type == HANDLE_WEAK_TRACK)
-            IL2CPP_NOT_IMPLEMENTED(GCHandle::Free);
-#endif
+
+        uint32_t slot = 0;
+        HandleData* handles = handle_lookup(gchandle, &slot);
+        if (handles->type >= HANDLE_TYPE_MAX)
+            return;
 
         lock_handles(handles);
-        if (slot < handles->size && (handles->bitmap[slot / 32] & (1 << (slot % 32))))
+        if (slot < handles->size && slot_occupied(handles, slot))
         {
-            if (handles->type <= HANDLE_WEAK_TRACK)
+            if (HandleTypeIsWeak((GCHandleType)handles->type))
             {
                 if (handles->entries[slot])
-                    GarbageCollector::RemoveWeakLink(&handles->entries[slot]);
+                    GarbageCollector::RemoveWeakLink(&handles->entries[slot] /*, handles->type == HANDLE_WEAK_TRACK*/);
             }
             else
             {
                 handles->entries[slot] = NULL;
             }
-            handles->bitmap[slot / 32] &= ~(1 << (slot % 32));
+            vacate_slot(handles, slot);
         }
         else
         {
             /* print a warning? */
         }
-        //mono_perfcounters->gc_num_handles--;
-        /*g_print ("freed entry %d of type %d\n", slot, handles->type);*/
+
         unlock_handles(handles);
     }
 
-    utils::Expected<uint32_t> GCHandle::GetTargetHandle(Il2CppObject * obj, int32_t handle, int32_t type)
+    utils::Expected<Il2CppGCHandle> GCHandle::GetTargetHandle(Il2CppObject * obj, Il2CppGCHandle handle, int32_t type)
     {
         if (type == -1)
         {
@@ -328,12 +383,17 @@ namespace gc
 
         for (int gcHandleTypeIndex = 0; gcHandleTypeIndex < 2; gcHandleTypeIndex++)
         {
-            const HandleData& handles = gc_handles[types[gcHandleTypeIndex]];
+            const HandleData* handles = gc_handles[types[gcHandleTypeIndex]];
 
-            for (uint32_t i = 0; i < handles.size; i++)
+            while (handles != NULL)
             {
-                if (handles.entries[i] != NULL)
-                    callback(static_cast<Il2CppObject*>(handles.entries[i]), context);
+                for (uint32_t i = 0; i < handles->size; i++)
+                {
+                    if (handles->entries[i] != NULL)
+                        callback(static_cast<Il2CppObject*>(handles->entries[i]), context);
+                }
+
+                handles = handles->next;
             }
         }
         unlock_handles(handles);

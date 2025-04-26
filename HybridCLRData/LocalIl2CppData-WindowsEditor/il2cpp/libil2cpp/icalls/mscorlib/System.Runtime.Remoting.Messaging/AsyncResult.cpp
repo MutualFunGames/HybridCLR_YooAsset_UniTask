@@ -24,10 +24,6 @@ namespace Messaging
 {
     Il2CppObject* AsyncResult::Invoke(Il2CppObject* _this)
     {
-#if IL2CPP_TINY
-        IL2CPP_NOT_IMPLEMENTED_ICALL(AsyncResult::Invoke);
-        return NULL;
-#else
         Il2CppAsyncCall *ac;
         Il2CppObject *res;
         Il2CppAsyncResult *ares = (Il2CppAsyncResult*)_this;
@@ -68,7 +64,6 @@ namespace Messaging
         }
 
         return res;
-#endif
     }
 } // namespace Messaging
 } // namespace Remoting

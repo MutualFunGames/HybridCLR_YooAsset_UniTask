@@ -29,8 +29,22 @@ namespace os
         return 0;
     }
 
+    static Event* s_ThreadSleepObject = nullptr;
+
+    void ThreadImpl::AllocateStaticData()
+    {
+        s_ThreadSleepObject = new Event();
+    }
+
+    void ThreadImpl::FreeStaticData()
+    {
+        delete s_ThreadSleepObject;
+        s_ThreadSleepObject = nullptr;
+    }
+
     ThreadImpl::ThreadImpl()
         : m_ThreadHandle(0), m_ThreadId(0), m_StackSize(IL2CPP_DEFAULT_STACK_SIZE), m_ApartmentState(kApartmentStateUnknown), m_Priority(kThreadPriorityNormal)
+        , m_ConditionSemaphore(1)
     {
     }
 
@@ -79,15 +93,7 @@ namespace os
     typedef HRESULT (__stdcall *SETTHREADPROC) (HANDLE, PCWSTR);
     void ThreadImpl::SetName(const char* name)
     {
-#if !IL2CPP_TARGET_WINRT
-        SETTHREADPROC ProcSetThreadDescription;
-        ProcSetThreadDescription = (SETTHREADPROC)GetProcAddress(GetModuleHandle(TEXT("kernel32")), "SetThreadDescription");
-        if (ProcSetThreadDescription != NULL)
-        {
-            const UTF16String varName = utils::StringUtils::Utf8ToUtf16(name);
-            (ProcSetThreadDescription)(m_ThreadHandle, varName.c_str());
-        }
-#endif
+        SetThreadDescription(m_ThreadHandle, utils::StringUtils::Utf8ToUtf16(name).c_str());
 
         if (Debug::IsDebuggerPresent())
             SetNameForDebugger(name);
@@ -130,7 +136,7 @@ namespace os
         if (!threadHandle)
             return kErrorCodeGenFailure;
 
-#if IL2CPP_TARGET_WINDOWS_GAMES || IL2CPP_TARGET_XBOXONE
+#if IL2CPP_TARGET_WINDOWS_GAMES
         if (affinityMask != Thread::kThreadAffinityAll)
             SetThreadAffinityMask(threadHandle, static_cast<DWORD_PTR>(affinityMask));
 #endif
@@ -145,29 +151,63 @@ namespace os
 
     void ThreadImpl::Sleep(uint32_t ms, bool interruptible)
     {
-        uint32_t remainingWaitTime = ms;
-        while (true)
+        /// An Event that we never signal. This is used for sleeping threads in an alertable state. They
+        /// simply wait on this object with the sleep timer as the timeout. This way we don't need a separate
+        /// codepath for implementing sleep logic.
+
+        s_ThreadSleepObject->Wait(ms, interruptible);
+    }
+
+    void ThreadImpl::CheckForUserAPCAndHandle()
+    {
+        m_PendingAPCsMutex.Acquire();
+
+        while (!m_PendingAPCs.empty())
         {
-            uint32_t startWaitTime = os::Time::GetTicksMillisecondsMonotonic();
-            DWORD sleepResult = ::SleepEx(remainingWaitTime, interruptible);
+            APCRequest apcRequest = m_PendingAPCs.front();
 
-            if (sleepResult == WAIT_IO_COMPLETION)
-            {
-                uint32_t waitedTime = os::Time::GetTicksMillisecondsMonotonic() - startWaitTime;
-                if (waitedTime >= remainingWaitTime)
-                    return;
+            // Remove from list. Do before calling the function to make sure the list
+            // is up to date in case the function throws.
+            m_PendingAPCs.erase(m_PendingAPCs.begin());
 
-                remainingWaitTime -= waitedTime;
-                continue;
-            }
+            // Release mutex while we call the function so that we don't deadlock
+            // if the function starts waiting on a thread that tries queuing an APC
+            // on us.
+            m_PendingAPCsMutex.Release();
 
-            break;
+            // Call function.
+            apcRequest.callback(apcRequest.context);
+
+            // Re-acquire mutex.
+            m_PendingAPCsMutex.Acquire();
         }
+
+        m_PendingAPCsMutex.Release();
+    }
+
+    void ThreadImpl::SetWaitObject(WaitObject* waitObject)
+    {
+        // This is an unprotected write as write acccess is restricted to the
+        // current thread.
+        m_CurrentWaitObject = waitObject;
     }
 
     void ThreadImpl::QueueUserAPC(Thread::APCFunc func, void* context)
     {
-        ::QueueUserAPC(reinterpret_cast<PAPCFUNC>(func), m_ThreadHandle, reinterpret_cast<ULONG_PTR>(context));
+        IL2CPP_ASSERT(func != NULL);
+
+        // Put on queue.
+        {
+            m_PendingAPCsMutex.Acquire();
+            m_PendingAPCs.push_back(APCRequest(func, context));
+            m_PendingAPCsMutex.Release();
+        }
+
+        // Interrupt an ongoing wait, only interrupt if we have an object waiting
+        if (m_CurrentWaitObject.load())
+        {
+            m_ConditionSemaphore.Release(1);
+        }
     }
 
     int ThreadImpl::GetMaxStackSize()
@@ -175,21 +215,20 @@ namespace os
         return INT_MAX;
     }
 
+    ThreadImpl* ThreadImpl::GetCurrentThread()
+    {
+        return Thread::GetCurrentThread()->m_Thread;
+    }
+
 namespace
 {
-    // It would be nice to always use CoGetApartmentType but it's only available on Windows 7 and later.
-    // That's why we check for function at runtime and do a fallback on Windows XP.
-    // CoGetApartmentType is always available in Windows Store Apps.
-
-    typedef HRESULT (STDAPICALLTYPE * CoGetApartmentTypeFunc)(APTTYPE* type, APTTYPEQUALIFIER* qualifier);
-
-    ApartmentState GetApartmentWindows7(CoGetApartmentTypeFunc coGetApartmentType, bool* implicit)
+    ApartmentState GetApartmentImpl(bool* implicit)
     {
         *implicit = false;
 
         APTTYPE type;
         APTTYPEQUALIFIER qualifier;
-        const HRESULT hr = coGetApartmentType(&type, &qualifier);
+        const HRESULT hr = CoGetApartmentType(&type, &qualifier);
         if (FAILED(hr))
         {
             IL2CPP_ASSERT(CO_E_NOTINITIALIZED == hr);
@@ -226,82 +265,6 @@ namespace
         IL2CPP_ASSERT(0 && "CoGetApartmentType returned unexpected value.");
         return kApartmentStateUnknown;
     }
-
-#if IL2CPP_TARGET_WINDOWS_DESKTOP
-
-    ApartmentState GetApartmentWindowsXp(bool* implicit)
-    {
-        *implicit = false;
-
-        IUnknown* context = nullptr;
-        HRESULT hr = CoGetContextToken(reinterpret_cast<ULONG_PTR*>(&context));
-        if (SUCCEEDED(hr))
-        {
-            IComThreadingInfo* info;
-            hr = context->QueryInterface(&info);
-            if (SUCCEEDED(hr))
-            {
-                THDTYPE type;
-                hr = info->GetCurrentThreadType(&type);
-                if (SUCCEEDED(hr))
-                {
-                    // THDTYPE_PROCESSMESSAGES means that we are in STA thread.
-                    // Otherwise it's an MTA thread. We are not sure at this moment if CoInitializeEx has been called explicitly on this thread
-                    // or if it has been implicitly made MTA by a CoInitialize call on another thread.
-                    if (THDTYPE_PROCESSMESSAGES == type)
-                        return kApartmentStateInSTA;
-
-                    // Assume implicit. Even if it's explicit, we'll handle the case correctly by checking CoInitializeEx return value.
-                    *implicit = true;
-                    return kApartmentStateInMTA;
-                }
-
-                info->Release();
-            }
-
-            // No need to release context.
-        }
-
-        return kApartmentStateUnknown;
-    }
-
-    class CoGetApartmentTypeHelper
-    {
-    private:
-        HMODULE _library;
-        CoGetApartmentTypeFunc _func;
-
-    public:
-        inline CoGetApartmentTypeHelper()
-        {
-            _library = LoadLibraryW(L"ole32.dll");
-            Assert(_library);
-            _func = reinterpret_cast<CoGetApartmentTypeFunc>(GetProcAddress(_library, "CoGetApartmentType"));
-        }
-
-        inline ~CoGetApartmentTypeHelper()
-        {
-            FreeLibrary(_library);
-        }
-
-        inline CoGetApartmentTypeFunc GetFunc() const { return _func; }
-    };
-
-    inline ApartmentState GetApartmentImpl(bool* implicit)
-    {
-        static CoGetApartmentTypeHelper coGetApartmentTypeHelper;
-        const CoGetApartmentTypeFunc func = coGetApartmentTypeHelper.GetFunc();
-        return func ? GetApartmentWindows7(func, implicit) : GetApartmentWindowsXp(implicit);
-    }
-
-#else
-
-    inline ApartmentState GetApartmentImpl(bool* implicit)
-    {
-        return GetApartmentWindows7(CoGetApartmentType, implicit);
-    }
-
-#endif
 }
 
     ApartmentState ThreadImpl::GetApartment()
@@ -353,15 +316,6 @@ namespace
             Assert(state == currentState);
             return currentState;
         }
-
-#if IL2CPP_TARGET_XBOXONE
-        if (state == kApartmentStateInSTA)
-        {
-            // Only assert in debug.. we wouldn't want to bring down the application in Release config
-            IL2CPP_ASSERT(false && "STA apartment state is not supported on Xbox One");
-            state = kApartmentStateInMTA;
-        }
-#endif
 
         HRESULT hr = CoInitializeEx(nullptr, (kApartmentStateInSTA == state) ? COINIT_APARTMENTTHREADED : COINIT_MULTITHREADED);
         if (SUCCEEDED(hr))

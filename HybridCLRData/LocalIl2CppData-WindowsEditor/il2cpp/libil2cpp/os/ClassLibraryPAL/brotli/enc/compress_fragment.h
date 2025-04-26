@@ -13,7 +13,7 @@
 #define BROTLI_ENC_COMPRESS_FRAGMENT_H_
 
 #include "../common/platform.h"
-#include "../include/brotli/types.h"
+#include <brotli/types.h>
 #include "./memory.h"
 
 #if defined(__cplusplus) || defined(c_plusplus)

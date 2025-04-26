@@ -15,8 +15,8 @@
 #define BROTLI_COMMON_CONSTANTS_H_
 
 #include "./platform.h"
-#include "../include/brotli/port.h"
-#include "../include/brotli/types.h"
+#include <brotli/port.h>
+#include <brotli/types.h>
 
 /* Specification: 7.3. Encoding of the context map */
 #define BROTLI_CONTEXT_MAP_MAX_RLE 16

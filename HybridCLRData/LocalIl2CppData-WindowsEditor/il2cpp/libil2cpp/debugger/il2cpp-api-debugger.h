@@ -21,9 +21,12 @@
 #define VM_DEFAULTS_EXCEPTION_CLASS il2cpp_defaults_exception_class()
 #define VM_DEFAULTS_CORLIB_IMAGE il2cpp_defaults_corlib_image()
 #define VM_DEFAULTS_VOID_CLASS il2cpp_defaults_void_class()
+#define VM_DEFAULTS_RUNTIMETYPE_CLASS il2cpp_defaults_runtimetype_class()
 #define VM_GENERIC_INST_TYPE_ARGC(inst) il2cpp_generic_inst_get_argc(inst)
 #define VM_GENERIC_INST_TYPE_ARGV(inst, index) il2cpp_generic_inst_get_argv(inst, index)
 #define VM_IMAGE_GET_MODULE_NAME(image) il2cpp_image_get_name(image)
+#define VM_ASSEMBLY_IS_DYNAMIC(assembly) 0
+#define VM_CLASS_IS_INTERFACE(c) ((il2cpp_class_get_flags (c) & TYPE_ATTRIBUTE_INTERFACE) || mono_type_is_generic_parameter (il2cpp_class_get_byval_arg (c)))
 
 // These types are used in debugger-agent.c for field access
 // (not via an API), so we need to map them to the IL2CPP types
@@ -37,10 +40,12 @@
 #define MonoThread Il2CppThread
 #define MonoType Il2CppType
 
+typedef struct Il2CppInternalThread Il2CppInternalThread;
+
 // These defines map objects that the debugger-agent.c code uses directly to there
 // IL2CPP counterparts.
 #define debug_options il2cpp_mono_debug_options
-#define mono_defaults il2cpp_mono_defaults
+#define mono_defaults il2cpp_defaults
 
 // These are some defines from Mono that the debugger-agent.c code uses.
 #define MONO_MAX_IREGS 1
@@ -55,6 +60,28 @@ enum SuspendThreadResult : int32_t;
 typedef SuspendThreadResult (*MonoSuspendThreadCallback) (MonoThreadInfo *info, void* user_data);
 #endif
 
+// This much match the layout of Mono's CattrNamedArg
+typedef struct
+{
+    const Il2CppType *type;
+    const FieldInfo *field;
+    const PropertyInfo *prop;
+} Il2CppCattrNamedArg;
+
+typedef struct
+{
+    const MonoMethod* ctor;
+    Il2CppArray* typedArgs;
+    Il2CppArray* namedArgs;
+    Il2CppCattrNamedArg* argInfo;
+} Il2CppCustomAttributeData;
+
+typedef struct
+{
+    int32_t numberOfAttributes;
+    Il2CppCustomAttributeData attributeData[];
+} Il2CppCustomAttributeDataList;
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
@@ -67,6 +94,7 @@ MonoClass* il2cpp_defaults_exception_class();
 MonoImage* il2cpp_defaults_corlib_image();
 bool il2cpp_method_is_string_ctor(const MonoMethod * method);
 MonoClass* il2cpp_defaults_void_class();
+MonoClass* il2cpp_defaults_runtimetype_class();
 MonoMethod* il2cpp_get_interface_method(MonoClass* klass, MonoClass* itf, int slot);
 int32_t il2cpp_field_is_deleted(MonoClassField *field);
 MonoClass* il2cpp_iterate_loaded_classes(void* *iter);
@@ -86,7 +114,6 @@ const MonoAssembly* il2cpp_m_method_get_assembly(MonoMethod* method);
 Il2CppSequencePointSourceFile* il2cpp_debug_get_source_file(MonoImage* image, int index);
 Il2CppCatchPoint* il2cpp_get_method_catch_points(MonoMethod* method, void* *iter);
 Il2CppSequencePoint* il2cpp_get_seq_point_from_catch_point(Il2CppCatchPoint *cp);
-size_t il2cpp_type_size(MonoType *t);
 MonoMethod* il2cpp_get_generic_method_definition(MonoMethod* method);
 bool il2cpp_class_is_initialized(MonoClass* klass);
 void* il2cpp_domain_get_agent_info(MonoAppDomain* domain);
@@ -98,6 +125,13 @@ MonoObject* il2cpp_assembly_get_object(MonoDomain * domain, MonoAssembly * assem
 const MonoType* il2cpp_get_type_from_index(int index);
 void il2cpp_thread_info_safe_suspend_and_run(size_t id, int32_t interrupt_kernel, MonoSuspendThreadCallback callback, void* user_data);
 MonoGenericParam* il2cpp_generic_container_get_param(MonoGenericContainer * gc, int i);
+int32_t il2cpp_mono_methods_match(MonoMethod* left, MonoMethod* right);
+void il2cpp_field_static_get_value_checked(MonoVTable * vt, MonoClassField * field, void* value, MonoError * error);
+void il2cpp_field_static_get_value_for_thread(MonoInternalThread * thread, MonoVTable * vt, MonoClassField * field, void* value, MonoError * error);
+const Il2CppCustomAttributeDataList* il2cpp_get_custom_attribute_data_list(MonoClass* attr_klass, MonoCustomAttrInfo* cinfo, MonoImage* image);
+void il2cpp_free_custom_attribute_data_list(Il2CppCustomAttributeDataList* data);
+int32_t il2cpp_field_get_fixed_array_size(MonoClassField* field);
+MonoType* il2cpp_class_get_byval_arg(MonoClass* klass);
 #if defined(__cplusplus)
 }
 #endif

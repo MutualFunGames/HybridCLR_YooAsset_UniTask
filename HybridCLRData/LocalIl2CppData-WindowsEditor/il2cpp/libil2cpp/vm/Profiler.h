@@ -14,6 +14,7 @@ namespace vm
 // exported
     public:
         static void Install(Il2CppProfiler *prof, Il2CppProfileFunc shutdownCallback);
+        static void Shutdown();
         static void SetEvents(Il2CppProfileFlags events);
 
         static void InstallEnterLeave(Il2CppProfileMethodFunc enter, Il2CppProfileMethodFunc fleave);
@@ -45,7 +46,8 @@ namespace vm
             return (s_profilerEvents & IL2CPP_PROFILE_FILEIO) != 0;
         }
 
-        static void Shutdown();
+        static void AllocateStaticData();
+        static void FreeStaticData();
 
     private:
     };

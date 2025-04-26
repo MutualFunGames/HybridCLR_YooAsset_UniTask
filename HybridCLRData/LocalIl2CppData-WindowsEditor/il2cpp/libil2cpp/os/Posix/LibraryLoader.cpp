@@ -1,6 +1,6 @@
 #include "il2cpp-config.h"
 
-#if IL2CPP_TARGET_POSIX
+#if IL2CPP_TARGET_POSIX && !IL2CPP_USE_PLATFORM_SPECIFIC_LIBRARYLOADER
 
 #include <dlfcn.h>
 #include <string>

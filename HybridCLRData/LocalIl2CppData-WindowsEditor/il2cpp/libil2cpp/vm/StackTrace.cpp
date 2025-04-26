@@ -117,7 +117,9 @@ namespace vm
     public:
         inline const StackFrames* GetStackFrames()
         {
-            return GetStackFramesRaw();
+            StackFrames* stackFrames = GetStackFramesRaw();
+            hybridclr::interpreter::InterpreterModule::GetCurrentThreadMachineState().SetupFramesDebugInfo(stackFrames);
+            return stackFrames;
         }
 
         inline const StackFrames* GetCachedStackFrames(int32_t depth, const void* stackPointer)
@@ -215,19 +217,15 @@ namespace vm
 
             if (method != NULL)
             {
-                Il2CppStackFrameInfo frameInfo = { 0 };
-                frameInfo.method = method;
-                frameInfo.raw_ip = reinterpret_cast<uintptr_t>(frame) - reinterpret_cast<uintptr_t>(os::Image::GetImageBase());
+                bool frames_added = il2cpp::utils::DebugSymbolReader::AddStackFrames(reinterpret_cast<void*>(frame), stackFrames);
 
-                il2cpp::utils::SourceLocation s;
-                bool symbol_res = il2cpp::utils::DebugSymbolReader::GetSourceLocation(reinterpret_cast<void*>(frame), s);
-                if (symbol_res)
+                if (!frames_added)
                 {
-                    frameInfo.filePath = s.filePath;
-                    frameInfo.sourceCodeLineNumber = s.lineNumber;
+                    Il2CppStackFrameInfo frameInfo = { 0 };
+                    frameInfo.method = method;
+                    frameInfo.raw_ip = reinterpret_cast<uintptr_t>(frame) - reinterpret_cast<uintptr_t>(os::Image::GetImageBase());
+                    stackFrames->push_back(frameInfo);
                 }
-
-                stackFrames->push_back(frameInfo);
             }
 
             return true;
@@ -418,83 +416,6 @@ namespace vm
         for (StackFrames::const_iterator it = frames.begin(); it != frames.end(); it++)
             callback(&*it, context);
     }
-
-#if IL2CPP_TINY_DEBUGGER
-
-    static std::map<const MethodInfo*, std::string> s_MethodNames;
-
-    static std::string MethodNameFor(const MethodInfo* method)
-    {
-        auto cachedMethodNameEntry = s_MethodNames.find(method);
-        if (cachedMethodNameEntry != s_MethodNames.end())
-            return cachedMethodNameEntry->second;
-
-        std::string methodName;
-        methodName += vm::Method::GetFullName(method);
-        methodName += " (";
-        uint32_t numberOfParameters = vm::Method::GetParamCount(method);
-        for (uint32_t j = 0; j < numberOfParameters; ++j)
-        {
-            const Il2CppType* parameterType = vm::Method::GetParam(method, j);
-            methodName += vm::Type::GetName(parameterType, IL2CPP_TYPE_NAME_FORMAT_FULL_NAME);
-            if (j != numberOfParameters - 1)
-                methodName += ", ";
-        }
-        methodName += ")";
-
-        s_MethodNames[method] = methodName;
-
-        return methodName;
-    }
-
-    const int s_StackTraceSize = 4096;
-    static char s_StackTrace[s_StackTraceSize];
-    static int s_StackTraceOffset = 0;
-
-    static void AppendToStackTrace(const char* value)
-    {
-        if (s_StackTraceOffset < s_StackTraceSize)
-            s_StackTraceOffset += snprintf(s_StackTrace + s_StackTraceOffset, s_StackTraceSize - s_StackTraceOffset, "%s", value);
-    }
-
-    const char* StackTrace::GetStackTrace()
-    {
-        // Since a pointer to a static buffer is used to store the stack trace, only
-        // once thread should use it. Tiny does not support managed code on non-main
-        // threads, so there is no need to use a thread local buffer here. Protect this
-        // from access on multiple threads by not returning anyting on non-main threads.
-        if (vm::Thread::Current() != vm::Thread::Main())
-            return NULL;
-
-        const StackFrames* frames = s_MethodStack.GetStackFrames();
-
-        const size_t numberOfFramesToSkip = 1;
-        int startFrame = (int)frames->size() - 1 - numberOfFramesToSkip;
-
-        s_StackTraceOffset = 0;
-        for (int i = startFrame; i > 0; i--)
-        {
-            if (i == startFrame)
-                AppendToStackTrace("at ");
-            else
-                AppendToStackTrace("  at ");
-            Il2CppStackFrameInfo stackFrame = (*frames)[i];
-            AppendToStackTrace(MethodNameFor(stackFrame.method).c_str());
-            if (stackFrame.filePath != NULL)
-            {
-                AppendToStackTrace(" in ");
-                AppendToStackTrace(stackFrame.filePath);
-                AppendToStackTrace(":");
-                AppendToStackTrace(std::to_string(stackFrame.sourceCodeLineNumber).c_str());
-            }
-            if (i != 1)
-                AppendToStackTrace("\n");
-        }
-
-        return s_StackTrace;
-    }
-
-#endif
 
     void StackTrace::PushFrame(Il2CppStackFrameInfo& frame)
     {

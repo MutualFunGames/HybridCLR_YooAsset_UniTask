@@ -6,7 +6,7 @@
 #include <mono/metadata/object.h>
 #include <mono/metadata/marshal.h>
 
-typedef void(*vprintf_func)(const char* msg, va_list args);
+typedef int (*vprintf_func)(const char* msg, va_list args);
 typedef struct {
 	void* (*malloc_func)(size_t size);
 	void(*free_func)(void *ptr);
@@ -96,7 +96,7 @@ guint64 mono_unity_method_get_hash(MonoMethod *method, gboolean inflate);
 MonoMethod* mono_unity_method_get_aot_array_helper_from_wrapper(MonoMethod *method);
 MonoObject* mono_unity_method_convert_return_type_if_needed(MonoMethod *method, void *value);
 MONO_API gboolean unity_mono_method_is_inflated(MonoMethod* method);
-guint32 mono_unity_method_get_token(MonoMethod *method);
+MONO_API guint32 mono_unity_method_get_token(MonoMethod *method);
 
 //domain
 void mono_unity_domain_install_finalize_runtime_invoke(MonoDomain* domain, RuntimeInvokeFunction callback);
@@ -137,6 +137,7 @@ MonoObject* mono_unity_exception_get_inner_exception(MonoException *exc);
 MonoArray* mono_unity_exception_get_trace_ips(MonoException *exc);
 void mono_unity_exception_set_trace_ips(MonoException *exc, MonoArray *ips);
 MonoException* mono_unity_exception_get_marshal_directive(const char* msg);
+MONO_API MonoException* mono_unity_error_convert_to_exception(MonoError *error);
 
 //defaults
 MonoClass* mono_unity_defaults_get_int_class();
@@ -152,20 +153,38 @@ MONO_API unitytls_interface_struct* mono_unity_get_unitytls_interface();
 MONO_API void mono_unity_install_unitytls_interface(unitytls_interface_struct* callbacks);
 
 // gc
+typedef enum
+{
+	MONO_GC_MODE_DISABLED = 0,
+	MONO_GC_MODE_ENABLED = 1,
+	MONO_GC_MODE_MANUAL = 2
+}  MonoGCMode;
+
+MONO_API void mono_unity_gc_set_mode(MonoGCMode mode);
+
+// Deprecated. Remove when Unity has switched to mono_unity_gc_set_mode
 MONO_API void mono_unity_gc_enable();
+// Deprecated. Remove when Unity has switched to mono_unity_gc_set_mode
 MONO_API void mono_unity_gc_disable();
+// Deprecated. Remove when Unity has switched to mono_unity_gc_set_mode
 MONO_API int mono_unity_gc_is_disabled();
+
+// logging
+typedef void (*UnityLogErrorCallback) (const char *message);
+MONO_API void mono_unity_set_editor_logging_callback(UnityLogErrorCallback callback);
+gboolean mono_unity_log_error_to_editor(const char *message);
 
 //misc
 MonoAssembly* mono_unity_assembly_get_mscorlib();
 MonoImage* mono_unity_image_get_mscorlib();
 MonoClass* mono_unity_generic_container_get_parameter_class(MonoGenericContainer* generic_container, gint index);
-MonoString* mono_unity_string_append_assembly_name_if_necessary(MonoString* typeName, MonoMethod* callingMethod);
+MonoString* mono_unity_string_append_assembly_name_if_necessary(MonoString* typeName, const char* assemblyName);
 void mono_unity_memory_barrier();
 MonoException* mono_unity_thread_check_exception();
 MonoObject* mono_unity_delegate_get_target(MonoDelegate *delegate);
 gchar* mono_unity_get_runtime_build_info(const char *date, const char *time);
 void* mono_unity_get_field_address(MonoObject *obj, MonoVTable *vt, MonoClassField *field);
+MONO_API MonoClassField* mono_unity_field_from_token_checked(MonoImage *image, guint32 token, MonoClass **retklass, MonoGenericContext *context, MonoError *error);
 gboolean mono_unity_thread_state_init_from_handle(MonoThreadUnwindState *tctx, MonoThreadInfo *info, void* fixme);
 void mono_unity_stackframe_set_method(MonoStackFrame *sf, MonoMethod *method);
 MonoType* mono_unity_reflection_type_get_type(MonoReflectionType *type);
@@ -176,6 +195,7 @@ MONO_API gpointer mono_unity_alloc(gsize size);
 MONO_API void mono_unity_g_free (void *ptr);
 
 MONO_API MonoClass* mono_custom_attrs_get_attrs (MonoCustomAttrInfo *ainfo, gpointer *iter);
+MONO_API MonoArray* mono_unity_custom_attrs_construct (MonoCustomAttrInfo *cinfo, MonoError *error);
 
 typedef size_t (*RemapPathFunction)(const char* path, char* buffer, size_t buffer_len);
 MONO_API void mono_unity_register_path_remapper (RemapPathFunction func);
@@ -200,5 +220,9 @@ mono_unity_set_enable_handler_block_guards (mono_bool allow);
 
 mono_bool
 mono_unity_get_enable_handler_block_guards (void);
+
+MONO_API gboolean mono_unity_class_is_open_constructed_type (MonoClass *klass);
+
+MONO_API gboolean mono_unity_class_has_failure (const MonoClass* klass);
 
 #endif

@@ -27,13 +27,6 @@
 #include "Cpp/Atomic.h"
 #include "Cpp/ReentrantLock.h"
 
-#if IL2CPP_MONO_DEBUGGER
-
-extern "C" {
-#include <mono/metadata/profiler-private.h>
-}
-#endif
-
 #include "hybridclr/interpreter/InterpreterModule.h"
 
 namespace il2cpp
@@ -49,15 +42,56 @@ namespace vm
 
     static bool s_BlockNewThreads = false;
 
-#define AUTO_LOCK_THREADS() \
-    il2cpp::os::FastAutoLock lock(&s_ThreadMutex)
+#define AUTO_LOCK_THREADS() il2cpp::os::FastAutoLock lock(&s_ThreadMutex)
+
     static baselib::ReentrantLock s_ThreadMutex;
 
     static std::vector<int32_t> s_ThreadStaticSizes;
 
     static il2cpp::os::ThreadLocalValue s_CurrentThread;
+    static il2cpp::os::ThreadLocalValue s_StaticData; // Cache the static thread data in a local TLS slot for faster lookup
 
     static baselib::atomic<int32_t> s_NextManagedThreadId = {0};
+
+    /*
+        Thread static data is stored in a two level lookup so we can grow the size at runtime
+        without requiring a lock on looking up static data
+
+        We pre-allocate a fixed number of slot pointers - kMaxThreadStaticSlots at startup.
+        Each of these slots can hold kMaxThreadStaticDataPointers data pointer.  These slots
+        are allocated as needed.
+    */
+
+    const int32_t kMaxThreadStaticSlots = 1024;
+    const int32_t kMaxThreadStaticDataPointers = 1024;
+
+    struct ThreadStaticOffset
+    {
+        uint32_t slot;
+        uint32_t index;
+    };
+
+    static ThreadStaticOffset IndexToStaticFieldOffset(int32_t index)
+    {
+        static_assert(kMaxThreadStaticSlots <= 0xFFFF, "Only 65535 base thread static slots are supported");
+        static_assert(kMaxThreadStaticDataPointers <= 0xFFFF, "Only 65535 thread static slots are supported");
+
+        uint32_t value = (uint32_t)index;
+        ThreadStaticOffset offset;
+        offset.slot = value >> 16;
+        offset.index = value & 0xFFFF;
+        return offset;
+    }
+
+    struct ThreadStaticDataSlot
+    {
+        void* data[kMaxThreadStaticSlots];
+    };
+
+    struct ThreadStaticData
+    {
+        ThreadStaticDataSlot* slots[kMaxThreadStaticSlots];
+    };
 
     static void
     set_wbarrier_for_attached_threads()
@@ -68,7 +102,7 @@ namespace vm
     static void
     thread_cleanup_on_cancel(void* arg)
     {
-        Thread::Detach((Il2CppThread*)arg);
+        Thread::Detach((Il2CppThread*)arg, true);
 
 #if IL2CPP_HAS_NATIVE_THREAD_CLEANUP
         il2cpp::os::Thread* osThread = ((Il2CppThread*)arg)->GetInternalThread()->handle;
@@ -99,8 +133,6 @@ namespace vm
         s_AttachedThreads = NULL;
 
         s_MainThread = NULL;
-
-        s_CurrentThread.SetValue(NULL);
     }
 
     Il2CppThread* Thread::Attach(Il2CppDomain *domain)
@@ -110,9 +142,7 @@ namespace vm
         if (managedThread != NULL)
             return managedThread;
 
-        int temp = 0;
-        if (!gc::GarbageCollector::RegisterThread(&temp))
-            IL2CPP_ASSERT(0 && "gc::GarbageCollector::RegisterThread failed");
+        gc::GarbageCollector::RegisterThread();
 
         StackTrace::InitializeStackTracesForCurrentThread();
 
@@ -164,10 +194,10 @@ namespace vm
         Domain::ContextSet(domain->default_context);
 
         Register(thread);
-        AdjustStaticData();
+        AllocateStaticDataForCurrentThread();
 
 #if IL2CPP_MONO_DEBUGGER
-        MONO_PROFILER_RAISE(thread_started, ((uintptr_t)thread->GetInternalThread()->tid));
+        utils::Debugger::ThreadStarted((uintptr_t)thread->GetInternalThread()->tid);
 #endif
 
 #if IL2CPP_ENABLE_PROFILER
@@ -195,8 +225,18 @@ namespace vm
             RequestInterrupt(thread);
     }
 
-    void Thread::UninitializeManagedThread(Il2CppThread *thread)
+    void Thread::UninitializeManagedThread(Il2CppThread* thread)
     {
+        Thread::UninitializeManagedThread(thread, false);
+    }
+
+    void Thread::UninitializeManagedThread(Il2CppThread *thread, bool inNativeThreadCleanup)
+    {
+        // This method is only valid to call from the current thread
+        // But we can't safely check the Current() in native thread shutdown
+        // because we can't rely on TLS values being valid
+        IL2CPP_ASSERT(inNativeThreadCleanup || thread == Current());
+
 #if IL2CPP_HAS_NATIVE_THREAD_CLEANUP
         // unregister from special cleanup since we are doing it now
         os::Thread::UnregisterCurrentThreadForCleanup();
@@ -215,10 +255,10 @@ namespace vm
         // thread is being detached by a call from thread_cleanup_on_cancel, then there might
         // not be a current thread, as pthreads does not privide TLS entries in thread destructors.
         if (os::Thread::HasCurrentThread())
-            MONO_PROFILER_RAISE(thread_stopped, ((uintptr_t)thread->GetInternalThread()->tid));
+            utils::Debugger::ThreadStopped((uintptr_t)thread->GetInternalThread()->tid);
 #endif
 
-        FreeThreadStaticData(thread);
+        FreeCurrentThreadStaticData(thread, inNativeThreadCleanup);
 
         // Call Unregister after all access to managed objects (Il2CppThread and Il2CppInternalThread)
         // is complete. Unregister will remove the managed thread object from the GC tracked vector of
@@ -240,12 +280,6 @@ namespace vm
         void* value = NULL;
         s_CurrentThread.GetValue(&value);
         return (Il2CppThread*)value;
-    }
-
-    Il2CppThread** Thread::GetAllAttachedThreads(size_t &size)
-    {
-        size = s_AttachedThreads->size();
-        return &(*s_AttachedThreads)[0];
     }
 
     static void STDCALL TerminateThread(void* context)
@@ -344,11 +378,16 @@ namespace vm
 #endif
     }
 
-    void Thread::Detach(Il2CppThread *thread)
+    void Thread::Detach(Il2CppThread* thread)
+    {
+        Thread::Detach(thread, false);
+    }
+
+    void Thread::Detach(Il2CppThread *thread, bool inNativeThreadCleanup)
     {
         IL2CPP_ASSERT(thread != NULL && "Cannot detach a NULL thread");
 
-        UninitializeManagedThread(thread);
+        UninitializeManagedThread(thread, inNativeThreadCleanup);
         il2cpp::vm::StackTrace::CleanupStackTracesForCurrentThread();
     }
 
@@ -410,19 +449,32 @@ namespace vm
         thread->GetInternalThread()->state &= ~state;
     }
 
-    const int32_t kMaxThreadStaticSlots = 2048;
+    static void AllocThreadDataSlot(ThreadStaticData* staticData, ThreadStaticOffset offset, int32_t size)
+    {
+        if (staticData->slots[offset.slot] == NULL)
+            staticData->slots[offset.slot] = (ThreadStaticDataSlot*)IL2CPP_CALLOC(1, sizeof(ThreadStaticDataSlot));
 
-    void Thread::AdjustStaticData()
+        if (staticData->slots[offset.slot]->data[offset.index] == NULL)
+            staticData->slots[offset.slot]->data[offset.index] = gc::GarbageCollector::AllocateFixed(size, NULL);
+    }
+
+    void Thread::AllocateStaticDataForCurrentThread()
     {
         AUTO_LOCK_THREADS();
-        size_t index = 0;
+        int32_t index = 0;
+
+        // Alloc the slotData along with the first slots at once
+        ThreadStaticData* staticData = (ThreadStaticData*)IL2CPP_CALLOC(1, sizeof(ThreadStaticData) + sizeof(ThreadStaticDataSlot));
+        staticData->slots[0] = (ThreadStaticDataSlot*)(staticData + 1);
+
         Il2CppThread* thread = Current();
-        if (!thread->GetInternalThread()->static_data)
-            thread->GetInternalThread()->static_data = (void**)IL2CPP_CALLOC(kMaxThreadStaticSlots, sizeof(void*));
+        IL2CPP_ASSERT(!thread->GetInternalThread()->static_data);
+        thread->GetInternalThread()->static_data = staticData;
+        s_StaticData.SetValue(staticData);
+
         for (std::vector<int32_t>::const_iterator iter = s_ThreadStaticSizes.begin(); iter != s_ThreadStaticSizes.end(); ++iter)
         {
-            if (!thread->GetInternalThread()->static_data[index])
-                thread->GetInternalThread()->static_data[index] = gc::GarbageCollector::AllocateFixed(*iter, NULL);
+            AllocThreadDataSlot(staticData, IndexToStaticFieldOffset(index), *iter);
             index++;
         }
     }
@@ -430,32 +482,75 @@ namespace vm
     int32_t Thread::AllocThreadStaticData(int32_t size)
     {
         AUTO_LOCK_THREADS();
+        IL2CPP_ASSERT(size > 0);
         int32_t index = (int32_t)s_ThreadStaticSizes.size();
-        IL2CPP_ASSERT(index < kMaxThreadStaticSlots);
+
+        IL2CPP_ASSERT(index < kMaxThreadStaticSlots * kMaxThreadStaticDataPointers);
+        if (index >= kMaxThreadStaticSlots * kMaxThreadStaticDataPointers)
+            il2cpp::vm::Exception::Raise(Exception::GetExecutionEngineException("Out of thread static storage slots"));
+
         s_ThreadStaticSizes.push_back(size);
+
+        ThreadStaticOffset offset = IndexToStaticFieldOffset(index);
+
         for (GCTrackedThreadVector::const_iterator iter = s_AttachedThreads->begin(); iter != s_AttachedThreads->end(); ++iter)
         {
             Il2CppThread* thread = *iter;
-            if (!thread->GetInternalThread()->static_data)
-                thread->GetInternalThread()->static_data = (void**)IL2CPP_CALLOC(kMaxThreadStaticSlots, sizeof(void*));
-            thread->GetInternalThread()->static_data[index] = gc::GarbageCollector::AllocateFixed(size, NULL);
+            ThreadStaticData* staticData = reinterpret_cast<ThreadStaticData*>(thread->GetInternalThread()->static_data);
+
+            if (staticData == NULL)
+            {
+                // There is a race on staticData for a thread could be NULL here in two cases
+                // 1. The thread hasn't entered AllocateStaticDataForCurrentThread yet
+                // 2. The thread has exited FreeCurrentThreadStaticData but hasn't been remove from the s_AttachedThreads yet
+                // In both cases we can just continue and in 1. the data will be allocated in AllocateStaticDataForCurrentThread
+                // and in 2. we don't want to allocate anything
+                continue;
+            }
+
+            AllocThreadDataSlot(staticData, offset, size);
         }
 
         return index;
     }
 
-    void Thread::FreeThreadStaticData(Il2CppThread *thread)
+    void Thread::FreeCurrentThreadStaticData(Il2CppThread *thread, bool inNativeThreadCleanup)
     {
+        // This method is only valid to call from the current thread
+        // But we can't safely check the Current() in native thread shutdown
+        // because we can't rely on TLS values being valid
+        IL2CPP_ASSERT(inNativeThreadCleanup || thread == Current());
+
         AUTO_LOCK_THREADS();
-        size_t index = 0;
-        for (std::vector<int32_t>::const_iterator iter = s_ThreadStaticSizes.begin(); iter != s_ThreadStaticSizes.end(); ++iter)
-        {
-            if (thread->GetInternalThread()->static_data[index])
-                gc::GarbageCollector::FreeFixed(thread->GetInternalThread()->static_data[index]);
-            index++;
-        }
-        IL2CPP_FREE(thread->GetInternalThread()->static_data);
+
+        ThreadStaticData* staticData = reinterpret_cast<ThreadStaticData*>(thread->GetInternalThread()->static_data);
+
         thread->GetInternalThread()->static_data = NULL;
+        s_StaticData.SetValue(NULL);
+
+        // This shouldn't happen unless we call this twice, but there's no reason to crash here
+        IL2CPP_ASSERT(staticData);
+        if (staticData == NULL)
+            return;
+
+        for (int slot = 0; slot < kMaxThreadStaticSlots; slot++)
+        {
+            if (!staticData->slots[slot])
+                break;
+
+            for (int i = 0; i < kMaxThreadStaticDataPointers; i++)
+            {
+                if (!staticData->slots[slot]->data[i])
+                    break;
+                gc::GarbageCollector::FreeFixed(staticData->slots[slot]->data[i]);
+            }
+
+            // Don't free the first slot because we allocate the first slot along with the root slots
+            if (slot > 0)
+                IL2CPP_FREE(staticData->slots[slot]);
+        }
+
+        IL2CPP_FREE(staticData);
     }
 
     void* Thread::GetThreadStaticData(int32_t offset)
@@ -463,15 +558,14 @@ namespace vm
         // No lock. We allocate static_data once with a fixed size so we can read it
         // safely without a lock here.
         IL2CPP_ASSERT(offset >= 0 && static_cast<uint32_t>(offset) < s_ThreadStaticSizes.size());
-        return Current()->GetInternalThread()->static_data[offset];
-    }
 
-    void* Thread::GetThreadStaticDataForThread(int32_t offset, Il2CppThread* thread)
-    {
-        // No lock. We allocate static_data once with a fixed size so we can read it
-        // safely without a lock here.
-        IL2CPP_ASSERT(offset >= 0 && static_cast<uint32_t>(offset) < s_ThreadStaticSizes.size());
-        return thread->GetInternalThread()->static_data[offset];
+        ThreadStaticOffset staticOffset = IndexToStaticFieldOffset(offset);
+
+        ThreadStaticData* staticData;
+        s_StaticData.GetValue((void**)&staticData);
+        IL2CPP_ASSERT(staticData != NULL);
+
+        return staticData->slots[staticOffset.slot]->data[staticOffset.index];
     }
 
     void* Thread::GetThreadStaticDataForThread(int32_t offset, Il2CppInternalThread* thread)
@@ -479,7 +573,10 @@ namespace vm
         // No lock. We allocate static_data once with a fixed size so we can read it
         // safely without a lock here.
         IL2CPP_ASSERT(offset >= 0 && static_cast<uint32_t>(offset) < s_ThreadStaticSizes.size());
-        return thread->static_data[offset];
+        IL2CPP_ASSERT(thread->static_data != NULL);
+
+        ThreadStaticOffset staticOffset = IndexToStaticFieldOffset(offset);
+        return reinterpret_cast<ThreadStaticData*>(thread->static_data)->slots[staticOffset.slot]->data[staticOffset.index];
     }
 
     void Thread::Register(Il2CppThread *thread)
@@ -684,9 +781,7 @@ namespace vm
         startData->m_Semaphore->Wait();
 
         {
-            int temp = 0;
-            if (!gc::GarbageCollector::RegisterThread(&temp))
-                IL2CPP_ASSERT(0 && "gc::GarbageCollector::RegisterThread failed");
+            gc::GarbageCollector::RegisterThread();
 
             il2cpp::vm::StackTrace::InitializeStackTracesForCurrentThread();
 
@@ -722,7 +817,7 @@ namespace vm
             il2cpp::vm::Thread::ClrState(startData->m_Thread, kThreadStateRunning);
             il2cpp::vm::Thread::SetState(startData->m_Thread, kThreadStateStopped);
             if (attachSuccessful)
-                il2cpp::vm::Thread::UninitializeManagedThread(startData->m_Thread);
+                il2cpp::vm::Thread::UninitializeManagedThread(startData->m_Thread, false);
 
             il2cpp::vm::StackTrace::CleanupStackTracesForCurrentThread();
         }

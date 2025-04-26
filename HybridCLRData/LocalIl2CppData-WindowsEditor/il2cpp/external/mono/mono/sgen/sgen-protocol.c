@@ -23,12 +23,14 @@
 
 #include <errno.h>
 #include <string.h>
-#if defined(HAVE_UNISTD_H)
+#if defined(HOST_WIN32)
+#include <windows.h>
+#elif defined(HAVE_UNISTD_H)
 #include <unistd.h>
 #include <fcntl.h>
-#elif defined(HOST_WIN32)
-#include <windows.h>
 #endif
+
+#ifndef DISABLE_SGEN_BINARY_PROTOCOL
 
 #if defined(HOST_WIN32)
 static const HANDLE invalid_file_value = INVALID_HANDLE_VALUE;
@@ -96,7 +98,9 @@ binary_protocol_open_file (gboolean assert_on_failure)
 	else
 		filename = filename_or_prefix;
 
-#if defined(HAVE_UNISTD_H)
+#if defined(HOST_WIN32)
+	binary_protocol_file = CreateFileA (filename, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+#elif defined(HAVE_UNISTD_H)
 	do {
 		binary_protocol_file = open (filename, O_CREAT | O_WRONLY, 0644);
 		if (binary_protocol_file == -1) {
@@ -114,12 +118,9 @@ binary_protocol_open_file (gboolean assert_on_failure)
 			ftruncate (binary_protocol_file, 0);
 		}
 	} while (binary_protocol_file == -1);
-#elif defined(HOST_WIN32)
-	binary_protocol_file = CreateFileA (filename, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 #else
 	g_error ("sgen binary protocol: not supported");
 #endif
-
 	if (binary_protocol_file == invalid_file_value && assert_on_failure)
 		g_error ("sgen binary protocol: failed to open file");
 
@@ -128,7 +129,7 @@ binary_protocol_open_file (gboolean assert_on_failure)
 }
 
 void
-binary_protocol_init (const char *filename, long long limit)
+sgen_binary_protocol_init (const char *filename, long long limit)
 {
 	file_size_limit = limit;
 
@@ -148,11 +149,11 @@ binary_protocol_init (const char *filename, long long limit)
 	if (file_size_limit == 0)
 		g_free (filename_or_prefix);
 
-	binary_protocol_header (PROTOCOL_HEADER_CHECK, PROTOCOL_HEADER_VERSION, SIZEOF_VOID_P, G_BYTE_ORDER == G_LITTLE_ENDIAN);
+	sgen_binary_protocol_header (PROTOCOL_HEADER_CHECK, PROTOCOL_HEADER_VERSION, SIZEOF_VOID_P, G_BYTE_ORDER == G_LITTLE_ENDIAN);
 }
 
 gboolean
-binary_protocol_is_enabled (void)
+sgen_binary_protocol_is_enabled (void)
 {
 	return binary_protocol_file != invalid_file_value;
 }
@@ -160,11 +161,11 @@ binary_protocol_is_enabled (void)
 static void
 close_binary_protocol_file (void)
 {
-#if defined(HAVE_UNISTD_H)
+#if defined(HOST_WIN32)
+	CloseHandle (binary_protocol_file);
+#elif defined(HAVE_UNISTD_H)
 	while (close (binary_protocol_file) == -1 && errno == EINTR)
 		;
-#elif defined(HOST_WIN32)
-	CloseHandle (binary_protocol_file);
 #endif
 	binary_protocol_file = invalid_file_value;
 }
@@ -219,27 +220,24 @@ unlock_recursive (void)
 static void
 binary_protocol_flush_buffer (BinaryProtocolBuffer *buffer)
 {
-	ssize_t ret;
 	size_t to_write = buffer->index;
 	size_t written = 0;
 	g_assert (buffer->index > 0);
 
-	while (written < to_write) {
-#if defined(HAVE_UNISTD_H)
-		ret = write (binary_protocol_file, buffer->buffer + written, to_write - written);
+	while (binary_protocol_file != invalid_file_value && written < to_write) {
+#if defined(HOST_WIN32)
+		DWORD tmp_written;
+		if (WriteFile (binary_protocol_file, buffer->buffer + written, to_write - written, &tmp_written, NULL))
+			written += tmp_written;
+#elif defined(HAVE_UNISTD_H)
+		ssize_t ret = write (binary_protocol_file, buffer->buffer + written, to_write - written);
 		if (ret >= 0)
 			written += ret;
 		else if (errno == EINTR)
 			continue;
-		else
-			close_binary_protocol_file ();
-#elif defined(HOST_WIN32)
-		int tmp_written;
-		if (WriteFile (binary_protocol_file, buffer->buffer + written, to_write - written, &tmp_written, NULL))
-			written += tmp_written;
-		else
-			close_binary_protocol_file ();
 #endif
+		else
+			close_binary_protocol_file ();
 	}
 
 	current_file_size += buffer->index;
@@ -275,7 +273,7 @@ binary_protocol_check_file_overflow (void)
  * The protocol entries that do flush have `FLUSH()` in their definition.
  */
 gboolean
-binary_protocol_flush_buffers (gboolean force)
+sgen_binary_protocol_flush_buffers (gboolean force)
 {
 	int num_buffers = 0, i;
 	BinaryProtocolBuffer *header;
@@ -390,48 +388,48 @@ protocol_entry (unsigned char type, gpointer data, int size)
 #define TYPE_BOOL gboolean
 
 #define BEGIN_PROTOCOL_ENTRY0(method) \
-	void method (void) { \
+	void sgen_ ## method (void) { \
 		int __type = PROTOCOL_ID(method); \
 		gpointer __data = NULL; \
 		int __size = 0; \
 		CLIENT_PROTOCOL_NAME (method) ();
 #define BEGIN_PROTOCOL_ENTRY1(method,t1,f1) \
-	void method (t1 f1) { \
+	void sgen_ ## method (t1 f1) { \
 		PROTOCOL_STRUCT(method) __entry = { f1 }; \
 		int __type = PROTOCOL_ID(method); \
 		gpointer __data = &__entry; \
 		int __size = sizeof (PROTOCOL_STRUCT(method)); \
 		CLIENT_PROTOCOL_NAME (method) (f1);
 #define BEGIN_PROTOCOL_ENTRY2(method,t1,f1,t2,f2) \
-	void method (t1 f1, t2 f2) { \
+	void sgen_ ## method (t1 f1, t2 f2) { \
 		PROTOCOL_STRUCT(method) __entry = { f1, f2 }; \
 		int __type = PROTOCOL_ID(method); \
 		gpointer __data = &__entry; \
 		int __size = sizeof (PROTOCOL_STRUCT(method)); \
 		CLIENT_PROTOCOL_NAME (method) (f1, f2);
 #define BEGIN_PROTOCOL_ENTRY3(method,t1,f1,t2,f2,t3,f3) \
-	void method (t1 f1, t2 f2, t3 f3) { \
+	void sgen_ ## method (t1 f1, t2 f2, t3 f3) { \
 		PROTOCOL_STRUCT(method) __entry = { f1, f2, f3 }; \
 		int __type = PROTOCOL_ID(method); \
 		gpointer __data = &__entry; \
 		int __size = sizeof (PROTOCOL_STRUCT(method)); \
 		CLIENT_PROTOCOL_NAME (method) (f1, f2, f3);
 #define BEGIN_PROTOCOL_ENTRY4(method,t1,f1,t2,f2,t3,f3,t4,f4) \
-	void method (t1 f1, t2 f2, t3 f3, t4 f4) { \
+	void sgen_ ## method (t1 f1, t2 f2, t3 f3, t4 f4) { \
 		PROTOCOL_STRUCT(method) __entry = { f1, f2, f3, f4 }; \
 		int __type = PROTOCOL_ID(method); \
 		gpointer __data = &__entry; \
 		int __size = sizeof (PROTOCOL_STRUCT(method)); \
 		CLIENT_PROTOCOL_NAME (method) (f1, f2, f3, f4);
 #define BEGIN_PROTOCOL_ENTRY5(method,t1,f1,t2,f2,t3,f3,t4,f4,t5,f5) \
-	void method (t1 f1, t2 f2, t3 f3, t4 f4, t5 f5) { \
+	void sgen_ ## method (t1 f1, t2 f2, t3 f3, t4 f4, t5 f5) { \
 		PROTOCOL_STRUCT(method) __entry = { f1, f2, f3, f4, f5 }; \
 		int __type = PROTOCOL_ID(method); \
 		gpointer __data = &__entry; \
 		int __size = sizeof (PROTOCOL_STRUCT(method)); \
 		CLIENT_PROTOCOL_NAME (method) (f1, f2, f3, f4, f5);
 #define BEGIN_PROTOCOL_ENTRY6(method,t1,f1,t2,f2,t3,f3,t4,f4,t5,f5,t6,f6) \
-	void method (t1 f1, t2 f2, t3 f3, t4 f4, t5 f5, t6 f6) { \
+	void sgen_ ## method (t1 f1, t2 f2, t3 f3, t4 f4, t5 f5, t6 f6) { \
 		PROTOCOL_STRUCT(method) __entry = { f1, f2, f3, f4, f5, f6 }; \
 		int __type = PROTOCOL_ID(method); \
 		gpointer __data = &__entry; \
@@ -451,7 +449,7 @@ protocol_entry (unsigned char type, gpointer data, int size)
 
 #define END_PROTOCOL_ENTRY_FLUSH \
 		protocol_entry (__type, __data, __size); \
-		binary_protocol_flush_buffers (FALSE); \
+		sgen_binary_protocol_flush_buffers (FALSE); \
 	}
 
 #ifdef SGEN_HEAVY_BINARY_PROTOCOL
@@ -491,5 +489,7 @@ protocol_entry (unsigned char type, gpointer data, int size)
 #undef TYPE_SIZE
 #undef TYPE_POINTER
 #undef TYPE_BOOL
+
+#endif
 
 #endif /* HAVE_SGEN_GC */

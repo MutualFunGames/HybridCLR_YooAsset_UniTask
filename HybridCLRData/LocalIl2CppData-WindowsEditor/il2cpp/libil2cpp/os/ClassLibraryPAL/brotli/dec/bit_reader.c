@@ -9,7 +9,7 @@
 #include "./bit_reader.h"
 
 #include "../common/platform.h"
-#include "../include/brotli/types.h"
+#include <brotli/types.h>
 
 #if defined(__cplusplus) || defined(c_plusplus)
 extern "C" {

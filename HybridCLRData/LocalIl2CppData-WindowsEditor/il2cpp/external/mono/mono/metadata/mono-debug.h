@@ -178,6 +178,9 @@ mono_debug_lookup_method_addresses (MonoMethod *method);
 MONO_API MonoDebugMethodJitInfo*
 mono_debug_find_method (MonoMethod *method, MonoDomain *domain);
 
+MONO_API MonoDebugHandle *
+mono_debug_get_handle (MonoImage *image);
+
 MONO_API void
 mono_debug_free_method_jit_info (MonoDebugMethodJitInfo *jit);
 
@@ -191,6 +194,7 @@ mono_debug_lookup_locals (MonoMethod *method);
 MonoDebugMethodAsyncInfo*
 mono_debug_lookup_method_async_debug_info (MonoMethod *method);
 
+MONO_API
 MonoDebugSourceLocation *
 mono_debug_method_lookup_location (MonoDebugMethodInfo *minfo, int il_offset);
 
@@ -200,6 +204,9 @@ mono_debug_method_lookup_location (MonoDebugMethodInfo *minfo, int il_offset);
 
 MONO_API MonoDebugSourceLocation *
 mono_debug_lookup_source_location (MonoMethod *method, uint32_t address, MonoDomain *domain);
+
+MONO_API MonoDebugSourceLocation*
+mono_debug_lookup_source_location_by_il (MonoMethod* method, uint32_t il_offset, MonoDomain* domain);
 
 MONO_API int32_t
 mono_debug_il_offset_from_address (MonoMethod *method, MonoDomain *domain, uint32_t native_offset);

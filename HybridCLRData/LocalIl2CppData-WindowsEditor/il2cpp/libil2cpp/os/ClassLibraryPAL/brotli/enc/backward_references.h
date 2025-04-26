@@ -13,7 +13,7 @@
 #include "../common/context.h"
 #include "../common/dictionary.h"
 #include "../common/platform.h"
-#include "../include/brotli/types.h"
+#include <brotli/types.h>
 #include "./command.h"
 #include "./hash.h"
 #include "./quality.h"

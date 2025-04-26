@@ -19,25 +19,25 @@ namespace Runtime
 {
 namespace InteropServices
 {
-    bool GCHandle::CheckCurrentDomain(int32_t handle)
+    bool GCHandle::CheckCurrentDomain(intptr_t handle)
     {
         return true; // il2cpp doesn't support multiple domains
     }
 
-    void GCHandle::FreeHandle(int32_t handle)
+    void GCHandle::FreeHandle(intptr_t handle)
     {
-        gc::GCHandle::Free(handle);
+        gc::GCHandle::Free((Il2CppGCHandle)handle);
     }
 
 // Returns -2 if gchandle is not pinned
-    intptr_t GCHandle::GetAddrOfPinnedObject(int32_t handle)
+    intptr_t GCHandle::GetAddrOfPinnedObject(intptr_t handle)
     {
-        gc::GCHandleType type = gc::GCHandle::GetHandleType(handle);
+        gc::GCHandleType type = gc::GCHandle::GetHandleType((Il2CppGCHandle)handle);
 
         if (type != gc::HANDLE_PINNED)
             return reinterpret_cast<intptr_t>(reinterpret_cast<uint8_t*>(-2)); // mscorlib on managed land expects us to return "-2" as IntPtr if this condition occurs
 
-        Il2CppObject* obj = gc::GCHandle::GetTarget(handle);
+        Il2CppObject* obj = gc::GCHandle::GetTarget((Il2CppGCHandle)handle);
         if (obj == NULL)
             return 0;
 
@@ -62,31 +62,17 @@ namespace InteropServices
         return reinterpret_cast<intptr_t>((reinterpret_cast<uint8_t*>(obj) + offset));
     }
 
-    Il2CppObject* GCHandle::GetTarget(int32_t handle)
+    Il2CppObject* GCHandle::GetTarget(intptr_t handle)
     {
-        return gc::GCHandle::GetTarget(handle);
+        return gc::GCHandle::GetTarget((Il2CppGCHandle)handle);
     }
 
     static bool IsTypePinnable(Il2CppClass* klass)
     {
-        const Il2CppType* il2cppType = vm::Class::GetType(klass);
-        if (il2cppType->type == IL2CPP_TYPE_ARRAY || il2cppType->type == IL2CPP_TYPE_SZARRAY)
-        {
-            Il2CppClass* elementClass = klass->element_class;
-            if (elementClass->byval_arg.type == IL2CPP_TYPE_STRING ||
-                elementClass->byval_arg.type == IL2CPP_TYPE_ARRAY ||
-                elementClass->byval_arg.type == IL2CPP_TYPE_SZARRAY)
-            {
-                return false;
-            }
-
-            return IsTypePinnable(elementClass); // Note the recursive call here
-        }
-
-        if (il2cppType->type == IL2CPP_TYPE_CHAR  || il2cppType->type == IL2CPP_TYPE_BOOLEAN || il2cppType->type == IL2CPP_TYPE_STRING)
-            return true;
-
-        return klass->is_blittable;
+        // IL2CPP is matching the .NET Core behavior now, not .NET Framework.
+        // Any type that does not have fields which are reference types can be
+        // pinned.
+        return !vm::Class::HasReferences(klass);
     }
 
     static inline bool IsObjectPinnable(Il2CppObject* obj)
@@ -97,17 +83,17 @@ namespace InteropServices
         return IsTypePinnable(obj->klass);
     }
 
-    int32_t GCHandle::GetTargetHandle(Il2CppObject* obj, int32_t handle, int32_t type)
+    intptr_t GCHandle::GetTargetHandle(Il2CppObject* obj, intptr_t handle, int32_t type)
     {
         if (type == gc::HANDLE_PINNED && !IsObjectPinnable(obj))
         {
-            Il2CppException* ex = vm::Exception::GetArgumentException(NULL, "Object contains non-primitive or non-blittable data.");
+            Il2CppException* ex = vm::Exception::GetArgumentException(NULL, "Object contains references.");
             vm::Exception::Raise(ex);
         }
 
-        auto targetHandle = gc::GCHandle::GetTargetHandle(obj, handle, type);
+        auto targetHandle = gc::GCHandle::GetTargetHandle(obj, (Il2CppGCHandle)handle, type);
         vm::Exception::RaiseIfError(targetHandle.GetError());
-        return targetHandle.Get();
+        return (intptr_t)targetHandle.Get();
     }
 } /* namespace InteropServices */
 } /* namespace Runtime */

@@ -1,9 +1,9 @@
 #pragma once
 
-// Arm exlusive state access break implementation
+// Arm exclusive state access break implementation
 #define detail_Baselib_atomic_llsc_break() __builtin_arm_clrex()
 
-// Arm exlusive LLSC implementation using intrinsics.
+// Arm exclusive LLSC implementation using intrinsics.
 #define detail_Baselib_atomic_llsc_arm_ts(obj, expected, value, code, ll_instr, sc_instr, load_barrier, store_barrier) \
     do {                                                                                                               \
         do {                                                                                                           \

@@ -1,7 +1,5 @@
 #include "os/c-api/il2cpp-config-platforms.h"
 
-#if !RUNTIME_TINY
-
 #include "os/c-api/Socket-c-api.h"
 #include "os/c-api/Allocator.h"
 #include "os/Socket.h"
@@ -35,5 +33,3 @@ UnityPalWaitStatus UnityPalGetHostByName(const char* host, char** name, int32_t*
 
     return result;
 }
-
-#endif

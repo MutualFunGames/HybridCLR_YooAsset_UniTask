@@ -10,8 +10,6 @@
 #include "vm/Runtime.h"
 #include "vm-utils/BlobReader.h"
 
-#include "hybridclr/metadata/MetadataUtil.h"
-
 namespace il2cpp
 {
 namespace icalls
@@ -58,7 +56,7 @@ namespace Reflection
             case IL2CPP_TYPE_R8:
             {
                 Il2CppObject* obj = vm::Object::New(vm::Class::FromIl2CppType(type));
-                utils::BlobReader::GetConstantValueFromBlob(fieldInfo->parent->image, type->type, data, vm::Object::Unbox(obj), nullptr, hybridclr::metadata::IsInterpreterType(fieldInfo->parent));
+                utils::BlobReader::GetConstantValueFromBlob(fieldInfo->parent->image, type->type, data, vm::Object::Unbox(obj));
                 return obj;
             }
             case IL2CPP_TYPE_SZARRAY:
@@ -68,7 +66,7 @@ namespace Reflection
             case IL2CPP_TYPE_GENERICINST:
             {
                 Il2CppObject* obj = NULL;
-                utils::BlobReader::GetConstantValueFromBlob(fieldInfo->parent->image, type->type, data, &obj, nullptr, hybridclr::metadata::IsInterpreterType(fieldInfo->parent));
+                utils::BlobReader::GetConstantValueFromBlob(fieldInfo->parent->image, type->type, data, &obj);
                 return obj;
             }
             default:

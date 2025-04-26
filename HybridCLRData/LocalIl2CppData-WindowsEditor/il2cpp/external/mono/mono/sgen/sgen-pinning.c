@@ -125,7 +125,7 @@ sgen_find_section_pin_queue_start_end (GCMemSection *section)
 	sgen_find_optimized_pin_queue_area (section->data, section->end_data,
 			&section->pin_queue_first_entry, &section->pin_queue_last_entry);
 
-	SGEN_LOG (6, "Found %zd pinning addresses in section %p",
+	SGEN_LOG (6, "Found %" G_GSIZE_FORMAT "d pinning addresses in section %p",
 			section->pin_queue_last_entry - section->pin_queue_first_entry, section);
 }
 
@@ -210,7 +210,7 @@ sgen_dump_pin_queue (void)
 
 	for (i = 0; i < last_num_pinned; ++i) {
 		GCObject *ptr = (GCObject *)pin_queue.data [i];
-		SGEN_LOG (3, "Bastard pinning obj %p (%s), size: %zd", ptr, sgen_client_vtable_get_name (SGEN_LOAD_VTABLE (ptr)), sgen_safe_object_get_size (ptr));
+		SGEN_LOG (3, "Bastard pinning obj %p (%s), size: %ld", ptr, sgen_client_vtable_get_name (SGEN_LOAD_VTABLE (ptr)), (long)sgen_safe_object_get_size (ptr));
 	}
 }
 
@@ -243,7 +243,7 @@ sgen_cement_reset (void)
 			cement_hash [i].count = 0;
 		}
 	}
-	binary_protocol_cement_reset ();
+	sgen_binary_protocol_cement_reset ();
 }
 
 
@@ -334,7 +334,7 @@ sgen_cement_lookup_or_register (GCObject *obj)
 
 	if (!hash [i].obj) {
 		GCObject *old_obj;
-		old_obj = mono_atomic_cas_ptr ((gpointer*)&hash [i].obj, obj, NULL);
+		old_obj = (GCObject*)mono_atomic_cas_ptr ((gpointer*)&hash [i].obj, obj, NULL);
 		/* Check if the slot was occupied by some other object */
 		if (old_obj != NULL && old_obj != obj)
 			return FALSE;
@@ -350,7 +350,7 @@ sgen_cement_lookup_or_register (GCObject *obj)
 		SGEN_ASSERT (9, SGEN_OBJECT_IS_PINNED (obj), "Can only cement pinned objects");
 		SGEN_CEMENT_OBJECT (obj);
 
-		binary_protocol_cement (obj, (gpointer)SGEN_LOAD_VTABLE (obj),
+		sgen_binary_protocol_cement (obj, (gpointer)SGEN_LOAD_VTABLE (obj),
 				(int)sgen_safe_object_get_size (obj));
 	}
 
@@ -370,7 +370,7 @@ pin_from_hash (CementHashEntry *hash, gboolean has_been_reset)
 
 		sgen_client_pinned_cemented_object (hash [i].obj);
 		sgen_pin_stage_ptr (hash [i].obj);
-		binary_protocol_cement_stage (hash [i].obj);
+		sgen_binary_protocol_cement_stage (hash [i].obj);
 		/* FIXME: do pin stats if enabled */
 
 		SGEN_CEMENT_OBJECT (hash [i].obj);

@@ -34,6 +34,11 @@
             The total number of generate into own cpp file attributes
             </summary>
         </member>
+        <member name="P:Unity.IL2CPP.Api.Output.Analytics.Il2CppDataTable.attribute_total_count_ignore_by_deep_profiler">
+            <summary>
+            The total number of ignore deep profiler attributes
+            </summary>
+        </member>
         <member name="P:Unity.IL2CPP.Api.Output.Analytics.Il2CppDataTable.extra_types_total_count">
             <summary>
             The total number of extra types defined by all extra type files
@@ -42,11 +47,6 @@
         <member name="P:Unity.IL2CPP.Api.Output.Analytics.Il2CppDataTable.option_extra_types_file_count">
             <summary>
             The number of extra types files that were included
-            </summary>
-        </member>
-        <member name="P:Unity.IL2CPP.Api.Output.Analytics.Il2CppDataTable.option_jobs">
-            <summary>
-            The number of jobs that were requested.  Defaults to the processor count
             </summary>
         </member>
         <member name="P:Unity.IL2CPP.Api.Output.Analytics.Il2CppDataTable.option_debug_assembly_name_count">
@@ -101,6 +101,13 @@
             Note that this option can also be enabled via the code generation option field
             </summary>
         </member>
+        <member name="P:Unity.IL2CPP.Api.Output.Analytics.Il2CppDataTable.option_emit_comments">
+            <summary>
+            Whether or not emitting comments was enabled
+            
+            Note that this option can also be enabled via the code generation option field
+            </summary>
+        </member>
         <member name="P:Unity.IL2CPP.Api.Output.Analytics.Il2CppDataTable.option_disable_generic_sharing">
             <summary>
             Whether or not generic sharing should be disabled
@@ -127,7 +134,7 @@
               EnableArrayBoundsCheck
               EnableDivideByZeroCheck
               EnableLazyStaticConstructors
-              EnableNoComments
+              EnableComments
               EnableSerial
               EnablePerAssemblyMetadata
               EnableInlining
@@ -158,7 +165,7 @@
               EnableEnumTypeSharing
               EnablePrimitiveValueTypeGenericSharing
               EnableFullSharing
-              EnableFullSharingFallback
+              EnableLegacyGenericSharing
               EnableFullSharingForStaticConstructors
             
             </summary>
@@ -217,6 +224,11 @@
         <member name="P:Unity.IL2CPP.Api.Output.Analytics.Il2CppDataTable.option_generate_usym_file">
             <summary>
             Whether or not generating a usym file was enabled
+            </summary>
+        </member>
+        <member name="P:Unity.IL2CPP.Api.Output.Analytics.Il2CppDataTable.option_jobs">
+            <summary>
+            The number of jobs that were requested.  Defaults to the processor count
             </summary>
         </member>
     </members>

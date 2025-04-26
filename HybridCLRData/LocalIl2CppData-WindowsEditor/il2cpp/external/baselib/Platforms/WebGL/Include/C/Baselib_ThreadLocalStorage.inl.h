@@ -3,7 +3,7 @@
 #if defined(__EMSCRIPTEN_PTHREADS__)
 
 #include <pthread.h>
-#include <libc/limits.h>
+#include <limits.h>
 
 // Emscripten has a bug in its pthread thread-local implementation:
 // Newly created values are not guaranteed to be zero.

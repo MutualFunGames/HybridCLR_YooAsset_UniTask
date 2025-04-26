@@ -1,45 +1,38 @@
 #include "il2cpp-config.h"
 
-#if IL2CPP_TARGET_WINDOWS_DESKTOP || IL2CPP_TARGET_WINDOWS_GAMES
+#if IL2CPP_TARGET_WINDOWS
 
 #include "os/Win32/WindowsHeaders.h"
 #include "os/Cryptography.h"
 
-#include <Wincrypt.h>
+#include <bcrypt.h>
 
 namespace il2cpp
 {
 namespace os
 {
+    // This has to be non-null value because the return value of NULL from GetCryptographyProvider means it failed
+    void* const kCryptographyProvider = reinterpret_cast<void*>(0x12345678);
+
     void* Cryptography::GetCryptographyProvider()
     {
-        HCRYPTPROV provider = 0;
-
-        if (!CryptAcquireContext(&provider, NULL, NULL, PROV_INTEL_SEC, CRYPT_VERIFYCONTEXT))
-        {
-            if (!CryptAcquireContext(&provider, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT))
-            {
-                provider = 0;
-            }
-        }
-
-        return (void*)provider;
+        return kCryptographyProvider;
     }
 
     bool Cryptography::OpenCryptographyProvider()
     {
-        return false;
+        return true;
     }
 
     void Cryptography::ReleaseCryptographyProvider(void* provider)
     {
-        CryptReleaseContext((HCRYPTPROV)provider, 0);
+        // Do nothing, since we never allocated it
     }
 
     bool Cryptography::FillBufferWithRandomBytes(void* provider, intptr_t length, unsigned char* data)
     {
-        ULONG const size = (ULONG)(length < ULONG_MAX ? length : ULONG_MAX); // This is how mono solves the type size difference
-        return CryptGenRandom((HCRYPTPROV)provider, size, data) == TRUE;
+        NO_UNUSED_WARNING(provider);
+        return SUCCEEDED(BCryptGenRandom(NULL, data, (ULONG)length, BCRYPT_USE_SYSTEM_PREFERRED_RNG));
     }
 }
 }

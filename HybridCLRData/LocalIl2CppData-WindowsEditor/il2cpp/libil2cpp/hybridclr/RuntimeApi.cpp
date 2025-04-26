@@ -1,43 +1,104 @@
-#include "CommonDef.h"
+#include "RuntimeApi.h"
+
+#include "codegen/il2cpp-codegen.h"
+#include "vm/InternalCalls.h"
+#include "vm/Array.h"
+#include "vm/Exception.h"
+#include "vm/Class.h"
 
 #include "metadata/MetadataModule.h"
-#include "Config.h"
+#include "metadata/MetadataUtil.h"
+#include "interpreter/InterpreterModule.h"
+#include "RuntimeConfig.h"
 
-extern "C"
+namespace hybridclr
 {
-
-	IL2CPP_EXPORT int32_t DEFAULT_CALL RuntimeApi_LoadMetadataForAOTAssembly(void* dllBytes, uint32_t dllSize, int32_t mode)
+	void RuntimeApi::RegisterInternalCalls()
 	{
-		return (int32_t)hybridclr::metadata::MetadataModule::LoadMetadataForAOTAssembly(dllBytes, dllSize, (hybridclr::metadata::HomologousImageMode)mode);
+		il2cpp::vm::InternalCalls::Add("HybridCLR.RuntimeApi::LoadMetadataForAOTAssembly(System.Byte[],HybridCLR.HomologousImageMode)", (Il2CppMethodPointer)LoadMetadataForAOTAssembly);
+		il2cpp::vm::InternalCalls::Add("HybridCLR.RuntimeApi::GetRuntimeOption(HybridCLR.RuntimeOptionId)", (Il2CppMethodPointer)GetRuntimeOption);
+		il2cpp::vm::InternalCalls::Add("HybridCLR.RuntimeApi::SetRuntimeOption(HybridCLR.RuntimeOptionId,System.Int32)", (Il2CppMethodPointer)SetRuntimeOption);
+		il2cpp::vm::InternalCalls::Add("HybridCLR.RuntimeApi::PreJitClass(System.Type)", (Il2CppMethodPointer)PreJitClass);
+		il2cpp::vm::InternalCalls::Add("HybridCLR.RuntimeApi::PreJitMethod(System.Reflection.MethodInfo)", (Il2CppMethodPointer)PreJitMethod);
 	}
 
-	IL2CPP_EXPORT uint32_t DEFAULT_CALL RuntimeApi_GetInterpreterThreadObjectStackSize()
+	int32_t RuntimeApi::LoadMetadataForAOTAssembly(Il2CppArray* dllBytes, int32_t mode)
 	{
-		return hybridclr::Config::GetIns().GetInterpreterThreadObjectStackSize();
+		if (!dllBytes)
+		{
+			il2cpp::vm::Exception::RaiseNullReferenceException();
+		}
+		return (int32_t)hybridclr::metadata::Assembly::LoadMetadataForAOTAssembly(il2cpp::vm::Array::GetFirstElementAddress(dllBytes), il2cpp::vm::Array::GetByteLength(dllBytes), (hybridclr::metadata::HomologousImageMode)mode);
 	}
 
-	IL2CPP_EXPORT void DEFAULT_CALL RuntimeApi_SetInterpreterThreadObjectStackSize(uint32_t size)
+	int32_t RuntimeApi::GetRuntimeOption(int32_t optionId)
 	{
-		hybridclr::Config::GetIns().SetInterpreterThreadObjectStackSize(size);
+		return hybridclr::RuntimeConfig::GetRuntimeOption((hybridclr::RuntimeOptionId)optionId);
 	}
 
-	IL2CPP_EXPORT uint32_t DEFAULT_CALL RuntimeApi_GetInterpreterThreadFrameStackSize()
+	void RuntimeApi::SetRuntimeOption(int32_t optionId, int32_t value)
 	{
-		return hybridclr::Config::GetIns().GetInterpreterThreadFrameStackSize();
+		hybridclr::RuntimeConfig::SetRuntimeOption((hybridclr::RuntimeOptionId)optionId, value);
 	}
 
-	IL2CPP_EXPORT void DEFAULT_CALL RuntimeApi_SetInterpreterThreadFrameStackSize(uint32_t size)
+	int32_t PreJitMethod0(const MethodInfo* methodInfo);
+
+	int32_t RuntimeApi::PreJitClass(Il2CppReflectionType* type)
 	{
-		hybridclr::Config::GetIns().SetInterpreterThreadFrameStackSize(size);
+		if (metadata::HasNotInstantiatedGenericType(type->type))
+		{
+			return false;
+		}
+		Il2CppClass* klass = il2cpp::vm::Class::FromIl2CppType(type->type, false);
+		if (!klass)
+		{
+			return false;
+		}
+		metadata::Image* image = metadata::MetadataModule::GetImage(klass->image);
+		if (!image)
+		{
+			(metadata::Image*)hybridclr::metadata::AOTHomologousImage::FindImageByAssembly(
+				klass->rank ? il2cpp_defaults.corlib->assembly : klass->image->assembly);
+			if (!image)
+			{
+				return false;
+			}
+		}
+		for (uint16_t i = 0; i < klass->method_count; i++)
+		{
+			const MethodInfo* methodInfo = klass->methods[i];
+			PreJitMethod0(methodInfo);
+		}
+		return true;
 	}
 
-	IL2CPP_EXPORT uint32_t DEFAULT_CALL RuntimeApi_GetInterpreterThreadExceptionFlowSize()
+	int32_t PreJitMethod0(const MethodInfo* methodInfo)
 	{
-		return hybridclr::Config::GetIns().GetInterpreterThreadExceptionFlowSize();
+		if (!methodInfo->isInterpterImpl)
+		{
+			return false;
+		}
+		if (!methodInfo->is_inflated)
+		{
+			if (methodInfo->is_generic)
+			{
+				return false;
+			}
+		}
+		else
+		{
+			const Il2CppGenericMethod* genericMethod = methodInfo->genericMethod;
+			if (metadata::HasNotInstantiatedGenericType(genericMethod->context.class_inst) || metadata::HasNotInstantiatedGenericType(genericMethod->context.method_inst))
+			{
+				return false;
+			}
+		}
+
+		return interpreter::InterpreterModule::GetInterpMethodInfo(methodInfo) != nullptr;
 	}
 
-	IL2CPP_EXPORT void DEFAULT_CALL RuntimeApi_SetInterpreterThreadExceptionFlowSize(uint32_t size)
+	int32_t RuntimeApi::PreJitMethod(Il2CppReflectionMethod* method)
 	{
-		hybridclr::Config::GetIns().SetInterpreterThreadExceptionFlowSize(size);
+		return PreJitMethod0(method->method);
 	}
 }

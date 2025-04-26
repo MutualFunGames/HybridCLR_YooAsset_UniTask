@@ -25,9 +25,11 @@
 #include <sys/time.h>
 #else
 #include <process.h>
+#include <Windows.h>
 #endif
 #include "mono-logger-internals.h"
 #include "mono-proclib.h"
+#include "mono-time.h"
 
 static FILE *logFile = NULL;
 static void *logUserData = NULL;
@@ -38,8 +40,8 @@ static void *logUserData = NULL;
  * 	@level - GLogLevelFlags value
  * 	@returns The equivalent character identifier
  */
-static inline char 
-mapLogFileLevel(GLogLevelFlags level) 
+static char
+mapLogFileLevel (GLogLevelFlags level)
 {
 	if (level & G_LOG_LEVEL_ERROR)
 		return ('E');
@@ -111,12 +113,12 @@ mono_log_write_logfile (const char *log_domain, GLogLevelFlags level, mono_bool 
 		struct tm tod;
 		time(&t);
 		localtime_r(&t, &tod);
-		strftime(logTime, sizeof(logTime), "%Y-%m-%d %H:%M:%S", &tod);
+		strftime(logTime, sizeof(logTime), MONO_STRFTIME_F " " MONO_STRFTIME_T, &tod);
 #else
 		struct tm *tod;
 		time(&t);
 		tod = localtime(&t);
-		strftime(logTime, sizeof(logTime), "%F %T", tod);
+		strftime(logTime, sizeof(logTime), MONO_STRFTIME_F " " MONO_STRFTIME_T, tod);
 #endif
 
 		pid = mono_process_current_pid ();
@@ -131,8 +133,13 @@ mono_log_write_logfile (const char *log_domain, GLogLevelFlags level, mono_bool 
 
 	fflush(logFile);
 
-	if (level & G_LOG_LEVEL_ERROR)
-		abort();
+	if (level & G_LOG_LEVEL_ERROR) {
+#ifdef HOST_WIN32
+		RaiseException (0xE0000001, EXCEPTION_NONCONTINUABLE, 0, NULL);
+#else
+		g_assert_abort ();
+#endif
+	}
 }
 
 /**

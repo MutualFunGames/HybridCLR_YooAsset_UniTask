@@ -1,7 +1,7 @@
 #include "os/c-api/il2cpp-config-platforms.h"
 #if IL2CPP_PLATFORM_SUPPORTS_CPU_INFO
 
-#if IL2CPP_TARGET_POSIX && !RUNTIME_TINY
+#if IL2CPP_TARGET_POSIX
 
 #include "os/CpuInfo.h"
 #include <stdlib.h>

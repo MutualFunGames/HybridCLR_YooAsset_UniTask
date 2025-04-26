@@ -19,8 +19,8 @@
 #include "mono/sgen/sgen-gc.h"
 #include "mono/metadata/sgen-bridge.h"
 
-extern volatile gboolean bridge_processing_in_progress;
-extern MonoGCBridgeCallbacks bridge_callbacks;
+extern volatile gboolean mono_bridge_processing_in_progress;
+extern MonoGCBridgeCallbacks mono_bridge_callbacks;
 
 gboolean sgen_need_bridge_processing (void);
 void sgen_bridge_reset_data (void);
@@ -42,6 +42,9 @@ typedef struct {
 	char *dump_prefix;
 	gboolean accounting;
 	gboolean scc_precise_merge; // Used by Tarjan
+	// Disables reporting SCCs with no bridge objects on tarjan. Used when comparing outputs
+	// of two bridge processors, in order to keep consistency.
+	gboolean disable_non_bridge_scc;
 } SgenBridgeProcessorConfig;
 
 typedef struct {

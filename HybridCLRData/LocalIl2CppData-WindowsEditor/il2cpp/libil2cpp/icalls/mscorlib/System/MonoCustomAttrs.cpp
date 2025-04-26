@@ -28,42 +28,12 @@ namespace System
     {
         IL2CPP_ASSERT(pseudoAttrs == false && "System_MonoCustomAttrs_GetCustomAttributesInternal_icall with pseudoAttrs == true has not been implemented yet");
 
-        CustomAttributesCache *cinfo = il2cpp::vm::Reflection::GetCustomAttrsInfo(obj);
+        Il2CppClass* attributeClass = type != NULL ? vm::Class::FromIl2CppType(type->type) : NULL;
 
-        if (!cinfo)
-        {
-            return il2cpp::vm::Array::New(il2cpp_defaults.object_class, 0);
-        }
+        Il2CppArray *result = il2cpp::vm::Reflection::GetCustomAttrsInfo(obj, attributeClass);
 
-        if (!type)
-        {
-            Il2CppArray *result = il2cpp::vm::Array::New(il2cpp_defaults.object_class, cinfo->count);
-            memcpy(il2cpp_array_addr(result, Il2CppObject*, 0), cinfo->attributes, sizeof(Il2CppObject*) * cinfo->count);
-            gc::GarbageCollector::SetWriteBarrier((void**)il2cpp_array_addr(result, Il2CppObject*, 0), sizeof(Il2CppObject*) * cinfo->count);
-            return result;
-        }
-
-        Il2CppClass* attributeClass = vm::Class::FromIl2CppType(type->type);
-        int count = 0;
-        for (int i = 0; i < cinfo->count; i++)
-        {
-            Il2CppObject* attr = cinfo->attributes[i];
-            if (vm::Class::IsAssignableFrom(attributeClass, attr->klass))
-                count++;
-        }
-
-        Il2CppArray *result = il2cpp::vm::Array::New(il2cpp_defaults.object_class, count);
-
-        int index = 0;
-        for (int i = 0; i < cinfo->count; i++)
-        {
-            Il2CppObject* attr = cinfo->attributes[i];
-            if (!vm::Class::IsAssignableFrom(attributeClass, attr->klass))
-                continue;
-
-            il2cpp_array_setref(result, index, cinfo->attributes[i]);
-            index++;
-        }
+        if (!result)
+            return il2cpp::vm::Array::New(il2cpp_defaults.attribute_class, 0);
 
         return result;
     }
@@ -98,21 +68,22 @@ namespace System
     Il2CppArray* MonoCustomAttrs::GetCustomAttributesDataInternal(Il2CppObject* obj)
     {
         il2cpp::vm::ReflectionObjInfo refInfo = il2cpp::vm::Reflection::GetImageOfReflectionObject(obj);
-        if (hybridclr::metadata::IsInterpreterImage(refInfo.image))
-        {
-            return hybridclr::metadata::MetadataModule::GetImage(refInfo.image)->GetCustomAttributesDataInternal(refInfo.token);
-        }
-
         metadata::CustomAttributeDataReader reader = il2cpp::vm::Reflection::GetCustomAttrsDataReader(obj);
 
+        uint32_t count = reader.GetCount();
+
         Il2CppArray* result = il2cpp::vm::Array::New(il2cpp_defaults.customattribute_data_class, reader.GetCount());
+
+        if (count == 0)
+            return result;
+
         uint32_t i = 0;
 
         bool hasError = false;
         il2cpp::metadata::LazyCustomAttributeData data;
         Il2CppException* exc = NULL;
         il2cpp::metadata::CustomAttributeDataIterator iter = reader.GetDataIterator();
-        while (reader.ReadLazyCustomAttributeData(obj->klass->image, &data, &iter, &exc))
+        while (reader.ReadLazyCustomAttributeData(&data, &iter, &exc))
         {
             IL2CPP_ASSERT(i < reader.GetCount());
             Il2CppObject* attributeData = CreateCustomAttributeData(obj->klass->image->assembly, data);

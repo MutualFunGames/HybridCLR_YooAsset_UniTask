@@ -26,7 +26,11 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <utime.h>
-#include <sys/errno.h>
+#if IL2CPP_TARGET_QNX
+    #include <errno.h>
+#else
+    #include <sys/errno.h>
+#endif
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <string>

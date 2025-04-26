@@ -1,6 +1,6 @@
 #include "os/c-api/il2cpp-config-platforms.h"
 
-#if IL2CPP_TARGET_WINDOWS_DESKTOP || IL2CPP_TARGET_WINRT || IL2CPP_TARGET_WINDOWS_GAMES
+#if IL2CPP_TARGET_WINDOWS
 
 #include "os/SystemCertificates.h"
 #include "WindowsHeaders.h"
@@ -47,4 +47,4 @@ namespace os
 }
 }
 
-#endif // IL2CPP_TARGET_WINDOWS_DESKTOP || IL2CPP_TARGET_WINRT || IL2CPP_TARGET_WINDOWS_GAMES
+#endif // IL2CPP_TARGET_WINDOWS

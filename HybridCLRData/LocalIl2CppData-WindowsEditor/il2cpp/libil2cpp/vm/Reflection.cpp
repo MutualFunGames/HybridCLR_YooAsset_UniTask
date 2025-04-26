@@ -5,7 +5,8 @@
 #include "mono-structs.h"
 #include "gc/GCHandle.h"
 #include "gc/WriteBarrier.h"
-#include "metadata//CustomAttributeDataReader.h"
+#include "metadata/CustomAttributeDataReader.h"
+#include "metadata/CustomAttributeCreator.h"
 #include "metadata/Il2CppTypeCompare.h"
 #include "metadata/Il2CppTypeHash.h"
 #include "vm/Array.h"
@@ -103,6 +104,17 @@ namespace vm
     static Il2CppClass *s_System_Reflection_MethodInfo;
     static Il2CppClass *s_System_Reflection_ConstructorInfo;
 
+    static il2cpp::metadata::CustomAttributeFilter GetFilter(Il2CppClass*& attributeClass)
+    {
+        if (attributeClass == NULL)
+            return [](const MethodInfo*) { return true; };
+
+        return [attributeClass](const MethodInfo* ctor) {
+                Il2CppClass* klass = ctor->klass;
+                return il2cpp::vm::Class::HasParent(klass, attributeClass) || (il2cpp::vm::Class::IsInterface(attributeClass) && il2cpp::vm::Class::IsAssignableFrom(attributeClass, klass));
+        };
+    }
+
     Il2CppReflectionAssembly* Reflection::GetAssemblyObject(const Il2CppAssembly *assembly)
     {
         Il2CppReflectionAssembly *res;
@@ -147,6 +159,11 @@ namespace vm
         IL2CPP_OBJECT_SETREF(res, type, GetTypeObject(field->type));
 
         return s_FieldMap->GetOrAdd(key, res);
+    }
+
+    const FieldInfo* Reflection::GetField(const Il2CppReflectionField* field)
+    {
+        return field->field;
     }
 
     const MethodInfo* Reflection::GetMethod(const Il2CppReflectionMethod* method)
@@ -375,16 +392,12 @@ namespace vm
 
     static bool IsMethod(Il2CppObject *obj)
     {
-        if (obj->klass->image == il2cpp_defaults.corlib)
-            return strcmp(obj->klass->name, "RuntimeMethodInfo") == 0 && strcmp(obj->klass->namespaze, "System.Reflection") == 0;
-        return false;
+        return obj->klass == s_System_Reflection_MethodInfo;
     }
 
     static bool IsCMethod(Il2CppObject *obj)
     {
-        if (obj->klass->image == il2cpp_defaults.corlib)
-            return strcmp(obj->klass->name, "RuntimeConstructorInfo") == 0 && strcmp(obj->klass->namespaze, "System.Reflection") == 0;
-        return false;
+        return obj->klass == s_System_Reflection_ConstructorInfo;
     }
 
     bool Reflection::IsAnyMethod(Il2CppObject *obj)
@@ -394,175 +407,89 @@ namespace vm
 
     bool Reflection::IsField(Il2CppObject *obj)
     {
-        if (obj->klass->image == il2cpp_defaults.corlib)
-            return strcmp(obj->klass->name, "RuntimeFieldInfo") == 0 && strcmp(obj->klass->namespaze, "System.Reflection") == 0;
-        return false;
+        return obj->klass == s_System_Reflection_RuntimeFieldInfoKlass;
     }
 
     bool Reflection::IsProperty(Il2CppObject *obj)
     {
-        if (obj->klass->image == il2cpp_defaults.corlib)
-            return strcmp(obj->klass->name, "RuntimePropertyInfo") == 0 && strcmp(obj->klass->namespaze, "System.Reflection") == 0;
-        return false;
+        return obj->klass == s_System_Reflection_RuntimePropertyInfoKlass;
     }
 
     bool Reflection::IsEvent(Il2CppObject *obj)
     {
-        if (obj->klass->image == il2cpp_defaults.corlib)
-            return strcmp(obj->klass->name, "RuntimeEventInfo") == 0 && strcmp(obj->klass->namespaze, "System.Reflection") == 0;
-        return false;
+        return obj->klass == s_System_Reflection_RuntimeEventInfoKlass;
     }
 
     static bool IsParameter(Il2CppObject *obj)
     {
-        if (obj->klass->image == il2cpp_defaults.corlib)
-            return obj->klass == il2cpp_defaults.parameter_info_class;
-        return false;
+        return obj->klass == il2cpp_defaults.parameter_info_class;
     }
 
     static bool IsAssembly(Il2CppObject *obj)
     {
-        if (obj->klass->image == il2cpp_defaults.corlib)
-            return obj->klass == s_System_Reflection_Assembly->klass;
-        return false;
+        return obj->klass == s_System_Reflection_Assembly->klass;
     }
 
-    CustomAttributesCache* Reflection::GetCustomAttributesCacheFor(Il2CppClass *klass)
-    {
-        return MetadataCache::GenerateCustomAttributesCache(klass->image, klass->token);
-    }
-
-    CustomAttributesCache* Reflection::GetCustomAttributesCacheFor(const MethodInfo *method)
-    {
-        return MetadataCache::GenerateCustomAttributesCache(method->klass->image, method->token);
-    }
-
-    CustomAttributesCache* Reflection::GetCustomAttributesCacheFor(const PropertyInfo *property)
-    {
-        return MetadataCache::GenerateCustomAttributesCache(property->parent->image, property->token);
-    }
-
-    CustomAttributesCache* Reflection::GetCustomAttributesCacheFor(FieldInfo *field)
-    {
-        return MetadataCache::GenerateCustomAttributesCache(field->parent->image, field->token);
-    }
-
-    CustomAttributesCache* Reflection::GetCustomAttributesCacheFor(const EventInfo *event)
-    {
-        return MetadataCache::GenerateCustomAttributesCache(event->parent->image, event->token);
-    }
-
-    CustomAttributesCache* Reflection::GetCustomAttributesCacheFor(Il2CppReflectionParameter *parameter)
-    {
-        Il2CppReflectionMethod* method = (Il2CppReflectionMethod*)parameter->MemberImpl;
-
-        if (method->method->parameters == NULL)
-            return NULL;
-
-        IL2CPP_NOT_IMPLEMENTED_NO_ASSERT(Reflection::GetCustomAttributesCacheFor, "-1 represents the return value. Need to emit custom attribute information for that.")
-        if (parameter->PositionImpl == -1)
-            return NULL;
-
-        const MethodInfo* methodWithParameterAttributeInformation = method->method;
-        if (method->method->is_inflated)
-            methodWithParameterAttributeInformation = method->method->genericMethod->methodDefinition;
-
-        return MetadataCache::GenerateCustomAttributesCache(methodWithParameterAttributeInformation->klass->image, Method::GetParameterToken(method->method, parameter->PositionImpl));
-    }
-
-    std::tuple<void*, void*> Reflection::GetCustomAttributesDataRangeFor(Il2CppClass *klass)
-    {
-        return MetadataCache::GetCustomAttributeDataRange(klass->image, klass->token);
-    }
-
-    std::tuple<void*, void*> Reflection::GetCustomAttributesDataRangeFor(const MethodInfo *method)
-    {
-        return MetadataCache::GetCustomAttributeDataRange(method->klass->image, method->token);
-    }
-
-    std::tuple<void*, void*> Reflection::GetCustomAttributesDataRangeFor(const PropertyInfo *property)
-    {
-        return MetadataCache::GetCustomAttributeDataRange(property->parent->image, property->token);
-    }
-
-    std::tuple<void*, void*>  Reflection::GetCustomAttributesDataRangeFor(FieldInfo *field)
-    {
-        return MetadataCache::GetCustomAttributeDataRange(field->parent->image, field->token);
-    }
-
-    std::tuple<void*, void*> Reflection::GetCustomAttributesDataRangeFor(const EventInfo *event)
-    {
-        return MetadataCache::GetCustomAttributeDataRange(event->parent->image, event->token);
-    }
-
-    std::tuple<void*, void*> Reflection::GetCustomAttributesDataRangeFor(Il2CppReflectionParameter *parameter)
-    {
-        Il2CppReflectionMethod* method = (Il2CppReflectionMethod*)parameter->MemberImpl;
-
-        if (method->method->parameters == NULL)
-            return std::make_tuple<void*, void*>(NULL, NULL);
-
-        IL2CPP_NOT_IMPLEMENTED_NO_ASSERT(Reflection::GetCustomAttributesDataRangeFor, "-1 represents the return value. Need to emit custom attribute information for that.")
-        if (parameter->PositionImpl == -1)
-            return std::make_tuple<void*, void*>(NULL, NULL);
-
-        const MethodInfo* methodWithParameterAttributeInformation = method->method;
-        if (method->method->is_inflated)
-            methodWithParameterAttributeInformation = method->method->genericMethod->methodDefinition;
-
-        return MetadataCache::GetCustomAttributeDataRange(methodWithParameterAttributeInformation->klass->image, Method::GetParameterToken(method->method, parameter->PositionImpl));
-    }
-
-    std::tuple<void*, void*> Reflection::GetCustomAttributesDataRangeFor(const Il2CppAssembly *assembly)
-    {
-        return MetadataCache::GetCustomAttributeDataRange(assembly->image, assembly->token);
-    }
-
-    int Reflection::GetMetadataToken(Il2CppObject* obj)
+    static std::tuple<uint32_t, const Il2CppImage*> GetMetadataTokenFromReflectionType(Il2CppObject* obj, bool throwOnError = true)
     {
         if (vm::Reflection::IsField(obj))
         {
             Il2CppReflectionField* field = (Il2CppReflectionField*)obj;
-            return vm::Field::GetToken(field->field);
+            return std::make_tuple(vm::Field::GetToken(field->field), field->field->parent->image);
         }
-        else if (vm::Reflection::IsAnyMethod(obj))
+        if (vm::Reflection::IsAnyMethod(obj))
         {
             Il2CppReflectionMethod* method = (Il2CppReflectionMethod*)obj;
-            return vm::Method::GetToken(method->method);
+            return std::make_tuple(vm::Method::GetToken(method->method), method->method->klass->image);
         }
-        else if (vm::Reflection::IsProperty(obj))
+        if (vm::Reflection::IsProperty(obj))
         {
             Il2CppReflectionProperty* prop = (Il2CppReflectionProperty*)obj;
-            return vm::Property::GetToken(prop->property);
+            return std::make_tuple(vm::Property::GetToken(prop->property), prop->property->parent->image);
         }
-        else if (vm::Reflection::IsEvent(obj))
+        if (vm::Reflection::IsEvent(obj))
         {
             Il2CppReflectionMonoEvent* eventInfo = (Il2CppReflectionMonoEvent*)obj;
-            return vm::Event::GetToken(eventInfo->eventInfo);
+            return std::make_tuple(vm::Event::GetToken(eventInfo->eventInfo), eventInfo->eventInfo->parent->image);
         }
-        else if (vm::Reflection::IsType(obj))
+        if (vm::Reflection::IsType(obj))
         {
             Il2CppReflectionType* type = (Il2CppReflectionType*)obj;
-            return vm::Type::GetToken(type->type);
+            Il2CppClass* klass = vm::Class::FromIl2CppType(type->type);
+            return std::make_tuple(klass->token, klass->image);
         }
-        else if (IsParameter(obj))
+        if (IsParameter(obj))
         {
             Il2CppReflectionParameter* parameter = (Il2CppReflectionParameter*)obj;
-            if (parameter->PositionImpl == -1)
-                return 0x8000000; // This is what mono returns as a fixed value.
-
             Il2CppReflectionMethod* method = (Il2CppReflectionMethod*)parameter->MemberImpl;
-            return vm::Method::GetParameterToken(method->method, parameter->PositionImpl);
+            const Il2CppImage* image = method->method->klass->image;
+#if !SUPPORT_METHOD_RETURN_TYPE_CUSTOM_ATTRIBUTE
+            if (parameter->PositionImpl == -1)
+                return std::make_tuple(0x8000000, method->method->klass->image); // This is what mono returns as a fixed value.
+
+#endif
+            return std::make_tuple(vm::Method::GetParameterToken(method->method, parameter->PositionImpl), method->method->klass->image);
         }
-        else
+        if (IsAssembly(obj))
         {
-            NOT_SUPPORTED_IL2CPP(MemberInfo::get_MetadataToken, "This icall is not supported by il2cpp.");
+            Il2CppReflectionAssembly* assembly = (Il2CppReflectionAssembly*)obj;
+            return std::make_tuple(assembly->assembly->token, assembly->assembly->image);
         }
 
-        return 0;
+        if (throwOnError)
+            NOT_SUPPORTED_IL2CPP(MemberInfo::get_MetadataToken, "This icall is not supported by il2cpp.");
+        return std::make_tuple(0, (const Il2CppImage*)nullptr);
     }
 
-    bool Reflection::HasAttribute(Il2CppReflectionParameter *parameter, Il2CppClass* attribute)
+    int Reflection::GetMetadataToken(Il2CppObject* obj)
+    {
+        uint32_t token;
+        const Il2CppImage* image;
+        std::tie(token, image) = GetMetadataTokenFromReflectionType(obj);
+        return (int)token;
+    }
+
+    bool Reflection::HasAttribute(Il2CppReflectionParameter *parameter, Il2CppClass* attributeClass)
     {
         Il2CppReflectionMethod* method = (Il2CppReflectionMethod*)parameter->MemberImpl;
 
@@ -577,99 +504,77 @@ namespace vm
         if (method->method->is_inflated)
             methodWithParameterAttributeInformation = method->method->genericMethod->methodDefinition;
 
-        return MetadataCache::HasAttribute(methodWithParameterAttributeInformation->klass->image, Method::GetParameterToken(method->method, parameter->PositionImpl), attribute);
+        auto reader = il2cpp::vm::MetadataCache::GetCustomAttributeDataReader(methodWithParameterAttributeInformation->klass->image, Method::GetParameterToken(method->method, parameter->PositionImpl));
+        return HasAttribute(reader, attributeClass);
     }
 
-    CustomAttributesCache* Reflection::GetCustomAttributesCacheFor(const Il2CppAssembly *assembly)
+    Il2CppArray* Reflection::GetCustomAttrsInfo(Il2CppObject* obj, Il2CppClass* attributeClass)
     {
-        return MetadataCache::GenerateCustomAttributesCache(assembly->image, assembly->token);
+        il2cpp::metadata::CustomAttributeDataReader reader = GetCustomAttrsDataReader(obj);
+        return GetCustomAttrsInfo(reader, attributeClass);
     }
 
-    CustomAttributesCache* Reflection::GetCustomAttrsInfo(Il2CppObject *obj)
+    Il2CppArray* Reflection::GetCustomAttrsInfo(const il2cpp::metadata::CustomAttributeDataReader& reader, Il2CppClass* attributeClass)
     {
-        if (IsMethod(obj) || IsCMethod(obj))
-            return GetCustomAttributesCacheFor(((Il2CppReflectionMethod*)obj)->method);
+        if (reader.GetCount() == 0)
+            return NULL;
 
-        if (IsProperty(obj))
-            return GetCustomAttributesCacheFor(((Il2CppReflectionProperty*)obj)->property);
+        auto filter = GetFilter(attributeClass);
 
-        if (IsField(obj))
-            return GetCustomAttributesCacheFor(((Il2CppReflectionField*)obj)->field);
+        uint32_t attributeCount = reader.GetCount(filter);
 
-        if (IsEvent(obj))
-            return GetCustomAttributesCacheFor(((Il2CppReflectionMonoEvent*)obj)->eventInfo);
+        if (attributeCount == 0)
+            return NULL;
 
-        if (IsParameter(obj))
-            return GetCustomAttributesCacheFor(((Il2CppReflectionParameter*)obj));
+        Il2CppArray* attrArray = il2cpp::vm::Array::New(il2cpp_defaults.attribute_class, attributeCount);
 
-        if (IsAssembly(obj))
-            return GetCustomAttributesCacheFor(((Il2CppReflectionAssembly*)obj)->assembly);
+        il2cpp::metadata::CustomAttributeDataIterator iter = reader.GetDataIterator(filter);
+        for (uint32_t i = 0; i < attributeCount; i++)
+        {
+            Il2CppException* exc = NULL;
+            il2cpp::metadata::CustomAttributeCreator creator;
+            if (reader.VisitCustomAttributeData(&iter, &creator, &exc))
+            {
+                il2cpp_array_setref(attrArray, i, creator.GetAttribute(&exc));
+                if (exc != NULL)
+                    il2cpp::vm::Exception::Raise(exc);
+            }
 
-        Il2CppClass *klass = IsType(obj)
-            ? Class::FromSystemType((Il2CppReflectionType*)obj)
-            : obj->klass;
+            if (exc != NULL)
+                il2cpp::vm::Exception::Raise(exc);
+        }
 
-        return GetCustomAttributesCacheFor(klass);
+        return attrArray;
     }
 
     il2cpp::metadata::CustomAttributeDataReader Reflection::GetCustomAttrsDataReader(Il2CppObject* obj)
     {
+        uint32_t token;
         const Il2CppImage* image;
-        std::tuple<void*, void*> dataRange;
+        std::tie(token, image) = GetMetadataTokenFromReflectionType(obj, false);
+        if (token == 0)
+        {
+            // obj is not a reflection type, reflect on obj's class
+            token = obj->klass->token;
+            image = obj->klass->image;
+        }
 
-        if (IsMethod(obj) || IsCMethod(obj))
-        {
-            const MethodInfo* method = ((Il2CppReflectionMethod*)obj)->method;
-            image = method->klass->image;
-            dataRange = GetCustomAttributesDataRangeFor(method);
-        }
-        else if (IsProperty(obj))
-        {
-            const PropertyInfo* prop = ((Il2CppReflectionProperty*)obj)->property;
-            image = prop->parent->image;
-            dataRange = GetCustomAttributesDataRangeFor(prop);
-        }
-        else if (IsField(obj))
-        {
-            FieldInfo* field = ((Il2CppReflectionField*)obj)->field;
-            image = field->parent->image;
-            dataRange = GetCustomAttributesDataRangeFor(field);
-        }
-        else if (IsEvent(obj))
-        {
-            const EventInfo* eventInfo = ((Il2CppReflectionMonoEvent*)obj)->eventInfo;
-            image = eventInfo->parent->image;
-            dataRange = GetCustomAttributesDataRangeFor(eventInfo);
-        }
-        else if (IsParameter(obj))
+        if ((token & IL2CPP_TOKEN_PARAM_DEF) == IL2CPP_TOKEN_PARAM_DEF)
         {
             Il2CppReflectionParameter* parameter = (Il2CppReflectionParameter*)obj;
             Il2CppReflectionMethod* method = (Il2CppReflectionMethod*)parameter->MemberImpl;
-            image = method->method->klass->image;
-            dataRange = GetCustomAttributesDataRangeFor(parameter);
-        }
-        else if (IsAssembly(obj))
-        {
-            const Il2CppAssembly* assembly = ((Il2CppReflectionAssembly*)obj)->assembly;
-            image = assembly->image;
-            dataRange = GetCustomAttributesDataRangeFor(assembly);
-        }
-        else
-        {
-            Il2CppClass *klass = IsType(obj)
-                ? Class::FromSystemType((Il2CppReflectionType*)obj)
-                : obj->klass;
 
-            image = klass->image;
-            dataRange = GetCustomAttributesDataRangeFor(klass);
+            if (method->method->parameters == NULL)
+                return il2cpp::metadata::CustomAttributeDataReader::Empty();
+#if !SUPPORT_METHOD_RETURN_TYPE_CUSTOM_ATTRIBUTE
+            IL2CPP_NOT_IMPLEMENTED_NO_ASSERT(Reflection::GetCustomAttributeReaderFor, "-1 represents the return value. Need to emit custom attribute information for that.")
+            if (parameter->PositionImpl == -1)
+                return il2cpp::metadata::CustomAttributeDataReader::Empty();
+#endif
         }
 
-        void* start;
-        void* end;
-        std::tie(start, end) = dataRange;
-        return metadata::CustomAttributeDataReader(start, end);
+        return il2cpp::vm::MetadataCache::GetCustomAttributeDataReader(image, token);
     }
-
 
     ReflectionObjInfo Reflection::GetImageOfReflectionObject(Il2CppObject* obj)
     {
@@ -714,62 +619,55 @@ namespace vm
         }
     }
 
-    bool Reflection::HasAttribute(Il2CppObject *obj, Il2CppClass* attribute)
+    bool Reflection::HasAttribute(Il2CppObject *obj, Il2CppClass* attributeClass)
     {
-        if (IsMethod(obj) || IsCMethod(obj))
-            return MetadataCache::HasAttribute((((Il2CppReflectionMethod*)obj)->method)->klass->image, (((Il2CppReflectionMethod*)obj)->method)->token, attribute);
-
-        if (IsProperty(obj))
-            return MetadataCache::HasAttribute((((Il2CppReflectionProperty*)obj)->property)->parent->image, (((Il2CppReflectionProperty*)obj)->property)->token, attribute);
-
-        if (IsField(obj))
-            return MetadataCache::HasAttribute((((Il2CppReflectionField*)obj)->field)->parent->image, (((Il2CppReflectionField*)obj)->field)->token, attribute);
-
-        if (IsEvent(obj))
-            return MetadataCache::HasAttribute((((Il2CppReflectionMonoEvent*)obj)->eventInfo)->parent->image, (((Il2CppReflectionMonoEvent*)obj)->eventInfo)->token, attribute);
-
-        if (IsParameter(obj))
-            return HasAttribute((Il2CppReflectionParameter*)obj, attribute);
-
-        if (IsAssembly(obj))
-            return MetadataCache::HasAttribute((((Il2CppReflectionAssembly*)obj)->assembly)->image, (((Il2CppReflectionAssembly*)obj)->assembly)->token, attribute);
-
-        Il2CppClass *klass = IsType(obj)
-            ? Class::FromSystemType((Il2CppReflectionType*)obj)
-            : obj->klass;
-
-        return MetadataCache::HasAttribute(klass->image, klass->token, attribute);
+        il2cpp::metadata::CustomAttributeDataReader reader = GetCustomAttrsDataReader(obj);
+        return HasAttribute(reader, attributeClass);
     }
 
-    Il2CppObject* Reflection::GetCustomAttribute(Il2CppMetadataCustomAttributeHandle token, Il2CppClass* attribute)
+    bool Reflection::HasAttribute(const il2cpp::metadata::CustomAttributeDataReader& reader, Il2CppClass* attributeClass)
     {
-        CustomAttributesCache* cache = MetadataCache::GenerateCustomAttributesCache(token);
-        if (cache == NULL)
+        if (reader.GetCount() == 0)
+            return false;
+
+        auto filter = GetFilter(attributeClass);
+        auto ctorIter = reader.GetCtorIterator(filter);
+        const MethodInfo* ctor;
+        return reader.IterateAttributeCtors(&ctor, &ctorIter);
+    }
+
+    Il2CppObject* Reflection::GetCustomAttribute(Il2CppMetadataCustomAttributeHandle token, Il2CppClass* attributeClass)
+    {
+        auto reader = il2cpp::vm::MetadataCache::GetCustomAttributeDataReader(token);
+
+        if (reader.GetCount() == 0)
             return NULL;
 
-        for (int32_t i = 0; i < cache->count; i++)
-        {
-            Il2CppObject* obj = cache->attributes[i];
-            Il2CppClass* klass = Object::GetClass(obj);
+        auto filter = GetFilter(attributeClass);
 
-            if (Class::HasParent(klass, attribute) || (Class::IsInterface(attribute) && Class::IsAssignableFrom(attribute, klass)))
-                return obj;
+        if (reader.GetCount(filter) == 0)
+            return NULL;
+
+        Il2CppObject* attr = NULL;
+        il2cpp::metadata::CustomAttributeDataIterator iter = reader.GetDataIterator(filter);
+        Il2CppException* exc = NULL;
+        il2cpp::metadata::CustomAttributeCreator creator;
+        if (reader.VisitCustomAttributeData(&iter, &creator, &exc))
+        {
+            if (exc == NULL)
+                attr = creator.GetAttribute(&exc);
         }
 
-        return NULL;
+        if (exc != NULL)
+            il2cpp::vm::Exception::Raise(exc);
+
+        return attr;
     }
 
     Il2CppArray* Reflection::ConstructCustomAttributes(Il2CppMetadataCustomAttributeHandle token)
     {
-        CustomAttributesCache* cache = MetadataCache::GenerateCustomAttributesCache(token);
-        if (cache == NULL)
-            return il2cpp::vm::Array::New(il2cpp_defaults.attribute_class, 0);
-
-        Il2CppArray* result = il2cpp::vm::Array::New(il2cpp_defaults.attribute_class, cache->count);
-        for (int32_t i = 0; i < cache->count; i++)
-            il2cpp_array_setref(result, i, cache->attributes[i]);
-
-        return result;
+        auto reader = il2cpp::vm::MetadataCache::GetCustomAttributeDataReader(token);
+        return GetCustomAttrsInfo(reader, NULL);
     }
 
     void Reflection::Initialize()
@@ -787,7 +685,6 @@ namespace vm
 
         s_System_Reflection_Assembly = Class::FromName(il2cpp_defaults.corlib, "System.Reflection", "RuntimeAssembly");
         IL2CPP_ASSERT(s_System_Reflection_Assembly != NULL);
-#if !IL2CPP_TINY_DEBUGGER
         s_System_Reflection_Module = Class::FromName(il2cpp_defaults.corlib, "System.Reflection", "RuntimeModule");
         IL2CPP_ASSERT(s_System_Reflection_Module != NULL);
 
@@ -806,22 +703,30 @@ namespace vm
         IL2CPP_ASSERT(s_System_Reflection_RuntimeEventInfoKlass != NULL);
         s_System_Reflection_RuntimePropertyInfoKlass = Class::FromName(il2cpp_defaults.corlib, "System.Reflection", "RuntimePropertyInfo");
         IL2CPP_ASSERT(s_System_Reflection_RuntimePropertyInfoKlass != NULL);
-#endif
     }
 
-    bool Reflection::HasAttribute(FieldInfo *field, Il2CppClass *attribute)
+    bool Reflection::HasAttribute(FieldInfo *field, Il2CppClass *attributeClass)
     {
-        return MetadataCache::HasAttribute(field->parent->image, field->token, attribute);
+        auto reader = il2cpp::vm::MetadataCache::GetCustomAttributeDataReader(field->parent->image, Field::GetToken(field));
+        return HasAttribute(reader, attributeClass);
     }
 
-    bool Reflection::HasAttribute(const MethodInfo *method, Il2CppClass *attribute)
+    bool Reflection::HasAttribute(const MethodInfo *method, Il2CppClass *attributeClass)
     {
-        return MetadataCache::HasAttribute(method->klass->image, method->token, attribute);
+        auto reader = il2cpp::vm::MetadataCache::GetCustomAttributeDataReader(method->klass->image, Method::GetToken(method));
+        return HasAttribute(reader, attributeClass);
     }
 
-    bool Reflection::HasAttribute(Il2CppClass *klass, Il2CppClass *attribute)
+    bool Reflection::HasAttribute(Il2CppClass *klass, Il2CppClass *attributeClass)
     {
-        return MetadataCache::HasAttribute(klass->image, klass->token, attribute);
+        auto reader = il2cpp::vm::MetadataCache::GetCustomAttributeDataReader(klass->image, klass->token);
+        return HasAttribute(reader, attributeClass);
+    }
+
+    bool Reflection::HasAttribute(Il2CppMetadataCustomAttributeHandle handle, Il2CppClass *attributeClass)
+    {
+        auto reader = il2cpp::vm::MetadataCache::GetCustomAttributeDataReader(handle);
+        return HasAttribute(reader, attributeClass);
     }
 
     Il2CppClass* Reflection::TypeGetHandle(Il2CppReflectionType* ref)
@@ -862,6 +767,27 @@ namespace vm
 
     void Reflection::ClearStatics()
     {
+        delete s_AssemblyMap;
+        s_AssemblyMap = NULL;
+        delete s_FieldMap;
+        s_FieldMap = NULL;
+        delete s_PropertyMap;
+        s_PropertyMap = NULL;
+        delete s_EventMap;
+        s_EventMap = NULL;
+        delete s_MethodMap;
+        s_MethodMap = NULL;
+        delete s_ModuleMap;
+        s_ModuleMap = NULL;
+        delete s_ParametersMap;
+        s_ParametersMap = NULL;
+        delete s_TypeMap;
+        s_TypeMap = NULL;
+        delete s_MonoGenericParamterMap;
+        s_MonoGenericParamterMap = NULL;
+        delete s_MonoAssemblyNameMap;
+        s_MonoAssemblyNameMap = NULL;
+
         s_System_Reflection_Assembly = NULL;
         s_System_Reflection_RuntimeFieldInfoKlass = NULL;
         s_System_Reflection_Module = NULL;

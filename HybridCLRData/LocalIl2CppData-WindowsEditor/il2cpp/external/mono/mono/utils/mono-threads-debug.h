@@ -5,20 +5,15 @@
 #ifndef __MONO_UTILS_MONO_THREADS_DEBUG_H__
 #define __MONO_UTILS_MONO_THREADS_DEBUG_H__
 
+#include <config.h>
+#include <glib.h>
+
 /* Logging - enable them below if you need specific logging for the category you need */
-#ifdef HOST_WIN32
-#define MOSTLY_ASYNC_SAFE_PRINTF(...) do { \
-	char __buff[1024];	__buff [0] = '\0'; \
-	g_snprintf (__buff, sizeof (__buff), __VA_ARGS__);	\
-	_write (1, __buff, (guint32)strlen (__buff));	\
+#define MOSTLY_ASYNC_SAFE_FPRINTF(handle, ...) do { \
+	g_async_safe_fprintf (handle, __VA_ARGS__); \
 } while (0)
-#else
-#define MOSTLY_ASYNC_SAFE_PRINTF(...) do { \
-	char __buff[1024];	__buff [0] = '\0'; \
-	g_snprintf (__buff, sizeof (__buff), __VA_ARGS__);	\
-	write (1, __buff, (guint32)strlen (__buff));	\
-} while (0)
-#endif
+
+#define MOSTLY_ASYNC_SAFE_PRINTF(...) MOSTLY_ASYNC_SAFE_FPRINTF(1, __VA_ARGS__);
 
 #if 1
 #define THREADS_DEBUG(...)
@@ -41,6 +36,7 @@
 #if 1
 #define THREADS_STATE_MACHINE_DEBUG(...)
 #else
+#define THREADS_STATE_MACHINE_DEBUG_ENABLED
 #define THREADS_STATE_MACHINE_DEBUG MOSTLY_ASYNC_SAFE_PRINTF
 #endif
 

@@ -87,7 +87,7 @@ namespace metadata
 	};
 #pragma pack(pop)
 
-	const int MAX_TABLE_INDEX = 0x2C;
+	const int MAX_TABLE_INDEX = 0x37;
 	const int TABLE_NUM = MAX_TABLE_INDEX + 1;
 
 	class TagBits
@@ -106,6 +106,7 @@ namespace metadata
 		static const uint32_t CustomAttributeType = 3;
 		static const uint32_t ResoulutionScope = 2;
 		static const uint32_t TypeOrMethodDef = 1;
+		static const uint32_t HasCustomDebugInformation = 5;
 
 	};
 
@@ -133,6 +134,36 @@ namespace metadata
 		TableType::GENERICPARAM,
 		TableType::GENERICPARAMCONSTRAINT,
 		TableType::METHODSPEC,
+	};
+
+	const TableType HasCustomDebugInformation[] = {
+		TableType::METHOD,
+		TableType::FIELD,
+		TableType::TYPEREF,
+		TableType::TYPEDEF,
+		TableType::PARAM,
+		TableType::INTERFACEIMPL,
+		TableType::MEMBERREF,
+		TableType::MODULE,
+		TableType::DECLSECURITY,
+		TableType::PROPERTY,
+		TableType::EVENT,
+		TableType::STANDALONESIG,
+		TableType::MODULEREF,
+		TableType::TYPESPEC,
+		TableType::ASSEMBLY,
+		TableType::ASSEMBLYREF,
+		TableType::FILE,
+		TableType::EXPORTEDTYPE,
+		TableType::MANIFESTRESOURCE,
+		TableType::GENERICPARAM,
+		TableType::GENERICPARAMCONSTRAINT,
+		TableType::METHODSPEC,
+		TableType::DOCUMENT,
+		TableType::LOCALSCOPE,
+		TableType::LOCALVARIABLE,
+		TableType::LOCALCONSTANT,
+		TableType::IMPORTSCOPE,
 	};
 
 	inline TableType DecodeTokenTableType(uint32_t index)
@@ -442,10 +473,9 @@ namespace metadata
 		uint32_t flags;
 		uint32_t codeSize;
 		const uint8_t* ilcodes;
-		Il2CppType* localVars;
-		uint32_t localVarCount;
 		uint32_t maxStack;
 		std::vector<ExceptionClause> exceptionClauses;
+		il2cpp::utils::dynamic_array<const Il2CppType*> localVars;
 		// optional data sections
 	};
 
@@ -453,9 +483,9 @@ namespace metadata
 
 	struct MethodRefInfo
 	{
-		Il2CppType containerType; // maybe generic
+		const Il2CppType* containerType; // maybe generic
 		const Il2CppMethodDefinition* methodDef;
-		Il2CppGenericInst* instantiation;
+		const Il2CppGenericInst* instantiation;
 	};
 
 	struct MethodImpl
@@ -466,30 +496,30 @@ namespace metadata
 
 	struct MethodDefSig
 	{
-		Il2CppType classType;
+		const Il2CppType* classType;
 		const char* name;
 		uint32_t flags;
 		uint32_t genericParamCount;
-		Il2CppType returnType;
-		std::vector<Il2CppType> params;
+		const Il2CppType* returnType;
+		il2cpp::utils::dynamic_array<const Il2CppType*> params;
 	};
 
 	struct MethodRefSig
 	{
 		uint32_t flags;
 		uint32_t genericParamCount;
-		Il2CppType returnType;
-		std::vector<Il2CppType> params;
+		const Il2CppType* returnType;
+		il2cpp::utils::dynamic_array<const Il2CppType*> params;
 	};
 
 	struct FieldRefSig
 	{
-		Il2CppType type;
+		const Il2CppType* type;
 	};
 
 	struct FieldRefInfo
 	{
-		Il2CppType containerType; // maybe generic
+		const Il2CppType* containerType; // maybe generic
 		const Il2CppFieldDefinition* field;
 	};
 
@@ -506,7 +536,7 @@ namespace metadata
 	struct ResolveMemberRefParent
 	{
 		TableType parentType;
-		Il2CppType type; // TYPEREF, TYPEDEF,TYPESPEC
+		const Il2CppType* type; // TYPEREF, TYPEDEF,TYPESPEC
 		ResolveModuleRef moduleRef;
 		ResolveMethodDef methodDef;
 	};
@@ -535,9 +565,8 @@ namespace metadata
 	struct ResolveStandAloneMethodSig
 	{
 		int32_t flags;
-		uint32_t paramCount;
-		Il2CppType returnType;
-		Il2CppType* params;
+		const Il2CppType* returnType;
+		il2cpp::utils::dynamic_array<const Il2CppType*> params;
 	};
 
 	inline TableType DecodeHasConstantType(uint32_t token)

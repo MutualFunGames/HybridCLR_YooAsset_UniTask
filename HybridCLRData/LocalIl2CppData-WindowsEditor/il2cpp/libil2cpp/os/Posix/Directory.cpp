@@ -1,6 +1,6 @@
 #include "il2cpp-config.h"
 
-#if IL2CPP_TARGET_POSIX && !RUNTIME_TINY
+#if IL2CPP_TARGET_POSIX && !IL2CPP_USE_PLATFORM_SPECIFIC_DIRECTORY
 
 #include "os/Directory.h"
 #include "os/ErrorCodes.h"
@@ -15,7 +15,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <sys/errno.h>
+#if IL2CPP_TARGET_QNX
+    #include <errno.h>
+#else
+    #include <sys/errno.h>
+#endif
 #include <sys/stat.h>
 #include <sys/types.h>
 

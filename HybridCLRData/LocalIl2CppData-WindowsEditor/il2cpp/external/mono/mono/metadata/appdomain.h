@@ -13,6 +13,7 @@
 
 #include <mono/utils/mono-publib.h>
 
+#include <mono/utils/mono-forward.h>
 #include <mono/metadata/object.h>
 #include <mono/metadata/reflection.h>
 
@@ -23,11 +24,11 @@ typedef void (*MonoThreadStartCB) (intptr_t tid, void* stack_start,
 typedef void (*MonoThreadAttachCB) (intptr_t tid, void* stack_start);
 
 typedef struct _MonoAppDomain MonoAppDomain;
-typedef struct _MonoJitInfo MonoJitInfo;
 
 typedef void (*MonoDomainFunc) (MonoDomain *domain, void* user_data);
-typedef void (*MonoDomainAssemblyFunc) (MonoAssembly *assembly, void* user_data);
+typedef void (*MonoJitInfoFunc)(MonoDomain *domain, MonoMethod* method, MonoJitInfo* jinfo, void* user_data);
 typedef void (*MonoUnityExceptionFunc) (MonoObject* exc);
+typedef void (*MonoDomainAssemblyFunc) (MonoAssembly *assembly, void* user_data);
 
 MONO_API MonoDomain*
 mono_init                  (const char *filename);
@@ -41,8 +42,7 @@ mono_init_version          (const char *domain_name, const char *version);
 MONO_API MonoDomain*
 mono_get_root_domain       (void);
 
-MONO_RT_EXTERNAL_ONLY
-MONO_API void
+MONO_API MONO_RT_EXTERNAL_ONLY void
 mono_runtime_init          (MonoDomain *domain, MonoThreadStartCB start_cb,
 			    MonoThreadAttachCB attach_cb);
 
@@ -52,7 +52,7 @@ mono_runtime_cleanup       (MonoDomain *domain);
 MONO_API void
 mono_install_runtime_cleanup (MonoDomainFunc func);
 
-MONO_API void
+MONO_API MONO_RT_EXTERNAL_ONLY void
 mono_runtime_quit (void);
 
 MONO_API void
@@ -67,12 +67,10 @@ mono_check_corlib_version (void);
 MONO_API MonoDomain *
 mono_domain_create         (void);
 
-MONO_RT_EXTERNAL_ONLY
-MONO_API MonoDomain *
+MONO_API MONO_RT_EXTERNAL_ONLY MonoDomain *
 mono_domain_create_appdomain (char *friendly_name, char *configuration_file);
 
-MONO_RT_EXTERNAL_ONLY
-MONO_API void
+MONO_API MONO_RT_EXTERNAL_ONLY void
 mono_domain_set_config (MonoDomain *domain, const char *base_dir, const char *config_file_name);
 
 MONO_API MonoDomain *
@@ -87,17 +85,13 @@ mono_domain_get_id         (MonoDomain *domain);
 MONO_API const char *
 mono_domain_get_friendly_name (MonoDomain *domain);
 
-MonoAssembly*
-m_domain_get_corlib (MonoDomain *domain);
-
-MONO_API mono_bool
+MONO_API MONO_RT_EXTERNAL_ONLY mono_bool
 mono_domain_set            (MonoDomain *domain, mono_bool force);
 
-MONO_API void
+MONO_API MONO_RT_EXTERNAL_ONLY void
 mono_domain_set_internal   (MonoDomain *domain);
 
-MONO_RT_EXTERNAL_ONLY
-MONO_API void
+MONO_API MONO_RT_EXTERNAL_ONLY void
 mono_domain_unload (MonoDomain *domain);
 
 MONO_API void
@@ -106,9 +100,11 @@ mono_domain_try_unload (MonoDomain *domain, MonoObject **exc,  MonoUnityExceptio
 MONO_API mono_bool
 mono_domain_is_unloading   (MonoDomain *domain);
 
-MONO_RT_EXTERNAL_ONLY
-MONO_API MonoDomain *
+MONO_API MONO_RT_EXTERNAL_ONLY MonoDomain *
 mono_domain_from_appdomain (MonoAppDomain *appdomain);
+
+MONO_API void
+mono_domain_jit_foreach (MonoDomain *domain, MonoJitInfoFunc func, void *user_data);
 
 MONO_API void
 mono_domain_foreach        (MonoDomainFunc func, void* user_data);
@@ -116,8 +112,14 @@ mono_domain_foreach        (MonoDomainFunc func, void* user_data);
 MONO_API void
 mono_domain_assembly_foreach (MonoDomain* domain, MonoDomainAssemblyFunc func, void* user_data);
 
-MONO_API MonoAssembly *
+MONO_API MONO_RT_EXTERNAL_ONLY MonoAssembly *
 mono_domain_assembly_open  (MonoDomain *domain, const char *name);
+
+MONO_API void
+mono_domain_ensure_entry_assembly (MonoDomain *domain, MonoAssembly *assembly);
+
+MONO_API void
+mono_set_ignore_version_and_key_when_finding_assemblies_already_loaded(mono_bool value);
 
 MONO_API mono_bool
 mono_domain_finalize       (MonoDomain *domain, uint32_t timeout);
@@ -128,19 +130,16 @@ mono_domain_free           (MonoDomain *domain, mono_bool force);
 MONO_API mono_bool
 mono_domain_has_type_resolve (MonoDomain *domain);
 
-MONO_RT_EXTERNAL_ONLY
-MONO_API MonoReflectionAssembly *
+MONO_API MONO_RT_EXTERNAL_ONLY MonoReflectionAssembly *
 mono_domain_try_type_resolve (MonoDomain *domain, char *name, MonoObject *tb);
 
 MONO_API mono_bool
 mono_domain_owns_vtable_slot (MonoDomain *domain, void* vtable_slot);
 
-MONO_RT_EXTERNAL_ONLY
-MONO_API void
+MONO_API MONO_RT_EXTERNAL_ONLY void
 mono_context_init 				   (MonoDomain *domain);
 
-MONO_RT_EXTERNAL_ONLY
-MONO_API void 
+MONO_API MONO_RT_EXTERNAL_ONLY void
 mono_context_set				   (MonoAppContext *new_context);
 
 MONO_API MonoAppContext * 
@@ -153,7 +152,7 @@ MONO_API int32_t
 mono_context_get_domain_id  (MonoAppContext *context);
 
 MONO_API MonoJitInfo *
-mono_jit_info_table_find   (MonoDomain *domain, char *addr);
+mono_jit_info_table_find   (MonoDomain *domain, void* addr);
 
 /* MonoJitInfo accessors */
 

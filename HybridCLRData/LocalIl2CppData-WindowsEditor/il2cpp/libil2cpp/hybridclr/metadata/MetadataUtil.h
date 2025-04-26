@@ -89,35 +89,77 @@ namespace metadata
 
 #pragma region interpreter metadtata index
 
-    const uint32_t kMetadataIndexBits = 26;
+    const uint32_t kMetadataIndexBits = 22;
 
-    const uint32_t kMetadataIndexMask = (1 << kMetadataIndexBits) - 1;
+    const uint32_t kMetadataKindBits = 2;
 
-    const uint32_t kLoadImageIndexBits = 32 - kMetadataIndexBits;
+    const uint32_t kMetadataKindShiftBits = 32 - kMetadataKindBits;
 
-    const uint32_t kMaxLoadImageCount = (1 << kLoadImageIndexBits) - 1;
+    const uint32_t kMetadataImageIndexShiftBits = kMetadataIndexBits;
+
+    const uint32_t kMetadataImageIndexExtraShiftBitsA = 6;
+    const uint32_t kMetadataImageIndexExtraShiftBitsB = 4;
+    const uint32_t kMetadataImageIndexExtraShiftBitsC = 2;
+    const uint32_t kMetadataImageIndexExtraShiftBitsD = 0;
+    extern const uint32_t kMetadataImageIndexExtraShiftBitsArr[4];
+
+    const uint32_t kMetadataIndexMaskA = (1 << (kMetadataIndexBits + kMetadataImageIndexExtraShiftBitsA)) - 1;
+    const uint32_t kMetadataIndexMaskB = (1 << (kMetadataIndexBits + kMetadataImageIndexExtraShiftBitsB)) - 1;
+    const uint32_t kMetadataIndexMaskC = (1 << (kMetadataIndexBits + kMetadataImageIndexExtraShiftBitsC)) - 1;
+    const uint32_t kMetadataIndexMaskD = (1 << (kMetadataIndexBits + kMetadataImageIndexExtraShiftBitsD)) - 1;
+    extern const uint32_t kMetadataIndexMaskArr[4];
+
+    const uint32_t kMetadataImageIndexBits = 32 - kMetadataIndexBits;
+
+    const uint32_t kMaxMetadataImageCount = (1 << kMetadataImageIndexBits);
+
+    const uint32_t kMaxMetadataImageIndexWithoutKind = 1u << (kMetadataImageIndexBits - kMetadataKindBits);
+
+    const uint32_t kInvalidImageIndex = 0;
 
     const int32_t kInvalidIndex = -1;
 
+    inline int32_t DecodeMetadataKind(uint32_t index)
+    {
+		return index >> kMetadataKindShiftBits;
+	}
+
     inline uint32_t DecodeImageIndex(int32_t index)
     {
-        return index != kInvalidIndex ? ((uint32_t)index) >> kMetadataIndexBits : 0;
+        if (index == kInvalidIndex)
+        {
+			return 0;
+		}
+        uint32_t uindex = (uint32_t)index;
+        uint32_t kind = uindex >> kMetadataKindShiftBits;
+        return (uindex & ~kMetadataIndexMaskArr[kind]) >> kMetadataImageIndexShiftBits;
     }
 
     inline uint32_t DecodeMetadataIndex(int32_t index)
     {
-        return index != kInvalidIndex ? ((uint32_t)index) & kMetadataIndexMask : kInvalidIndex;
+        if (index == kInvalidIndex)
+        {
+            return kInvalidIndex;
+        }
+        uint32_t uindex = (uint32_t)index;
+        uint32_t kind = uindex >> kMetadataKindShiftBits;
+        return uindex & kMetadataIndexMaskArr[kind];
     }
 
     inline int32_t EncodeImageAndMetadataIndex(uint32_t imageIndex, int32_t rawIndex)
     {
-        IL2CPP_ASSERT(rawIndex <= kMetadataIndexMask);
-        return rawIndex != kInvalidIndex ? (imageIndex << kMetadataIndexBits) | rawIndex : kInvalidIndex;
+        if (rawIndex == kInvalidIndex)
+        {
+			return kInvalidIndex;
+		}
+        IL2CPP_ASSERT(((imageIndex << kMetadataImageIndexShiftBits) & (uint32_t)rawIndex) == 0);
+        return (imageIndex << kMetadataIndexBits) | (uint32_t)rawIndex;
     }
 
     inline bool IsInterpreterIndex(int32_t index)
     {
-        return DecodeImageIndex(index) != 0;
+        //return DecodeImageIndex(index) != 0;
+        return index != kInvalidIndex && ((uint32_t)index & ~kMetadataIndexMaskA) != 0;
     }
 
     inline bool IsInterpreterType(const Il2CppTypeDefinition* typeDefinition)
@@ -190,6 +232,11 @@ namespace metadata
         return (flags & METHOD_ATTRIBUTE_MEMBER_ACCESS_MASK) == METHOD_ATTRIBUTE_PRIVATE;
     }
 
+    inline bool IsPublicMethod(uint32_t flags)
+    {
+        return (flags & METHOD_ATTRIBUTE_MEMBER_ACCESS_MASK) == METHOD_ATTRIBUTE_PUBLIC;
+    }
+
     inline bool IsGenericIns(const Il2CppType* type)
     {
         return type->type == IL2CPP_TYPE_GENERICINST;
@@ -198,6 +245,11 @@ namespace metadata
     inline bool IsVirtualMethod(uint32_t flags)
     {
         return flags & METHOD_ATTRIBUTE_VIRTUAL;
+    }
+
+    inline bool IsAbstractMethod(uint32_t flags)
+    {
+        return flags & METHOD_ATTRIBUTE_ABSTRACT;
     }
 
     inline bool IsNewSlot(uint32_t flags)
@@ -222,6 +274,11 @@ namespace metadata
         return typeDef->bitfield & (1 << (il2cpp::vm::kBitIsValueType - 1));
     }
 
+    inline bool IsEnumType(const Il2CppTypeDefinition* typeDef)
+    {
+        return (typeDef->bitfield >> (il2cpp::vm::kBitIsEnum - 1)) & 0x1;
+    }
+
     inline const Il2CppTypeDefinition* GetUnderlyingTypeDefinition(const Il2CppType* type)
     {
         if (IsGenericIns(type))
@@ -234,11 +291,7 @@ namespace metadata
         }
     }
 
-    inline void GetIl2CppTypeFromTypeDefinition(const Il2CppTypeDefinition* typeDef, Il2CppType& type)
-    {
-        type.type = typeDef->bitfield & (1 << (il2cpp::vm::kBitIsValueType - 1)) ? IL2CPP_TYPE_VALUETYPE : IL2CPP_TYPE_CLASS;
-        type.data.typeHandle = (Il2CppMetadataTypeHandle)typeDef;
-    }
+    const Il2CppType* GetIl2CppTypeFromTypeDefinition(const Il2CppTypeDefinition* typeDef);
 
     inline uint32_t GetActualArgumentNum(const MethodInfo* method)
     {
@@ -290,8 +343,6 @@ namespace metadata
 
     bool IsTypeGenericCompatible(const Il2CppType* t1, const Il2CppType* t2);
 
-    bool IsExactlyMatch(const Il2CppMethodDefinition* src, const Il2CppMethodDefinition* dst);
-
     bool IsOverrideMethod(const Il2CppType* type1, const Il2CppMethodDefinition* method1, const Il2CppType* type2, const Il2CppMethodDefinition* method2);
     bool IsOverrideMethodIgnoreName(const Il2CppType* type1, const Il2CppMethodDefinition* methodDef1, const Il2CppType* type2, const Il2CppMethodDefinition* methodDef2);
 
@@ -299,9 +350,9 @@ namespace metadata
 
     const MethodInfo* GetMethodInfoFromMethodDef(const Il2CppType* type, const Il2CppMethodDefinition* methodDef);
 
-    bool ResolveField(const Il2CppType* type, const char* resolveFieldName, Il2CppType* resolveFieldType, const Il2CppFieldDefinition*& retFieldDef);
+    bool ResolveField(const Il2CppType* type, const char* resolveFieldName, const Il2CppType* resolveFieldType, const Il2CppFieldDefinition*& retFieldDef);
 
-    inline void ResolveFieldThrow(const Il2CppType* type, const char* resolveFieldName, Il2CppType* resolveFieldType, const Il2CppFieldDefinition*& retFieldDef)
+    inline void ResolveFieldThrow(const Il2CppType* type, const char* resolveFieldName, const Il2CppType* resolveFieldType, const Il2CppFieldDefinition*& retFieldDef)
     {
         if (!ResolveField(type, resolveFieldName, resolveFieldType, retFieldDef))
         {
@@ -311,27 +362,28 @@ namespace metadata
 
     const Il2CppGenericContainer* GetGenericContainerFromIl2CppType(const Il2CppType* type);
 
+    inline const Il2CppGenericContainer* GetGenericContainer(const MethodInfo* methodDef)
+    {
+        return methodDef->is_inflated ?
+            (const Il2CppGenericContainer*)methodDef->genericMethod->methodDefinition->genericContainerHandle :
+            (const Il2CppGenericContainer*)methodDef->genericContainerHandle;
+    }
+
     bool IsMatchSigType(const Il2CppType* dstType, const Il2CppType* sigType, const Il2CppGenericContainer* klassGenericContainer, const Il2CppGenericContainer* methodGenericContainer);
 
     bool IsMatchMethodSig(const Il2CppMethodDefinition* methodDef, const MethodRefSig& resolveSig, const Il2CppGenericContainer* klassGenericContainer);
     bool IsMatchMethodSig(const MethodInfo* methodDef, const MethodRefSig& resolveSig, const Il2CppGenericContainer* klassGenericContainer);
     bool IsMatchMethodSig(const MethodInfo* methodDef, const MethodRefSig& resolveSig, const Il2CppType** klassInstArgv, const Il2CppType** methodInstArgv);
 
-    inline Il2CppType* CloneIl2CppType(const Il2CppType* type)
-    {
-        Il2CppType* newType = (Il2CppType*)IL2CPP_MALLOC(sizeof(Il2CppType));
-        *newType = *type;
-        return newType;
-    }
+    const Il2CppGenericInst* TryInflateGenericInst(const Il2CppGenericInst* inst, const Il2CppGenericContext* genericContext);
 
-    Il2CppGenericInst* TryInflateGenericInst(Il2CppGenericInst* inst, const Il2CppGenericContext* genericContext);
+	bool HasNotInstantiatedGenericType(const Il2CppType* type);
+    bool HasNotInstantiatedGenericType(const Il2CppGenericInst* inst);
 
 #pragma endregion
 
 
 #pragma region misc
-
-    const int32_t kMaxRetValueTypeStackObjectSize = 256;
 
     int32_t GetTypeValueSize(const Il2CppType* type);
 
@@ -366,15 +418,15 @@ namespace metadata
     class Il2CppTypeHashShallow
     {
     public:
-        size_t operator()(const Il2CppType& t1) const
+        size_t operator()(const Il2CppType* t1) const
         {
-            size_t h = (size_t)t1.data.dummy;
-            h = il2cpp::utils::HashUtils::Combine(h, t1.attrs);
-            h = il2cpp::utils::HashUtils::Combine(h, (size_t)t1.type);
-            h = il2cpp::utils::HashUtils::Combine(h, t1.byref);
-            h = il2cpp::utils::HashUtils::Combine(h, t1.pinned);
+            size_t h = (size_t)t1->data.dummy;
+            h = il2cpp::utils::HashUtils::Combine(h, t1->attrs);
+            h = il2cpp::utils::HashUtils::Combine(h, (size_t)t1->type);
+            h = il2cpp::utils::HashUtils::Combine(h, t1->byref);
+            h = il2cpp::utils::HashUtils::Combine(h, t1->pinned);
 #if HYBRIDCLR_UNITY_2021_OR_NEW
-            h = il2cpp::utils::HashUtils::Combine(h, t1.valuetype);
+            h = il2cpp::utils::HashUtils::Combine(h, t1->valuetype);
 #endif
             return h;
         }
@@ -383,31 +435,17 @@ namespace metadata
     class Il2CppTypeEqualityComparerShallow
     {
     public:
-        bool operator()(const Il2CppType& t1, const Il2CppType& t2) const
+        bool operator()(const Il2CppType* t1, const Il2CppType* t2) const
         {
-            return (t1.data.dummy == t2.data.dummy)
-                && t1.type == t2.type
-                && t1.attrs == t2.attrs
-                && t1.byref == t2.byref
-                && t1.pinned == t2.pinned
+            return (t1->data.dummy == t2->data.dummy)
+                && t1->type == t2->type
+                && t1->attrs == t2->attrs
+                && t1->byref == t2->byref
+                && t1->pinned == t2->pinned
 #if HYBRIDCLR_UNITY_2021_OR_NEW
-                && t1.valuetype == t2.valuetype
+                && t1->valuetype == t2->valuetype
 #endif
                 ;
-        }
-    };
-
-
-    struct Il2CppTypeHash {
-        size_t operator()(const Il2CppType* x) const noexcept {
-            return il2cpp::metadata::Il2CppTypeHash::Hash(x);
-        }
-    };
-
-    struct Il2CppTypeEqualTo
-    {
-        bool operator()(const Il2CppType* a, const Il2CppType* b) const {
-            return il2cpp::metadata::Il2CppTypeEqualityComparer::AreEqual(a, b);
         }
     };
 

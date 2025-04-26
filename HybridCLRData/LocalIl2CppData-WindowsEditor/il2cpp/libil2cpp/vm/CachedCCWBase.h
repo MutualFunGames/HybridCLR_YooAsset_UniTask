@@ -31,7 +31,7 @@ namespace vm
     {
     private:
         baselib::atomic<uint32_t> m_RefCount;
-        uint32_t m_GCHandle;
+        Il2CppGCHandle m_GCHandle;
 
     public:
         inline CachedCCWBase(Il2CppObject* obj) :
@@ -64,8 +64,8 @@ namespace vm
                 // at this point we're in middle of ReleaseImpl call just after
                 // it decrements the gccount to 0 but hasn't released m_GCHandle
                 // yet. We spin until it is released.
-                uint32_t gcHandle = gc::GCHandle::New(GetManagedObjectInline(), false);
-                while (os::Atomic::CompareExchange(&m_GCHandle, gcHandle, 0) != 0) {}
+                Il2CppGCHandle gcHandle = (Il2CppGCHandle)gc::GCHandle::New(GetManagedObjectInline(), false);
+                while (os::Atomic::CompareExchangePointer(&m_GCHandle, gcHandle, gc::kEmptyGCHandle) != 0) {}
             }
 
             return refCount;
@@ -83,7 +83,7 @@ namespace vm
                 // ref count to 0 will ever be in flight at the same time
                 // because AddRefImpl that takes us out of this state halts until
                 // we set m_GCHandle to zero.
-                uint32_t gcHandle = os::Atomic::Exchange(&m_GCHandle, 0);
+                Il2CppGCHandle gcHandle = (Il2CppGCHandle)os::Atomic::ExchangePointer((void**)&m_GCHandle, (void*)gc::kEmptyGCHandle);
                 IL2CPP_ASSERT(gcHandle != 0);
                 gc::GCHandle::Free(gcHandle);
             }

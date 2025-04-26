@@ -1,29 +1,29 @@
 #include "il2cpp-config.h"
-
 #include "il2cpp-runtime-metadata.h"
-#include "RuntimeType.h"
-#include "Type.h"
-#include "metadata/GenericMetadata.h"
-#include "vm/Array.h"
-#include "vm/Type.h"
-#include "vm/Class.h"
-#include "vm/Field.h"
-#include "vm/MetadataCache.h"
-#include "vm/Method.h"
-#include "vm/String.h"
-#include "vm/GenericClass.h"
-#include "vm/Reflection.h"
-#include "vm/ClassInlines.h"
-#include "utils/Functional.h"
-#include "utils/dynamic_array.h"
-#include "utils/Il2CppHashSet.h"
-#include "utils/StringUtils.h"
 #include "il2cpp-api.h"
 #include "il2cpp-tabledefs.h"
 #include "mono-structs.h"
+
+#include "RuntimeType.h"
 #include "RuntimeTypeHandle.h"
+#include "Type.h"
+#include "metadata/GenericMetadata.h"
+#include "utils/Functional.h"
+#include "utils/Il2CppHashSet.h"
+#include "utils/StringUtils.h"
+#include "utils/dynamic_array.h"
 #include "vm-utils/VmStringUtils.h"
-#include <vm/Reflection.h>
+#include "vm/Array.h"
+#include "vm/Class.h"
+#include "vm/ClassInlines.h"
+#include "vm/Field.h"
+#include "vm/GenericClass.h"
+#include "vm/MetadataCache.h"
+#include "vm/Method.h"
+#include "vm/Reflection.h"
+#include "vm/Runtime.h"
+#include "vm/String.h"
+#include "vm/Type.h"
 
 #include <vector>
 #include <set>
@@ -746,11 +746,10 @@ namespace System
         return 0;
     }
 
-    Il2CppObject* RuntimeType::get_DeclaringMethod(Il2CppReflectionRuntimeType* thisPtr)
+    Il2CppReflectionMethod* RuntimeType::get_DeclaringMethod(Il2CppReflectionRuntimeType* thisPtr)
     {
-        IL2CPP_NOT_IMPLEMENTED_ICALL(RuntimeType::get_DeclaringMethod);
-        IL2CPP_UNREACHABLE;
-        return NULL;
+        const MethodInfo* declaringMethod = vm::Type::GetDeclaringMethod(thisPtr->type.type);
+        return declaringMethod == NULL ? NULL : vm::Reflection::GetMethodObject(declaringMethod, NULL);
     }
 
     Il2CppObject* RuntimeType::GetCorrespondingInflatedMethod(Il2CppReflectionRuntimeType* thisPtr, Il2CppObject* generic)
@@ -810,9 +809,24 @@ namespace System
         return il2cpp::vm::String::NewWrapper(name.c_str());
     }
 
+    std::string RuntimeType::getFullName2(Il2CppReflectionRuntimeType* _type, bool full_name, bool assembly_qualified)
+    {
+        Il2CppTypeNameFormat format;
+
+        if (full_name)
+            format = assembly_qualified ?
+            IL2CPP_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED :
+            IL2CPP_TYPE_NAME_FORMAT_FULL_NAME;
+        else
+            format = IL2CPP_TYPE_NAME_FORMAT_REFLECTION;
+
+        return std::string(vm::Type::GetName(_type->type.type, format));
+    }
+
     Il2CppReflectionType* RuntimeType::get_DeclaringType(Il2CppReflectionRuntimeType* _this)
     {
-        return vm::Type::GetDeclaringType(_this->type.type);
+        Il2CppClass* declaringClass = vm::Type::GetDeclaringType(_this->type.type);
+        return declaringClass == NULL ? NULL : il2cpp::vm::Reflection::GetTypeObject(vm::Class::GetType(declaringClass));
     }
 
     void validate_make_array_type_inputs(Il2CppReflectionType* type, int32_t rank)
@@ -1119,8 +1133,7 @@ namespace System
                 else if (vm::Class::IsInterface(targetMethod->klass))
                 {
                     // We found a default interface method
-
-                    if (targetMethod->methodPointer == NULL)
+                    if (targetMethod->flags & METHOD_ATTRIBUTE_ABSTRACT)
                     {
                         // The method was re-abstracted
                         member = NULL;

@@ -5,6 +5,18 @@
 #ifndef _ARM_BARRIER_ISH
     #define _ARM_BARRIER_ISH 0xB
 #endif
+#ifndef _ARM64_BARRIER_ISHLD
+    #define _ARM64_BARRIER_ISHLD 0x9
+#endif
+
+#ifndef _ARM_BARRIER_LOAD
+    #if defined(_M_ARM)
+        #define _ARM_BARRIER_LOAD _ARM_BARRIER_ISH
+    #else
+        #define _ARM_BARRIER_LOAD _ARM64_BARRIER_ISHLD
+    #endif
+#endif
+
 
 #define _InterlockedCompareExchange32(obj, value, exp)      _InterlockedCompareExchange((long*)obj, value, exp)
 #define _InterlockedCompareExchange32_nf(obj, value, exp)   _InterlockedCompareExchange_nf((long*)obj, value, exp)
@@ -39,6 +51,8 @@
 #undef _InterlockedOr64
 #undef _InterlockedAnd64
 #undef _InterlockedXor64
+#undef _InterlockedIncrement64
+#undef _InterlockedDecrement64
 
 #define detail_CAS_OP(_name, ...)                                                                       \
 static __forceinline __int64 _name(__int64* obj, __int64 value)                                         \
@@ -53,6 +67,22 @@ detail_CAS_OP(_InterlockedExchangeAdd64, p1 + value);
 detail_CAS_OP(_InterlockedOr64, p1 | value);
 detail_CAS_OP(_InterlockedAnd64, p1 & value);
 detail_CAS_OP(_InterlockedXor64, p1 ^ value);
+#undef detail_CAS_OP
+
+
+#undef _InterlockedIncrement64
+#undef _InterlockedDecrement64
+
+#define detail_CAS_OP(_name, ...)                                                                       \
+static __forceinline __int64 _name(__int64* obj)                                                        \
+{                                                                                                       \
+    __int64 p1, p2 = *obj;                                                                              \
+    do { p1 = p2; p2 = _InterlockedCompareExchange64(obj, (__VA_ARGS__), p1); } while (p1 != p2);       \
+    return (__VA_ARGS__);                                                                               \
+}
+
+detail_CAS_OP(_InterlockedIncrement64, p1 + 1);
+detail_CAS_OP(_InterlockedDecrement64, p1 - 1);
 #undef detail_CAS_OP
 
 #endif

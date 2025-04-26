@@ -1,4 +1,3 @@
-#if !IL2CPP_TINY
 #include "il2cpp-config.h"
 #include "il2cpp-class-internals.h"
 #include "il2cpp-object-internals.h"
@@ -60,4 +59,3 @@ namespace Diagnostics
 } /* namespace mscorlib */
 } /* namespace icalls */
 } /* namespace il2cpp */
-#endif

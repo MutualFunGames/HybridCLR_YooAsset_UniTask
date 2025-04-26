@@ -27,22 +27,19 @@ typedef struct Il2CppCodeGenModule Il2CppCodeGenModule;
 typedef struct Il2CppMetadataRegistration Il2CppMetadataRegistration;
 typedef struct Il2CppCodeRegistration Il2CppCodeRegistration;
 
-#if RUNTIME_TINY
-typedef Il2CppMethodPointer VirtualInvokeData;
-#else
 typedef struct VirtualInvokeData
 {
     Il2CppMethodPointer methodPtr;
     const MethodInfo* method;
 } VirtualInvokeData;
-#endif
 
 typedef enum Il2CppTypeNameFormat
 {
     IL2CPP_TYPE_NAME_FORMAT_IL,
     IL2CPP_TYPE_NAME_FORMAT_REFLECTION,
     IL2CPP_TYPE_NAME_FORMAT_FULL_NAME,
-    IL2CPP_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED
+    IL2CPP_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED,
+    IL2CPP_TYPE_NAME_FORMAT_REFLECTION_QUALIFIED
 } Il2CppTypeNameFormat;
 
 
@@ -187,12 +184,6 @@ struct MethodInfo;
 struct FieldInfo;
 struct Il2CppObject;
 struct MemberInfo;
-
-typedef struct CustomAttributesCache
-{
-    int count;
-    Il2CppObject** attributes;
-} CustomAttributesCache;
 
 #ifndef THREAD_STATIC_FIELD_OFFSET
 #define THREAD_STATIC_FIELD_OFFSET -1
@@ -358,14 +349,14 @@ typedef struct MethodInfo
     uint8_t is_inflated : 1; /* true if declaring_type is a generic instance or if method is a generic instance*/
     uint8_t wrapper_type : 1; /* always zero (MONO_WRAPPER_NONE) needed for the debugger */
     uint8_t has_full_generic_sharing_signature : 1;
-    uint8_t indirect_call_via_invokers : 1;
+    uint8_t is_unmanaged_callers_only : 1;
 
     // ==={{ hybridclr
+    bool initInterpCallMethodPointer : 1;
+    bool isInterpterImpl : 1;
     void* interpData;
     Il2CppMethodPointer methodPointerCallByInterp;
     Il2CppMethodPointer virtualMethodPointerCallByInterp;
-    bool initInterpCallMethodPointer;
-    bool isInterpterImpl;
     // ===}} hybridclr
 } MethodInfo;
 
@@ -418,7 +409,7 @@ typedef struct Il2CppClass
 
     void *unity_user_data;
 
-    uint32_t initializationExceptionGCHandle;
+    Il2CppGCHandle initializationExceptionGCHandle;
 
     uint32_t cctor_started;
     uint32_t cctor_finished_or_no_cctor;
@@ -427,6 +418,7 @@ typedef struct Il2CppClass
     // Remaining fields are always valid except where noted
     Il2CppMetadataGenericContainerHandle genericContainerHandle;
     uint32_t instance_size; // valid when size_inited is true
+    uint32_t stack_slot_size; // valid when size_inited is true
     uint32_t actualSize;
     uint32_t element_size;
     int32_t native_size;
@@ -449,11 +441,10 @@ typedef struct Il2CppClass
     uint8_t genericRecursionDepth;
     uint8_t rank;
     uint8_t minimumAlignment; // Alignment of this type
-    uint8_t naturalAligment; // Alignment of this type without accounting for packing
     uint8_t packingSize;
 
     // this is critical for performance of Class::InitFromCodegen. Equals to initialized && !initializationExceptionGCHandle at all times.
-    // Use Class::UpdateInitializedAndNoError to update
+    // Use Class::PublishInitialized to update
     uint8_t initialized_and_no_error : 1;
 
     uint8_t initialized : 1;
@@ -617,8 +608,10 @@ typedef struct Il2CppCodeRegistration
     const Il2CppMethodPointer* genericAdjustorThunks;
     uint32_t invokerPointersCount;
     const InvokerMethod* invokerPointers;
-    uint32_t unresolvedVirtualCallCount;
+    uint32_t unresolvedIndirectCallCount;
     const Il2CppMethodPointer* unresolvedVirtualCallPointers;
+    const Il2CppMethodPointer* unresolvedInstanceCallPointers;
+    const Il2CppMethodPointer* unresolvedStaticCallPointers;
     uint32_t interopDataCount;
     Il2CppInteropData* interopData;
     uint32_t windowsRuntimeFactoryCount;

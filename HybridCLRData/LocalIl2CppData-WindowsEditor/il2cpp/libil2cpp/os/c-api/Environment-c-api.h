@@ -8,7 +8,6 @@ extern "C"
 #endif
 
 char* UnityPalGetOsUserName();
-char* UnityPalGetMachineName();
 char* UnityPalGetEnvironmentVariable(const char* name);
 void UnityPalSetEnvironmentVariable(const char* name, const char* value);
 char* UnityPalGetHomeDirectory();

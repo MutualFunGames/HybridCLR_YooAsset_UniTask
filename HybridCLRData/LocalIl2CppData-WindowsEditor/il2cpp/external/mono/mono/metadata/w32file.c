@@ -34,11 +34,11 @@
 #include <mono/metadata/exception.h>
 #include <mono/metadata/appdomain.h>
 #include <mono/metadata/marshal.h>
-#include <mono/metadata/unity-utils.h>
 #include <mono/utils/strenc.h>
-#include <utils/mono-io-portability.h>
+#include <mono/utils/mono-io-portability.h>
 #include <mono/metadata/w32handle.h>
 #include <mono/utils/w32api.h>
+#include "icall-decl.h"
 
 #undef DEBUG
 
@@ -187,6 +187,8 @@ static guint32 convert_attrs(MonoFileAttributes attrs)
 
 /* System.IO.MonoIO internal calls */
 
+#if !ENABLE_NETCORE
+
 MonoBoolean
 ves_icall_System_IO_MonoIO_CreateDirectory (const gunichar2 *path, gint32 *error)
 {
@@ -216,9 +218,9 @@ ves_icall_System_IO_MonoIO_RemoveDirectory (const gunichar2 *path, gint32 *error
 
 	if (path_remapped = mono_unity_remap_path_utf16 (path))
 		path = path_remapped;
-	
+
 	*error=ERROR_SUCCESS;
-	
+
 	ret=mono_w32file_remove_directory (path);
 	if(ret==FALSE) {
 		*error=mono_w32error_get_last ();
@@ -338,9 +340,9 @@ ves_icall_System_IO_MonoIO_SetCurrentDirectory (const gunichar2 *path,
 
 	if (path_remapped = mono_unity_remap_path_utf16 (path))
 		path = path_remapped;
-	
+
 	*error=ERROR_SUCCESS;
-	
+
 	ret=mono_w32file_set_cwd (path);
 	if(ret==FALSE) {
 		*error=mono_w32error_get_last ();
@@ -379,6 +381,7 @@ ves_icall_System_IO_MonoIO_ReplaceFile (const gunichar2 *source_file_name, const
 {
 	gboolean ret;
 	guint32 replace_flags = REPLACEFILE_WRITE_THROUGH;
+
 	const gunichar2 *source_file_name_remapped;
 	const gunichar2 *destination_file_name_remapped;
 	const gunichar2 *destination_backup_file_name_remapped;
@@ -481,11 +484,6 @@ ves_icall_System_IO_MonoIO_SetFileAttributes (const gunichar2 *path, gint32 attr
 					      gint32 *error)
 {
 	gboolean ret;
-	const gunichar2 *path_remapped;
-
-	if (path_remapped = mono_unity_remap_path_utf16 (path))
-		path = path_remapped;
-
 	*error=ERROR_SUCCESS;
 	
 	ret=mono_w32file_set_attributes (path,
@@ -493,9 +491,6 @@ ves_icall_System_IO_MonoIO_SetFileAttributes (const gunichar2 *path, gint32 attr
 	if(ret==FALSE) {
 		*error=mono_w32error_get_last ();
 	}
-
-	g_free (path_remapped);
-
 	return(ret);
 }
 
@@ -606,34 +601,45 @@ ves_icall_System_IO_MonoIO_Close (HANDLE handle, gint32 *error)
 	return(ret);
 }
 
+MonoBoolean
+ves_icall_System_IO_MonoIO_Cancel (HANDLE handle, gint32 *error)
+{
+	gboolean ret;
+	*error=ERROR_SUCCESS;
+
+	ret = mono_w32file_cancel (handle);
+	if (ret == FALSE)
+		*error = mono_w32error_get_last ();
+
+	return ret;
+}
+
 gint32 
 ves_icall_System_IO_MonoIO_Read (HANDLE handle, MonoArrayHandle dest,
 				 gint32 dest_offset, gint32 count,
 				 gint32 *io_error,
 				 MonoError *error)
 {
-	guchar *buffer;
+	void *buffer;
 	gboolean result;
 	guint32 n;
 
 	*io_error=ERROR_SUCCESS;
 
-	MONO_CHECK_ARG_NULL (dest, 0);
+	MONO_CHECK_ARG_NULL_HANDLE (dest, 0);
 
 	if (dest_offset > mono_array_handle_length (dest) - count) {
 		mono_error_set_argument (error, "array", "array too small. numBytes/offset wrong.");
 		return 0;
 	}
 
-	guint32 buffer_handle = 0;
+	MonoGCHandle buffer_handle = NULL;
 	buffer = MONO_ARRAY_HANDLE_PIN (dest, guchar, dest_offset, &buffer_handle);
-	result = mono_w32file_read (handle, buffer, count, &n);
-	mono_gchandle_free (buffer_handle);
+	result = mono_w32file_read (handle, buffer, count, &n, io_error);
+	mono_gchandle_free_internal (buffer_handle);
 
-	if (!result) {
-		*io_error=mono_w32error_get_last ();
+	if (!result)
 		return -1;
-	}
 
 	return (gint32)n;
 }
@@ -644,28 +650,26 @@ ves_icall_System_IO_MonoIO_Write (HANDLE handle, MonoArrayHandle src,
 				  gint32 *io_error,
 				  MonoError *error)
 {
-	guchar *buffer;
+	void *buffer;
 	gboolean result;
 	guint32 n;
 
 	*io_error=ERROR_SUCCESS;
 
-	MONO_CHECK_ARG_NULL (src, 0);
+	MONO_CHECK_ARG_NULL_HANDLE (src, 0);
 	
 	if (src_offset > mono_array_handle_length (src) - count) {
 		mono_error_set_argument (error, "array", "array too small. numBytes/offset wrong.");
 		return 0;
 	}
 	
-	guint32 src_handle = 0;
+	MonoGCHandle src_handle = NULL;
 	buffer = MONO_ARRAY_HANDLE_PIN (src, guchar, src_offset, &src_handle);
-	result = mono_w32file_write (handle, buffer, count, &n);
-	mono_gchandle_free (src_handle);
+	result = mono_w32file_write (handle, buffer, count, &n, io_error);
+	mono_gchandle_free_internal (src_handle);
 
-	if (!result) {
-		*io_error=mono_w32error_get_last ();
+	if (!result)
 		return -1;
-	}
 
 	return (gint32)n;
 }
@@ -796,19 +800,19 @@ ves_icall_System_IO_MonoIO_SetFileTime (HANDLE handle, gint64 creation_time,
 }
 
 HANDLE 
-ves_icall_System_IO_MonoIO_get_ConsoleOutput ()
+ves_icall_System_IO_MonoIO_get_ConsoleOutput (void)
 {
 	return mono_w32file_get_console_output ();
 }
 
 HANDLE 
-ves_icall_System_IO_MonoIO_get_ConsoleInput ()
+ves_icall_System_IO_MonoIO_get_ConsoleInput (void)
 {
 	return mono_w32file_get_console_input ();
 }
 
 HANDLE 
-ves_icall_System_IO_MonoIO_get_ConsoleError ()
+ves_icall_System_IO_MonoIO_get_ConsoleError (void)
 {
 	return mono_w32file_get_console_error ();
 }
@@ -816,6 +820,8 @@ ves_icall_System_IO_MonoIO_get_ConsoleError ()
 MonoBoolean
 ves_icall_System_IO_MonoIO_CreatePipe (HANDLE *read_handle, HANDLE *write_handle, gint32 *error)
 {
+	*error = ERROR_SUCCESS;
+
 	gboolean ret;
 
 	ret=mono_w32file_create_pipe (read_handle, write_handle, 0);
@@ -843,7 +849,7 @@ ves_icall_System_IO_MonoIO_DuplicateHandle (HANDLE source_process_handle, HANDLE
 
 	*target_handle = mono_w32handle_duplicate (source_handle_data);
 
-	mono_w32handle_unref (source_handle);
+	mono_w32handle_unref ((MonoW32Handle*)source_handle);
 #else
 	gboolean ret;
 
@@ -863,28 +869,32 @@ ves_icall_System_IO_MonoIO_DuplicateHandle (HANDLE source_process_handle, HANDLE
 
 #ifndef HOST_WIN32
 gunichar2 
-ves_icall_System_IO_MonoIO_get_VolumeSeparatorChar ()
+ves_icall_System_IO_MonoIO_get_VolumeSeparatorChar (void)
 {
 	return (gunichar2) '/';	/* forward slash */
 }
 
 gunichar2 
-ves_icall_System_IO_MonoIO_get_DirectorySeparatorChar ()
+ves_icall_System_IO_MonoIO_get_DirectorySeparatorChar (void)
 {
 	return (gunichar2) '/';	/* forward slash */
 }
 
 gunichar2 
-ves_icall_System_IO_MonoIO_get_AltDirectorySeparatorChar ()
+ves_icall_System_IO_MonoIO_get_AltDirectorySeparatorChar (void)
 {
+#if TARGET_WASM
+	return (gunichar2) '\\';	/* backslash issue https://github.com/mono/mono/issues/18933 */ 
+#else	
 	if (IS_PORTABILITY_SET)
 		return (gunichar2) '\\';	/* backslash */
 	else
 		return (gunichar2) '/';	/* forward slash */
+#endif		
 }
 
 gunichar2 
-ves_icall_System_IO_MonoIO_get_PathSeparator ()
+ves_icall_System_IO_MonoIO_get_PathSeparator (void)
 {
 	return (gunichar2) ':';	/* colon */
 }
@@ -921,7 +931,7 @@ ves_icall_System_IO_MonoIO_get_InvalidPathChars (MonoError *error)
 	domain = mono_domain_get ();
 	n = sizeof (invalid_path_chars) / sizeof (gunichar2);
 	MONO_HANDLE_ASSIGN (chars, mono_array_new_handle (domain, mono_defaults.char_class, n, error));
-	return_val_if_nok (error, NULL);
+	return_val_if_nok (error, MONO_HANDLE_CAST (MonoArray, mono_new_null ()));
 
 	for (i = 0; i < n; ++ i)
 		MONO_HANDLE_ARRAY_SETVAL (chars, gunichar2, i, invalid_path_chars [i]);
@@ -943,6 +953,18 @@ void ves_icall_System_IO_MonoIO_Unlock (HANDLE handle, gint64 position,
 	mono_w32file_unlock (handle, position, length, error);
 }
 
+
+#ifndef HOST_WIN32
+void mono_w32handle_dump (void);
+
+void ves_icall_System_IO_MonoIO_DumpHandles (void)
+{
+	mono_w32handle_dump ();
+}
+#endif /* !HOST_WIN32 */
+
+#endif /* !ENABLE_NETCORE */
+
 //Support for io-layer free mmap'd files.
 
 #if defined (TARGET_IOS) || defined (TARGET_ANDROID)
@@ -950,11 +972,11 @@ void ves_icall_System_IO_MonoIO_Unlock (HANDLE handle, gint64 position,
 gint64
 mono_filesize_from_path (MonoString *string)
 {
-	MonoError error;
+	ERROR_DECL (error);
 	struct stat buf;
 	gint64 res;
-	char *path = mono_string_to_utf8_checked (string, &error);
-	mono_error_raise_exception_deprecated (&error); /* OK to throw, external only without a good alternative */
+	char *path = mono_string_to_utf8_checked_internal (string, error);
+	mono_error_raise_exception_deprecated (error); /* OK to throw, external only without a good alternative */
 
 	gint stat_res;
 	MONO_ENTER_GC_SAFE;
@@ -986,13 +1008,8 @@ mono_filesize_from_fd (int fd)
 	return (gint64)buf.st_size;
 }
 
+#else
+
+MONO_EMPTY_SOURCE_FILE (w32file);
+
 #endif
-
-#ifndef HOST_WIN32
-void mono_w32handle_dump (void);
-
-void ves_icall_System_IO_MonoIO_DumpHandles (void)
-{
-	mono_w32handle_dump ();
-}
-#endif /* !HOST_WIN32 */

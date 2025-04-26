@@ -17,17 +17,17 @@ namespace baselib
             // Default memory allocation methods
             struct page_allocator_impl
             {
-                static constexpr auto Baselib_Memory_AllocatePages = ::Baselib_Memory_AllocatePages;
-                static constexpr auto Baselib_Memory_ReleasePages = ::Baselib_Memory_ReleasePages;
-                static constexpr auto Baselib_Memory_SetPageState = ::Baselib_Memory_SetPageState;
+                static constexpr auto Baselib_Memory_AllocatePagesEx = ::Baselib_Memory_AllocatePagesEx;
+                static constexpr auto Baselib_Memory_ReleasePages      = ::Baselib_Memory_ReleasePages;
+                static constexpr auto Baselib_Memory_SetPageStateEx  = ::Baselib_Memory_SetPageStateEx;
             };
 
             // Test memory allocation methods
             struct page_allocator_impl_test
             {
-                static Baselib_Memory_PageAllocation Baselib_Memory_AllocatePages(uint64_t pageSize, uint64_t pageCount, uint64_t alignmentInMultipleOfPageSize, Baselib_Memory_PageState pageState, Baselib_ErrorState* errorState);
+                static Baselib_Memory_PageAllocation Baselib_Memory_AllocatePagesEx(uint64_t pageSize, uint64_t pageCount, uint64_t alignmentInMultipleOfPageSize, Baselib_Memory_PageState pageState, uint32_t pageStateExt, Baselib_ErrorState* errorState);
                 static void Baselib_Memory_ReleasePages(Baselib_Memory_PageAllocation pageAllocation, Baselib_ErrorState* errorState);
-                static void Baselib_Memory_SetPageState(void* addressOfFirstPage, uint64_t pageSize, uint64_t pageCount, Baselib_Memory_PageState pageState, Baselib_ErrorState* errorState);
+                static void Baselib_Memory_SetPageStateEx(void* addressOfFirstPage, uint64_t pageSize, uint64_t pageCount, Baselib_Memory_PageState pageState, uint32_t pageStateExt, Baselib_ErrorState* errorState);
             };
 
             typedef enum Memory_PageState : int
@@ -65,9 +65,9 @@ namespace baselib
                 page_allocator() : page_allocator(DefaultPageSize()) {}
                 page_allocator(size_t page_size) : m_PageSize(page_size), m_PageSizeAligned(page_size > alignment ? page_size : alignment) {}
 
-                void* allocate(size_t size, int state, Baselib_ErrorState *error_state_ptr) const
+                void* allocate(size_t size, int state, Baselib_ErrorState *error_state_ptr, uint32_t ext_page_state) const
                 {
-                    Baselib_Memory_PageAllocation pa = Impl::Baselib_Memory_AllocatePages(m_PageSize, PagedCountFromSize(size), m_PageSizeAligned / m_PageSize, (Baselib_Memory_PageState)state, error_state_ptr);
+                    Baselib_Memory_PageAllocation pa = Impl::Baselib_Memory_AllocatePagesEx(m_PageSize, PagedCountFromSize(size), m_PageSizeAligned / m_PageSize, (Baselib_Memory_PageState)state, ext_page_state, error_state_ptr);
                     return pa.ptr;
                 }
 
@@ -82,9 +82,9 @@ namespace baselib
                     return (size + m_PageSizeAligned - 1) & ~(m_PageSizeAligned - 1);
                 }
 
-                bool set_page_state(void* ptr, size_t size, int state, Baselib_ErrorState *error_state_ptr) const
+                bool set_page_state(void* ptr, size_t size, int state, Baselib_ErrorState *error_state_ptr, uint32_t ext_page_state) const
                 {
-                    Impl::Baselib_Memory_SetPageState(ptr, m_PageSize, PagedCountFromSize(size), (Baselib_Memory_PageState)state, error_state_ptr);
+                    Impl::Baselib_Memory_SetPageStateEx(ptr, m_PageSize, PagedCountFromSize(size), (Baselib_Memory_PageState)state, ext_page_state, error_state_ptr);
                     return (error_state_ptr->code == Baselib_ErrorCode_Success);
                 }
             };

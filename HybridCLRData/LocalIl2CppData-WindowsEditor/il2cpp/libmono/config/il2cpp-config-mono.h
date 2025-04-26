@@ -13,12 +13,14 @@
 #include "il2cpp-config-mono-osx.h"
 #elif IL2CPP_TARGET_LINUX
 #include "il2cpp-config-mono-linux.h"
+#elif IL2CPP_TARGET_QNX
+#include "il2cpp-config-mono-qnx.h"
 #elif IL2CPP_TARGET_ANDROID
 #include "il2cpp-config-mono-android.h"
 #elif IL2CPP_TARGET_JAVASCRIPT
 #include "il2cpp-config-mono-web.h"
-#elif IL2CPP_TARGET_LUMIN
-#include "il2cpp-config-mono-lumin.h"
+#elif IL2CPP_USE_PLATFORM_CONFIG
+#include "il2cpp-config-mono-platform.h"
 #else
 //Uncomment out after all platforms defines moved to header file
 //#error "Mono Code Compiled on Unimplemented Platform"
@@ -60,10 +62,6 @@ typedef int pid_t;
         #error Architecture not defined for this platform
     #endif
 
-#define GPOINTER_TO_INT(ptr) ((gint)(intptr_t) (ptr))
-#define GPOINTER_TO_UINT(ptr) ((guint)(intptr_t) (ptr))
-#define GINT_TO_POINTER(v) ((gpointer)(intptr_t) (v))
-#define GUINT_TO_POINTER(v) ((gpointer)(uintptr_t) (v))
 typedef uintptr_t gsize;
 typedef intptr_t gssize;
 #define G_GSIZE_FORMAT "PRIdPTR"

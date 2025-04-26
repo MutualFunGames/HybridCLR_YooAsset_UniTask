@@ -2,9 +2,7 @@
 #include "utils/StringUtils.h"
 #include "utils/Exception.h"
 
-#if !RUNTIME_TINY
 #include "os/Mutex.h"
-#endif
 
 namespace il2cpp
 {
@@ -12,12 +10,10 @@ namespace os
 {
     static Il2CppSetFindPlugInCallback s_FindPluginCallback = NULL;
 
-#if !RUNTIME_TINY
     typedef std::vector<std::pair<std::basic_string<Il2CppNativeChar>, Baselib_DynamicLibrary_Handle> > DllCacheContainer;
     typedef DllCacheContainer::const_iterator DllCacheIterator;
     static DllCacheContainer s_DllCache; // If a library does not need to be closed - do not add it to the cache.
     static baselib::ReentrantLock s_DllCacheMutex;
-#endif
 
     static inline Il2CppNativeChar AsciiToLower(Il2CppNativeChar c)
     {
@@ -103,14 +99,12 @@ namespace os
             libraryName = s_FindPluginCallback(libraryName);
         auto libraryNameLength = utils::StringUtils::StrLen(libraryName);
 
-#if !RUNTIME_TINY
         {
             os::FastAutoLock lock(&s_DllCacheMutex);
             for (DllCacheIterator it = s_DllCache.begin(); it != s_DllCache.end(); it++)
                 if (it->first.compare(0, std::string::npos, libraryName, libraryNameLength) == 0)
                     return it->second;
         }
-#endif
 
         bool needsClosing = true;
 
@@ -119,8 +113,8 @@ namespace os
         {
             auto errorState = Baselib_ErrorState_Create();
             handle = OpenProgramHandle(errorState, needsClosing);
-            // Disabling it for emscripten and tiny builds as they seem to be quite code sensitive
-#if (!RUNTIME_TINY) && (!defined(__EMSCRIPTEN__))
+            // Disabling it for emscripten builds as they seem to be quite code sensitive
+#if (!defined(__EMSCRIPTEN__))
             if (Baselib_ErrorState_ErrorRaised(&errorState))
             {
                 if (!detailedError.empty())
@@ -134,13 +128,11 @@ namespace os
         else
             handle = ProbeForLibrary(libraryName, libraryNameLength, detailedError);
 
-#if !RUNTIME_TINY
         if ((handle != Baselib_DynamicLibrary_Handle_Invalid) && needsClosing)
         {
             os::FastAutoLock lock(&s_DllCacheMutex);
             s_DllCache.push_back(std::make_pair(libraryName, handle));
         }
-#endif
 
         return handle;
     }
@@ -209,7 +201,7 @@ namespace os
         if (handle == Baselib_DynamicLibrary_Handle_Invalid)
             return NULL;
         auto func = reinterpret_cast<Il2CppMethodPointer>(Baselib_DynamicLibrary_GetFunction(handle, functionName, &errorState));
-#if (!RUNTIME_TINY) && (!defined(__EMSCRIPTEN__))
+#if (!defined(__EMSCRIPTEN__))
         if (Baselib_ErrorState_ErrorRaised(&errorState))
         {
             if (!detailedError.empty())
@@ -228,7 +220,6 @@ namespace os
 
     void LibraryLoader::CleanupLoadedLibraries()
     {
-#if !RUNTIME_TINY
         // We assume that presence of the library in s_DllCache is a valid reason to be able to close it
         for (DllCacheIterator it = s_DllCache.begin(); it != s_DllCache.end(); it++)
         {
@@ -240,7 +231,6 @@ namespace os
                 Baselib_DynamicLibrary_Close(it->second);
         }
         s_DllCache.clear();
-#endif
     }
 
     bool LibraryLoader::CloseLoadedLibrary(Baselib_DynamicLibrary_Handle handle)
@@ -248,7 +238,6 @@ namespace os
         if (handle == Baselib_DynamicLibrary_Handle_Invalid)
             return false;
 
-#if !RUNTIME_TINY
         os::FastAutoLock lock(&s_DllCacheMutex);
         // We assume that presence of the library in s_DllCache is a valid reason to be able to close it
         for (DllCacheIterator it = s_DllCache.begin(); it != s_DllCache.end(); it++)
@@ -260,7 +249,6 @@ namespace os
                 return true;
             }
         }
-#endif
         return false;
     }
 
@@ -274,7 +262,7 @@ namespace os
         auto errorState = Baselib_ErrorState_Create();
         auto handle = Baselib_DynamicLibrary_Open(utils::StringUtils::NativeStringToBaselib(libraryName), &errorState);
 
-#if (!RUNTIME_TINY) && (!defined(__EMSCRIPTEN__))
+#if (!defined(__EMSCRIPTEN__))
         if (Baselib_ErrorState_ErrorRaised(&errorState))
         {
             if (!detailedError.empty())

@@ -12,7 +12,7 @@
 #include "Baselib.h"
 #include "Cpp/ReentrantLock.h"
 
-#if IL2CPP_TARGET_POSIX
+#if IL2CPP_TARGET_POSIX || IL2CPP_SUPPORT_SOCKETS_POSIX_API
 # include "os/Posix/SocketImpl.h"
 #elif IL2CPP_TARGET_WINDOWS
 # include "os/Win32/SocketImpl.h"

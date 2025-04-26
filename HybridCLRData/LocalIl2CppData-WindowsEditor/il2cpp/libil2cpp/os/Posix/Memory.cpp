@@ -1,6 +1,6 @@
 #include "il2cpp-config.h"
 
-#if IL2CPP_TARGET_POSIX || IL2CPP_TARGET_N3DS && !RUNTIME_TINY
+#if IL2CPP_TARGET_POSIX || IL2CPP_TARGET_N3DS
 
 #include "os/Memory.h"
 #include <stdint.h>
@@ -18,6 +18,7 @@ namespace Memory
         return memalign(alignment, size);
 #else
         void* ptr = NULL;
+        alignment = alignment < sizeof(void*) ? sizeof(void*) : alignment;
         posix_memalign(&ptr, alignment, size);
         return ptr;
 #endif

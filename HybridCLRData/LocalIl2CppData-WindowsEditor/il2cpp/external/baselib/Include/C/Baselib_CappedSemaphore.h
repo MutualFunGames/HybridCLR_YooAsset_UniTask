@@ -15,7 +15,7 @@
 // https://en.wikipedia.org/w/index.php?title=Semaphore_(programming)&oldid=872408126
 
 
-#if PLATFORM_FUTEX_NATIVE_SUPPORT
+#if PLATFORM_HAS_NATIVE_FUTEX
 #include "Internal/Baselib_CappedSemaphore_FutexBased.inl.h"
 #else
 #include "Internal/Baselib_CappedSemaphore_SemaphoreBased.inl.h"
@@ -25,18 +25,43 @@
 //
 // Cap is the number of tokens that can be held by the semaphore when there is no contention.
 // If there are not enough system resources to create a semaphore, process abort is triggered.
+// Use Baselib_CappedSemaphore_Free() to free the semaphore.
 //
 // For optimal performance, the returned Baselib_CappedSemaphore should be stored at a cache aligned memory location.
 //
-// \returns          A struct representing a semaphore instance. Use Baselib_CappedSemaphore_Free to free the semaphore.
+// \returns          A struct representing a semaphore instance.
 BASELIB_INLINE_API Baselib_CappedSemaphore Baselib_CappedSemaphore_Create(uint16_t cap);
+
+// Creates a capped counting semaphore synchronization primitive in-place with memory provided by caller.
+//
+// Cap is the number of tokens that can be held by the semaphore when there is no contention.
+// If there are not enough system resources to create a semaphore, process abort is triggered.
+// Use Baselib_CappedSemaphore_FreeInplace() to free capped semaphore.
+//
+// For optimal performance, the returned Baselib_CappedSemaphore should be stored at a cache aligned memory location.
+BASELIB_INLINE_API void Baselib_CappedSemaphore_CreateInplace(Baselib_CappedSemaphore* semaphoreData, uint16_t cap);
 
 // Try to consume a token and return immediately.
 //
 // When successful this function is guaranteed to emit an acquire barrier.
 //
 // \returns          true if token was consumed. false if not.
-BASELIB_INLINE_API bool Baselib_CappedSemaphore_TryAcquire(Baselib_CappedSemaphore* semaphore);
+COMPILER_WARN_UNUSED_RESULT
+BASELIB_FORCEINLINE_API bool Baselib_CappedSemaphore_TryAcquire(Baselib_CappedSemaphore* semaphore)
+{
+    return Baselib_CappedSemaphore_TrySpinAcquire(semaphore, 0);
+}
+
+// Try to consume a token.
+//
+// When successful this function is guaranteed to emit an acquire barrier.
+//
+// \param maxSpinCount  Max number of times to spin in user space before falling back to the kernel. The actual number
+//                      may differ depending on the underlying implementation but will never exceed the maxSpinCount
+//                      value.
+// \returns             true if token was consumed. false if not.
+COMPILER_WARN_UNUSED_RESULT
+BASELIB_INLINE_API bool Baselib_CappedSemaphore_TrySpinAcquire(Baselib_CappedSemaphore* semaphore, uint32_t maxSpinCount);
 
 // Wait for semaphore token to become available
 //
@@ -56,7 +81,8 @@ BASELIB_INLINE_API void Baselib_CappedSemaphore_Acquire(Baselib_CappedSemaphore*
 // \param timeoutInMilliseconds       Time to wait for token to become available in milliseconds.
 //
 // \returns          true if token was consumed. false if timeout was reached.
-BASELIB_INLINE_API bool Baselib_CappedSemaphore_TryTimedAcquire(Baselib_CappedSemaphore* semaphore, const uint32_t timeoutInMilliseconds);
+COMPILER_WARN_UNUSED_RESULT
+BASELIB_INLINE_API bool Baselib_CappedSemaphore_TryTimedAcquire(Baselib_CappedSemaphore* semaphore, uint32_t timeoutInMilliseconds);
 
 // Submit tokens to the semaphore.
 //
@@ -65,7 +91,7 @@ BASELIB_INLINE_API bool Baselib_CappedSemaphore_TryTimedAcquire(Baselib_CappedSe
 // When successful this function is guaranteed to emit a release barrier.
 //
 // \returns          number of submitted tokens.
-BASELIB_INLINE_API uint16_t Baselib_CappedSemaphore_Release(Baselib_CappedSemaphore* semaphore, const uint16_t count);
+BASELIB_INLINE_API uint16_t Baselib_CappedSemaphore_Release(Baselib_CappedSemaphore* semaphore, uint16_t count);
 
 // Sets the semaphore token count to zero and release all waiting threads.
 //
@@ -79,3 +105,9 @@ BASELIB_INLINE_API uint32_t Baselib_CappedSemaphore_ResetAndReleaseWaitingThread
 // If threads are waiting on the semaphore, calling free will trigger an assert and may cause process abort.
 // Calling this function with a nullptr result in a no-op.
 BASELIB_INLINE_API void Baselib_CappedSemaphore_Free(Baselib_CappedSemaphore* semaphore);
+
+// Reclaim resources and memory held by the semaphore. Caller is responsible for freeing memory pointed to by the semaphore.
+//
+// If threads are waiting on the semaphore, calling free will trigger an assert and may cause process abort.
+// Calling this function with a nullptr result in a no-op.
+BASELIB_INLINE_API void Baselib_CappedSemaphore_FreeInplace(Baselib_CappedSemaphore* semaphore);

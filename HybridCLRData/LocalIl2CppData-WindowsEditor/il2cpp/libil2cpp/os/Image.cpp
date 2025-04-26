@@ -24,6 +24,12 @@ namespace Image
         return s_ManagedSectionStart <= ip && ip <= s_ManagedSectionEnd;
     }
 
+    void GetManagedSectionStartAndEnd(void*& start, void*& end)
+    {
+        start = s_ManagedSectionStart;
+        end = s_ManagedSectionEnd;
+    }
+
     void SetManagedSectionStartAndEnd(void* start, void* end)
     {
         s_ManagedSectionStart = start;

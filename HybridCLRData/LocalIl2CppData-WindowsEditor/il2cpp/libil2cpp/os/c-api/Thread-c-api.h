@@ -18,7 +18,6 @@ extern "C"
 {
 #endif
 
-void UnityPalThreadInitialize();
 void UnityPalSleep(uint32_t milliseconds);
 UnityPalThreadId UnityPalGetCurrentThreadId();
 

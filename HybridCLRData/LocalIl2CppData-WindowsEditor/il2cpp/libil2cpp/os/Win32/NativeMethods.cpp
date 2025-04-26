@@ -19,11 +19,7 @@ namespace os
 
     utils::Expected<bool> NativeMethods::GetExitCodeProcess(ProcessHandle* handle, int32_t* exitCode)
     {
-#if IL2CPP_TARGET_WINDOWS_DESKTOP
         return ::GetExitCodeProcess((HANDLE)handle, (LPDWORD)exitCode);
-#else
-        return utils::Il2CppError(utils::NotSupported, "Getting process exit code is not supported on WinRT based platforms.");
-#endif
     }
 
     int32_t NativeMethods::GetCurrentProcessId()

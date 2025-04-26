@@ -2,7 +2,7 @@
 
 #if IL2CPP_DEBUG
 
-#if IL2CPP_TARGET_WINDOWS || IL2CPP_TARGET_XBOXONE || IL2CPP_TARGET_WINRT
+#if IL2CPP_TARGET_WINDOWS
 #include <crtdbg.h>
 
 void il2cpp_assert(const char* assertion, const char* file, unsigned int line)
@@ -13,6 +13,6 @@ void il2cpp_assert(const char* assertion, const char* file, unsigned int line)
     }
 }
 
-#endif // IL2CPP_TARGET_WINDOWS || IL2CPP_TARGET_XBOXONE || IL2CPP_TARGET_WINRT
+#endif // IL2CPP_TARGET_WINDOWS
 
 #endif // IL2CPP_DEBUG

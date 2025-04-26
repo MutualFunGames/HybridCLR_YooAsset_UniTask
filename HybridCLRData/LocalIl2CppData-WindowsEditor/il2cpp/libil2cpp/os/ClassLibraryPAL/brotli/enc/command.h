@@ -11,7 +11,7 @@
 
 #include "../common/constants.h"
 #include "../common/platform.h"
-#include "../include/brotli/types.h"
+#include <brotli/types.h>
 #include "./fast_log.h"
 #include "./params.h"
 #include "./prefix.h"

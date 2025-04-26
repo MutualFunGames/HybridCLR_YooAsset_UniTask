@@ -400,23 +400,21 @@ static void alloc_mark_stack(size_t);
                 MARK_FROM_MARK_STACK();
                 break;
             } else {
-                if (GC_mark_stack_too_small) {
-                    GC_mark_state = MS_NONE;
-                    alloc_mark_stack(2*GC_mark_stack_size);
-                    return(TRUE);
-                } else {
-                  GC_mark_stack_empty_proc mark_stack_empty_proc = GC_get_mark_stack_empty();
-                  if (mark_stack_empty_proc) {
-                      GC_mark_stack_top = mark_stack_empty_proc(GC_mark_stack_top, GC_mark_stack_limit);
-                  }
-                  /* if we pushed new items or overflowed stack we need to continue processing */
-                  if (((word)GC_mark_stack_top >= (word)GC_mark_stack) || GC_mark_stack_too_small) {
-                      break;
-                  }
-
-                  GC_mark_state = MS_NONE;
-                  return(TRUE);
+                GC_mark_stack_empty_proc mark_stack_empty_proc = GC_get_mark_stack_empty();
+                if (mark_stack_empty_proc) {
+                    GC_mark_stack_top = mark_stack_empty_proc(GC_mark_stack_top, GC_mark_stack_limit);
+                    /* if we pushed new items we need to continue processing */
+                    if ((word)GC_mark_stack_top >= (word)GC_mark_stack) {
+                        break;
+                    }
                 }
+
+                if (GC_mark_stack_too_small) {
+                    alloc_mark_stack(2 * GC_mark_stack_size);
+                }
+
+                GC_mark_state = MS_NONE;
+                return(TRUE);
                 break;
             }
 
@@ -1382,6 +1380,55 @@ GC_API void GC_CALL GC_push_all(void *bottom, void *top)
 #   endif
     GC_mark_stack_top -> mse_start = (ptr_t)bottom;
     GC_mark_stack_top -> mse_descr.w = length;
+}
+
+GC_API void GC_CALL GC_push_proc(GC_word proc , void * start)
+{
+    GC_mark_stack_top++;
+    if ((word)GC_mark_stack_top >= (word)GC_mark_stack_limit) {
+        GC_mark_stack_top = GC_signal_mark_stack_overflow (GC_mark_stack_top);
+    }
+    GC_mark_stack_top -> mse_descr.w = proc;
+    GC_mark_stack_top -> mse_start = (ptr_t)start;
+}
+
+GC_API struct GC_ms_entry * GC_CALL GC_custom_push_range(void * bottom , void * top,
+                                struct GC_ms_entry * mark_stack_ptr,
+                                struct GC_ms_entry * mark_stack_limit)
+{
+    word length;
+
+    bottom = (void *)(((word)bottom + ALIGNMENT-1) & ~(ALIGNMENT-1));
+    top = (void *)((word)top & ~(ALIGNMENT-1));
+    if ((word)bottom >= (word)top) return mark_stack_ptr;
+
+    mark_stack_ptr++;
+    if ((word)mark_stack_ptr >= (word)mark_stack_limit) {
+        mark_stack_ptr = GC_signal_mark_stack_overflow (mark_stack_ptr);
+    }
+    length = (word)top - (word)bottom;
+#   if GC_DS_TAGS > ALIGNMENT - 1
+        length += GC_DS_TAGS;
+        length &= ~GC_DS_TAGS;
+#   endif
+    mark_stack_ptr -> mse_start = (ptr_t)bottom;
+    mark_stack_ptr -> mse_descr.w = length;
+
+    return mark_stack_ptr;
+}
+
+GC_API struct GC_ms_entry * GC_CALL GC_custom_push_proc(GC_word proc , void * start,
+                                struct GC_ms_entry * mark_stack_ptr,
+                                struct GC_ms_entry * mark_stack_limit)
+{
+    mark_stack_ptr++;
+    if ((word)mark_stack_ptr >= (word)mark_stack_limit) {
+        mark_stack_ptr = GC_signal_mark_stack_overflow (mark_stack_ptr);
+    }
+    mark_stack_ptr -> mse_descr.w = proc;
+    mark_stack_ptr -> mse_start = (ptr_t)start;
+
+    return mark_stack_ptr;
 }
 
 #ifndef GC_DISABLE_INCREMENTAL

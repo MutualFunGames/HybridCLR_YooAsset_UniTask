@@ -8,6 +8,7 @@
 #include "gc/gc_wrapper.h"
 #include "gc/GarbageCollector.h"
 #include "metadata/GenericMethod.h"
+#include "metadata/Il2CppTypeCompare.h"
 #include "utils/StringUtils.h"
 #include "vm-utils/VmThreadUtils.h"
 #include "vm/Array.h"
@@ -87,7 +88,6 @@ namespace vm
 
     Il2CppObject* Object::Box(Il2CppClass *typeInfo, void* val)
     {
-        Class::Init(typeInfo);
         if (!typeInfo->byval_arg.valuetype)
             return *(Il2CppObject**)val;
 
@@ -107,8 +107,9 @@ namespace vm
                 return NULL;
         }
 
-        size_t size = Class::GetInstanceSize(typeInfo);
         Il2CppObject* obj = Object::New(typeInfo);
+
+        size_t size = Class::GetInstanceSize(typeInfo);
 
         // At this point we know we have a value type and we need to adjust the
         // copy size by the size of Il2CppObject
@@ -117,6 +118,7 @@ namespace vm
         uint8_t* valueStart = static_cast<uint8_t*>(val);
         if (isNullable)
         {
+            IL2CPP_ASSERT(metadata::Il2CppTypeEqualityComparer::AreEqual(typeInfo->fields[1].type, &Class::GetNullableArgument(typeInfo)->byval_arg));
             // Shift the valueStart right past the bool for nullable
             int32_t nullableShift = typeInfo->fields[1].offset - sizeof(Il2CppObject);
             valueStart += nullableShift;
@@ -409,16 +411,6 @@ namespace vm
             memcpy(buf + klass->fields[1].offset - sizeof(Il2CppObject), Object::Unbox(value), Class::GetValueSize(parameterClass, NULL));
         else
             memset(buf + klass->fields[1].offset - sizeof(Il2CppObject), 0, Class::GetValueSize(parameterClass, NULL));
-    }
-
-    bool Object::NullableHasValue(Il2CppClass* klass, void* data)
-    {
-        IL2CPP_ASSERT(Class::IsNullable(klass));
-
-        // The hasValue field is the first field in the Nullable managed stuct,
-        // so read the first byte to get its value;
-        uint8_t* hasValueByte = static_cast<uint8_t*>(data);
-        return *hasValueByte != 0;
     }
 } /* namespace vm */
 } /* namespace il2cpp */

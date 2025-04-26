@@ -54,22 +54,37 @@ mono_runtime_is_shutting_down (void)
 static void
 fire_process_exit_event (MonoDomain *domain, gpointer user_data)
 {
-	MonoError error;
+	ERROR_DECL (error);
+	MonoObject *exc;
+
+#if ENABLE_NETCORE
+	MONO_STATIC_POINTER_INIT (MonoMethod, procexit_method)
+
+		procexit_method = mono_class_get_method_from_name_checked (mono_defaults.appcontext_class, "OnProcessExit", 0, 0, error);
+		mono_error_assert_ok (error);
+
+	MONO_STATIC_POINTER_INIT_END (MonoMethod, procexit_method)
+
+	g_assert (procexit_method);
+	
+	mono_runtime_try_invoke (procexit_method, NULL, NULL, &exc, error);
+#else
 	MonoClassField *field;
 	gpointer pa [2];
-	MonoObject *delegate, *exc;
+	MonoObject *delegate;
 
-	field = mono_class_get_field_from_name (mono_defaults.appdomain_class, "ProcessExit");
+	field = mono_class_get_field_from_name_full (mono_defaults.appdomain_class, "ProcessExit", NULL);
 	g_assert (field);
 
 	delegate = *(MonoObject **)(((char *)domain->domain) + field->offset);
 	if (delegate == NULL)
 		return;
 
-	pa [0] = domain;
+	pa [0] = domain->domain;
 	pa [1] = NULL;
-	mono_runtime_delegate_try_invoke (delegate, pa, &exc, &error);
-	mono_error_cleanup (&error);
+	mono_runtime_delegate_try_invoke (delegate, pa, &exc, error);
+	mono_error_cleanup (error);
+#endif
 }
 
 static void
@@ -106,7 +121,7 @@ mono_runtime_try_shutdown (void)
 	/*TODO move the follow to here:
 	mono_thread_suspend_all_other_threads (); OR  mono_thread_wait_all_other_threads
 
-	mono_runtime_quit ();
+	mono_runtime_quit_internal ();
 	*/
 
 	return TRUE;
@@ -124,8 +139,8 @@ mono_runtime_init_tls (void)
 	mono_marshal_init_tls ();
 }
 
-char*
-mono_runtime_get_aotid (void)
+guint8*
+mono_runtime_get_aotid_arr (void)
 {
 	int i;
 	guint8 aotid_sum = 0;
@@ -135,12 +150,22 @@ mono_runtime_get_aotid (void)
 		return NULL;
 
 	guint8 (*aotid)[16] = &domain->entry_assembly->image->aotid;
-
 	for (i = 0; i < 16; ++i)
 		aotid_sum |= (*aotid)[i];
 
 	if (aotid_sum == 0)
 		return NULL;
 
-	return mono_guid_to_string ((guint8*) aotid);
+	return (guint8*)aotid;
+}
+
+char*
+mono_runtime_get_aotid (void)
+{
+	guint8 *aotid = mono_runtime_get_aotid_arr ();
+
+	if (!aotid)
+		return NULL;
+
+	return mono_guid_to_string (aotid);
 }

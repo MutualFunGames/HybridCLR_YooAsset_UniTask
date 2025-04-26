@@ -7,6 +7,7 @@
 
 #include <unwind.h>
 #include <dlfcn.h>
+#include <link.h>
 #include <pthread.h>
 #include <string.h>
 
@@ -22,12 +23,39 @@ namespace
 
     uintptr_t s_BaseAddress;
     uintptr_t s_EndAddress;
+    uintptr_t s_LibUnityBaseAddress;
+    uintptr_t s_LibUnityEndAddress;
     pthread_once_t s_InitKnownSymbolInfoOnceFlag = PTHREAD_ONCE_INIT;
+
+    static int
+    libUnityLookupCallback(struct dl_phdr_info *info, size_t size, void *data)
+    {
+        int j;
+        uintptr_t endAddr;
+
+        // dlpi_name can have different values depending on Android OS:
+        // Google Pixel 2 Android 10, dlpi_name will be "/data/app/com.unity.stopaskingforpackagename-uRHSDLXYA4cnHxyTNT30-g==/lib/arm/libunity.so"
+        // Samsung GT-I9505 Android 5, dlpi_name will be "libunity.so"
+        if (info->dlpi_name == NULL || strstr(info->dlpi_name, "libunity.so") == NULL)
+            return 0;
+
+        s_LibUnityBaseAddress = s_LibUnityEndAddress = info->dlpi_addr;
+
+        for (j = 0; j < info->dlpi_phnum; j++)
+        {
+            endAddr = (uintptr_t)(((char*)info->dlpi_addr) + info->dlpi_phdr[j].p_vaddr + info->dlpi_phdr[j].p_memsz);
+            if (s_LibUnityEndAddress < endAddr)
+                s_LibUnityEndAddress = endAddr;
+        }
+        return 0;
+    }
 
     static void InitKnownSymbolInfo()
     {
         s_BaseAddress = reinterpret_cast<uintptr_t>(os::Image::GetImageBase());
         s_EndAddress = reinterpret_cast<uintptr_t>(&end);
+
+        dl_iterate_phdr(libUnityLookupCallback, NULL);
     }
 
     static bool KnownSymbol(const uintptr_t addr)
@@ -37,14 +65,10 @@ namespace
         if (addr >= s_BaseAddress && addr <= s_EndAddress)
             return true;
 
-        Dl_info info;
-        if (!dladdr(reinterpret_cast<void*>(addr), &info))
-            return false;
+        if (addr >= s_LibUnityBaseAddress && addr <= s_LibUnityEndAddress)
+            return true;
 
-        // dli_name can have different values depending on Android OS:
-        // Google Pixel 2 Android 10, dli_name will be "/data/app/com.unity.stopaskingforpackagename-uRHSDLXYA4cnHxyTNT30-g==/lib/arm/libunity.so"
-        // Samsung GT-I9505 Android 5, dli_name will be "libunity.so"
-        return info.dli_fname != NULL && strstr(info.dli_fname, "libunity.so") != NULL;
+        return false;
     }
 
     struct AndroidStackTrace

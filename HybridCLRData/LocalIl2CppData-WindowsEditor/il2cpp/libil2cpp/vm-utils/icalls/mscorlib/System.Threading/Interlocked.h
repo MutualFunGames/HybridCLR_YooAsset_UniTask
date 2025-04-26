@@ -4,11 +4,7 @@
 #include "il2cpp-config.h"
 #include "il2cpp-object-internals.h"
 
-#if RUNTIME_TINY
-namespace tiny
-#else
 namespace il2cpp
-#endif
 {
 namespace icalls
 {

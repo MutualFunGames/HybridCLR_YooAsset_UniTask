@@ -2,6 +2,9 @@
 
 #include <string.h>
 #include "hybridclr/generated/UnityVersion.h"
+#if HYBRIDCLR_UNITY_VERSION >= 60000010
+#define SUPPORT_METHOD_RETURN_TYPE_CUSTOM_ATTRIBUTE 1
+#endif
 
 /* first setup platform defines*/
 #include "os/c-api/il2cpp-config-platforms.h"
@@ -33,6 +36,12 @@
 #define IL2CPP_CXX_ABI_MSVC 1
 #else
 #define IL2CPP_CXX_ABI_MSVC 0
+#endif
+
+#if defined(__GNUC__)
+#define IL2CPP_GCC_VERSION (__GNUC__ * 10000 \
+                      + __GNUC_MINOR__ * 100 \
+                      + __GNU_PATCHLEVEL__)
 #endif
 
 typedef void (STDCALL *SynchronizationContextCallback)(intptr_t arg);
@@ -77,7 +86,12 @@ typedef void (STDCALL *CultureInfoChangedCallback)(const Il2CppChar* arg);
     #define ALIGN_OF(T) __alignof__(T)
     #define ALIGN_TYPE(val) __attribute__((aligned(val)))
     #define ALIGN_FIELD(val) ALIGN_TYPE(val)
-    #define IL2CPP_FORCE_INLINE inline __attribute__ ((always_inline))
+// GCC earlier than 10.1 are unable to compile properly with the always_inline attribute
+    #if defined(__GNUC__) && IL2CPP_GCC_VERSION < 100100
+        #define IL2CPP_FORCE_INLINE inline
+    #else
+        #define IL2CPP_FORCE_INLINE inline __attribute__ ((always_inline))
+    #endif
     #define IL2CPP_MANAGED_FORCE_INLINE IL2CPP_FORCE_INLINE
 #elif defined(_MSC_VER)
     #define ALIGN_OF(T) __alignof(T)
@@ -111,9 +125,7 @@ typedef void (STDCALL *CultureInfoChangedCallback)(const Il2CppChar* arg);
 #define IL2CPP_DEVELOPMENT 0
 #endif
 
-#define IL2CPP_THREADS_ALL_ACCESS (!IL2CPP_THREADS_STD && IL2CPP_TARGET_XBOXONE)
-
-#if (IL2CPP_SUPPORT_THREADS && (!IL2CPP_THREADS_STD && !IL2CPP_THREADS_PTHREAD && !IL2CPP_THREADS_WIN32 && !IL2CPP_THREADS_XBOXONE && !IL2CPP_THREADS_N3DS && !IL2CPP_THREADS_PS4 && !IL2CPP_THREADS_PSP2 && !IL2CPP_THREADS_SWITCH && !IL2CPP_THREADS_CUSTOM))
+#if (IL2CPP_SUPPORT_THREADS && (!IL2CPP_THREADS_STD && !IL2CPP_THREADS_PTHREAD && !IL2CPP_THREADS_WIN32 && !IL2CPP_THREADS_N3DS && !IL2CPP_THREADS_PS4 && !IL2CPP_THREADS_PSP2 && !IL2CPP_THREADS_SWITCH && !IL2CPP_THREADS_CUSTOM))
 #error "No thread implementation defined"
 #endif
 
@@ -126,37 +138,11 @@ typedef void (STDCALL *CultureInfoChangedCallback)(const Il2CppChar* arg);
 #define IL2CPP_ENABLE_PLATFORM_THREAD_STACKSIZE 1
 #endif
 
-#if IL2CPP_TINY
-    #if IL2CPP_TINY_DEBUG_METADATA || IL2CPP_TINY_DEBUGGER
-        #define IL2CPP_ENABLE_STACKTRACES 1
-    #else
-        #define IL2CPP_ENABLE_STACKTRACES 0
-    #endif // IL2CPP_TINY_DEBUG_METADATA
-#else
-    #define IL2CPP_ENABLE_STACKTRACES 1
-#endif // IL2CPP_TINY
-
-#ifndef IL2CPP_DISABLE_GC
-#if IL2CPP_TINY && IL2CPP_TARGET_JAVASCRIPT
-#define IL2CPP_DISABLE_GC 1
-#endif
-#endif
-
-#ifndef FORCE_PINVOKE_INTERNAL
-#if IL2CPP_TINY && IL2CPP_TARGET_IOS
-#define FORCE_PINVOKE_INTERNAL 1
-#endif
-#endif
-
-#ifndef HOST_WASM
-#if IL2CPP_TINY_DEBUGGER && IL2CPP_TARGET_JAVASCRIPT
-#define HOST_WASM 1
-#endif
-#endif
+#define IL2CPP_ENABLE_STACKTRACES !IL2CPP_TARGET_QNX
 
 /* Platforms which use OS specific implementation to extract stracktrace */
 #if !defined(IL2CPP_ENABLE_NATIVE_STACKTRACES)
-#define IL2CPP_ENABLE_NATIVE_STACKTRACES (IL2CPP_TARGET_WINDOWS || IL2CPP_TARGET_LINUX || IL2CPP_TARGET_DARWIN || IL2CPP_TARGET_IOS || IL2CPP_TARGET_ANDROID || IL2CPP_TARGET_LUMIN)
+#define IL2CPP_ENABLE_NATIVE_STACKTRACES (IL2CPP_TARGET_WINDOWS || IL2CPP_TARGET_LINUX || IL2CPP_TARGET_DARWIN || IL2CPP_TARGET_IOS || IL2CPP_TARGET_ANDROID)
 #endif
 
 /* Platforms which support native IP emission to crash reporting to enable server-side reconstruction of C# exception stack trace line numbers */
@@ -217,7 +203,7 @@ typedef void (STDCALL *CultureInfoChangedCallback)(const Il2CppChar* arg);
 
 #if _MSC_VER
 #define IL2CPP_UNREACHABLE __assume(0)
-#elif __has_builtin(__builtin_unreachable)
+#elif __has_builtin(__builtin_unreachable) || IL2CPP_TARGET_QNX
 #define IL2CPP_UNREACHABLE __builtin_unreachable()
 #else
 #define IL2CPP_UNREACHABLE
@@ -289,8 +275,6 @@ static const uint16_t kInvalidIl2CppMethodSlot = 65535;
 
 #endif
 
-#if !RUNTIME_TINY
-
 #define NOT_SUPPORTED_IL2CPP(func, reason) \
     il2cpp::vm::Exception::Raise (il2cpp::vm::Exception::GetNotSupportedException ( NOTSUPPORTEDICALLMESSAGE ("IL2CPP", #func, #reason) ))
 
@@ -306,13 +290,6 @@ static const uint16_t kInvalidIl2CppMethodSlot = 65535;
 #else
 #define NOT_SUPPORTED_WEBGL(func, reason)
 #endif
-
-#else
-#define NOT_SUPPORTED_IL2CPP(func, reason)
-#define NOT_SUPPORTED_SRE(func)
-#define NOT_SUPPORTED_REMOTING(func)
-#define NOT_SUPPORTED_WEBGL(func, reason)
-#endif // #if !RUNTIME_TINY
 
 #if IL2CPP_COMPILER_MSVC
     #define IL2CPP_DIR_SEPARATOR '\\'   /* backslash */
@@ -334,9 +311,10 @@ static const uint16_t kInvalidIl2CppMethodSlot = 65535;
 #define IL2CPP_USE_GENERIC_SOCKET_BRIDGE !IL2CPP_TARGET_JAVASCRIPT
 #endif
 
-/* set by platforms that require special handling of SIGPIPE signalling during socket sends */
+/* Set by platforms that require special handling of SIGPIPE signalling during socket sends. */
+/* Is redefined by platform specific headers. Enabled for common Linux desktop platforms. */
 #ifndef IL2CPP_USE_SEND_NOSIGNAL
-    #define IL2CPP_USE_SEND_NOSIGNAL 0
+    #define IL2CPP_USE_SEND_NOSIGNAL IL2CPP_TARGET_LINUX
 #endif
 
 #ifndef IL2CPP_USE_GENERIC_ENVIRONMENT
@@ -344,11 +322,11 @@ static const uint16_t kInvalidIl2CppMethodSlot = 65535;
 #endif
 
 #define IL2CPP_USE_GENERIC_COM  (!IL2CPP_TARGET_WINDOWS || IL2CPP_TARGET_WINDOWS_GAMES)
-#define IL2CPP_USE_GENERIC_COM_SAFEARRAYS   (!IL2CPP_TARGET_WINDOWS || IL2CPP_TARGET_XBOXONE || IL2CPP_TARGET_WINDOWS_GAMES)
-#define IL2CPP_USE_GENERIC_WINDOWSRUNTIME (!IL2CPP_TARGET_WINDOWS || RUNTIME_NONE || IL2CPP_TINY || IL2CPP_TARGET_WINDOWS_GAMES)
+#define IL2CPP_USE_GENERIC_COM_SAFEARRAYS   (!IL2CPP_TARGET_WINDOWS || IL2CPP_TARGET_WINDOWS_GAMES)
+#define IL2CPP_USE_GENERIC_WINDOWSRUNTIME (!IL2CPP_TARGET_WINDOWS || RUNTIME_NONE || IL2CPP_TARGET_WINDOWS_GAMES)
 
 #ifndef IL2CPP_USE_GENERIC_MEMORY_MAPPED_FILE
-#define IL2CPP_USE_GENERIC_MEMORY_MAPPED_FILE (IL2CPP_TARGET_XBOXONE || IL2CPP_TARGET_WINDOWS_GAMES || IL2CPP_TARGET_JAVASCRIPT || (!IL2CPP_TARGET_WINDOWS && !IL2CPP_TARGET_POSIX))
+#define IL2CPP_USE_GENERIC_MEMORY_MAPPED_FILE (IL2CPP_TARGET_WINDOWS_GAMES || IL2CPP_TARGET_JAVASCRIPT || (!IL2CPP_TARGET_WINDOWS && !IL2CPP_TARGET_POSIX))
 #endif
 
 #ifndef IL2CPP_HAS_CLOSE_EXEC
@@ -368,7 +346,7 @@ static const uint16_t kInvalidIl2CppMethodSlot = 65535;
 #endif
 
 #ifndef IL2CPP_USE_GENERIC_PROCESS
-#define IL2CPP_USE_GENERIC_PROCESS !IL2CPP_TARGET_LUMIN
+#define IL2CPP_USE_GENERIC_PROCESS 1
 #endif
 
 #ifndef IL2CPP_USE_GENERIC_THREAD
@@ -377,10 +355,6 @@ static const uint16_t kInvalidIl2CppMethodSlot = 65535;
 
 #define IL2CPP_SIZEOF_STRUCT_WITH_NO_INSTANCE_FIELDS 1
 #define IL2CPP_VALIDATE_FIELD_LAYOUT 0
-
-#ifndef IL2CPP_USE_POSIX_COND_TIMEDWAIT_REL
-#define IL2CPP_USE_POSIX_COND_TIMEDWAIT_REL ( IL2CPP_TARGET_DARWIN || IL2CPP_TARGET_PSP2 || ( IL2CPP_TARGET_ANDROID && __ANDROID_API__ < 21 ) )
-#endif
 
 #if IL2CPP_MONO_DEBUGGER
 #define STORE_SEQ_POINT(storage, seqPoint) (storage).currentSequencePoint = seqPoint;
@@ -445,7 +419,7 @@ static const int ipv6AddressSize = 16;
 #define IL2CPP_SUPPORT_IPV6_SUPPORT_QUERY (IL2CPP_SUPPORT_IPV6 && IL2CPP_TARGET_LINUX)
 
 #if !defined(IL2CPP_SUPPORT_SEND_FILE)
-#define IL2CPP_SUPPORT_SEND_FILE (!IL2CPP_TARGET_SWITCH)
+#define IL2CPP_SUPPORT_SEND_FILE (!IL2CPP_TARGET_SWITCH && !IL2CPP_TARGET_JAVASCRIPT)
 #endif
 
 #if !defined(IL2CPP_SUPPORT_RECV_MSG)
@@ -463,7 +437,7 @@ static const int ipv6AddressSize = 16;
 // Android: "There is no support for locales in the C library" https://code.google.com/p/android/issues/detail?id=57313
 // PS4/PS2: strtol_d doesn't exist
 #if !defined(IL2CPP_SUPPORT_LOCALE_INDEPENDENT_PARSING)
-#define IL2CPP_SUPPORT_LOCALE_INDEPENDENT_PARSING (!IL2CPP_TARGET_ANDROID && !IL2CPP_TARGET_PS4 && !IL2CPP_TARGET_PSP2 && !IL2CPP_TARGET_LUMIN)
+#define IL2CPP_SUPPORT_LOCALE_INDEPENDENT_PARSING (!IL2CPP_TARGET_QNX && !IL2CPP_TARGET_ANDROID && !IL2CPP_TARGET_PS4 && !IL2CPP_TARGET_PSP2)
 #endif
 
 #define NO_UNUSED_WARNING(expr) (void)(expr)
@@ -532,7 +506,7 @@ static const Il2CppChar kIl2CppNewLine[] = { '\n', '\0' };
 #define IL2CPP_ATTRIBUTE_WEAK __attribute__((weak))
 #endif
 
-#if IL2CPP_TARGET_XBOXONE || IL2CPP_TARGET_WINRT || IL2CPP_TARGET_ANDROID || IL2CPP_TARGET_PS4 || IL2CPP_TARGET_PSP2
+#if IL2CPP_TARGET_ANDROID || IL2CPP_TARGET_PS4 || IL2CPP_TARGET_PSP2
 #define IL2CPP_USE_GENERIC_CPU_INFO 1
 #else
 #define IL2CPP_USE_GENERIC_CPU_INFO 0
@@ -565,7 +539,7 @@ char(*il2cpp_array_size_helper(Type(&array)[Size]))[Size];
 #define IL2CPP_MUTATE_METHOD_POINTERS !IL2CPP_TARGET_PS4
 #endif
 
-#define IL2CPP_USE_GENERIC_ASSERT !(IL2CPP_TARGET_WINDOWS || IL2CPP_TARGET_XBOXONE || IL2CPP_TARGET_WINRT || IL2CPP_TARGET_PS4 || IL2CPP_TARGET_PS5)
+#define IL2CPP_USE_GENERIC_ASSERT !(IL2CPP_TARGET_WINDOWS || IL2CPP_TARGET_PS4 || IL2CPP_TARGET_PS5)
 
 #ifndef IL2CPP_USE_SPARSEHASH
 #define IL2CPP_USE_SPARSEHASH (IL2CPP_TARGET_ANDROID || IL2CPP_TARGET_IOS)

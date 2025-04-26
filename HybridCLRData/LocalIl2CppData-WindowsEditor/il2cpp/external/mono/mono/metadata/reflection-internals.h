@@ -13,6 +13,23 @@
 #include <mono/utils/mono-compiler.h>
 #include <mono/utils/mono-error.h>
 
+/* Safely access System.Reflection.Assembly from native code */
+TYPED_HANDLE_DECL (MonoReflectionAssembly)
+
+/* Safely access System.Reflection.Emit.TypeBuilder from native code */
+TYPED_HANDLE_DECL (MonoReflectionTypeBuilder)
+
+MonoReflectionAssemblyHandle
+mono_domain_try_type_resolve_name (MonoDomain *domain, MonoAssembly *assembly, MonoStringHandle name, MonoError *error);
+
+#ifndef ENABLE_NETCORE
+MonoReflectionAssemblyHandle
+mono_domain_try_type_resolve_typebuilder (MonoDomain *domain, MonoReflectionTypeBuilderHandle typebuilder, MonoError *error);
+#endif
+
+MonoReflectionTypeBuilderHandle
+mono_class_get_ref_info (MonoClass *klass);
+
 gboolean
 mono_reflection_parse_type_checked (char *name, MonoTypeNameParse *info, MonoError *error);
 
@@ -26,10 +43,10 @@ MonoType *
 mono_reflection_type_handle_mono_type (MonoReflectionTypeHandle ref_type, MonoError *error);
 
 MonoType*
-mono_reflection_get_type_checked (MonoImage *rootimage, MonoImage* image, MonoTypeNameParse *info, mono_bool ignorecase, mono_bool *type_resolve, MonoError *error);
+mono_reflection_get_type_checked (MonoAssemblyLoadContext *alc, MonoImage *rootimage, MonoImage* image, MonoTypeNameParse *info, gboolean ignorecase, gboolean search_mscorlib, gboolean *type_resolve, MonoError *error);
 
 MonoType*
-mono_reflection_type_from_name_checked (char *name, MonoImage *image, MonoError *error);
+mono_reflection_type_from_name_checked (char *name, MonoAssemblyLoadContext *alc, MonoImage *image, MonoError *error);
 
 guint32
 mono_reflection_get_token_checked (MonoObjectHandle obj, MonoError *error);
@@ -46,7 +63,10 @@ mono_reflection_get_custom_attrs_data_checked (MonoObjectHandle obj, MonoError *
 MonoArrayHandle
 mono_reflection_get_custom_attrs_by_type_handle (MonoObjectHandle obj, MonoClass *attr_klass, MonoError *error);
 
-MonoArray*
+MonoArrayHandle
+mono_custom_attrs_construct_by_type (MonoCustomAttrInfo *cinfo, MonoClass *attr_klass, MonoError *error);
+
+MonoArrayHandle
 mono_reflection_get_custom_attrs_blob_checked (MonoReflectionAssembly *assembly, MonoObject *ctor, MonoArray *ctorArgs, MonoArray *properties, MonoArray *propValues, MonoArray *fields, MonoArray* fieldValues, MonoError *error);
 
 MonoCustomAttrInfo*
@@ -115,5 +135,13 @@ mono_method_body_get_object_handle (MonoDomain *domain, MonoMethod *method, Mono
 MonoClass *
 mono_class_from_mono_type_handle (MonoReflectionTypeHandle h);
 
+MonoMethod*
+mono_runtime_get_caller_no_system_or_reflection (void);
+
+MonoAssembly*
+mono_runtime_get_caller_from_stack_mark (MonoStackCrawlMark *stack_mark);
+
+void
+mono_reflection_get_param_info_member_and_pos (MonoReflectionParameterHandle p, MonoObjectHandle member_impl, int *out_position);
 
 #endif /* __MONO_METADATA_REFLECTION_INTERNALS_H__ */

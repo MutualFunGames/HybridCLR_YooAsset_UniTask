@@ -22,8 +22,24 @@ namespace metadata
         return AreEqual(t1.key, t2.key);
     }
 
+    bool Il2CppGenericInstCompare::Compare(const Il2CppGenericInst* t1, const Il2CppGenericInst* t2)
+    {
+        if (t1)
+        {
+            return t2 && AreEqual(t1, t2);
+        }
+        else
+        {
+            return !t2;
+        }
+    }
+
     bool Il2CppGenericInstCompare::AreEqual(const Il2CppGenericInst* t1, const Il2CppGenericInst* t2)
     {
+        if (t1 == t2)
+        {
+            return true;
+        }
         if (t1->type_argc != t2->type_argc)
             return false;
 

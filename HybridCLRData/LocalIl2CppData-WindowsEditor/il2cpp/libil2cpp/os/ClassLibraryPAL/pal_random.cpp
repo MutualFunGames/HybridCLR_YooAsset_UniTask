@@ -30,7 +30,6 @@ void SystemNative_GetNonCryptographicallySecureRandomBytes(uint8_t* buffer, int3
     static bool sMissingDevURandom;
     static bool sInitializedMRand;
 
-#if !IL2CPP_HAVE_NO_UDEV_RANDOM
     if (!sMissingDevURandom)
     {
         if (rand_des == -1)
@@ -84,7 +83,6 @@ void SystemNative_GetNonCryptographicallySecureRandomBytes(uint8_t* buffer, int3
             while (offset != bufferLength);
         }
     }
-#endif // !IL2CPP_HAVE_NO_UDEV_RANDOM
 
     if (!sInitializedMRand)
     {

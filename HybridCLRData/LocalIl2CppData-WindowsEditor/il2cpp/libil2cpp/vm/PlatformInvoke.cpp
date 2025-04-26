@@ -9,6 +9,7 @@
 #include "Object.h"
 #include "Runtime.h"
 #include "Type.h"
+#include "Reflection.h"
 
 #include "gc/WriteBarrier.h"
 #include "os/LibraryLoader.h"
@@ -16,6 +17,10 @@
 #include "utils/Memory.h"
 #include "utils/StringUtils.h"
 #include "vm-utils/VmStringUtils.h"
+
+#include "hybridclr/metadata/MetadataUtil.h"
+#include "hybridclr/metadata/MetadataModule.h"
+#include "hybridclr/interpreter/InterpreterModule.h"
 
 #include <stdint.h>
 #include <algorithm>
@@ -392,7 +397,39 @@ namespace vm
         return typeNameList;
     }
 
-#if !IL2CPP_TINY
+    static Il2CppCallConvention GetDelegateCallConvention(Il2CppDelegate* d)
+    {
+        const Il2CppImage* image = d->object.klass->image;
+
+        Il2CppMetadataCustomAttributeHandle customAttributeHandle = MetadataCache::GetCustomAttributeTypeToken(image, d->object.klass->token);
+        if (!customAttributeHandle)
+        {
+            return IL2CPP_CALL_DEFAULT;
+        }
+
+        static Il2CppClass* umanagedFunctionPointerAttributeClass = nullptr;
+
+        if (umanagedFunctionPointerAttributeClass == nullptr)
+        {
+            umanagedFunctionPointerAttributeClass = Class::FromName(il2cpp_defaults.corlib, "System.Runtime.InteropServices", "UnmanagedFunctionPointerAttribute");
+            if (umanagedFunctionPointerAttributeClass == nullptr)
+            {
+                return IL2CPP_CALL_DEFAULT;
+            }
+        }
+
+        Il2CppObject* customAttribute = il2cpp::vm::Reflection::GetCustomAttribute(customAttributeHandle, umanagedFunctionPointerAttributeClass);
+
+        if (!customAttribute)
+        {
+            return IL2CPP_CALL_DEFAULT;
+        }
+
+        int32_t callConv = *(int32_t*)(customAttribute + 1);
+        IL2CPP_ASSERT(callConv >= 1 && callConv <= 5);
+        return (Il2CppCallConvention)(callConv - 1);
+    }
+
     intptr_t PlatformInvoke::MarshalDelegate(Il2CppDelegate* d)
     {
         if (d == NULL)
@@ -400,6 +437,13 @@ namespace vm
 
         if (IsFakeDelegateMethodMarshaledFromNativeCode(d))
             return reinterpret_cast<intptr_t>(d->delegate_trampoline);
+
+        const MethodInfo* method = d->method;
+        if (method && hybridclr::metadata::IsInterpreterImplement(method))
+        {
+            Il2CppCallConvention callConvention = GetDelegateCallConvention(d);
+            return reinterpret_cast<intptr_t>(hybridclr::interpreter::InterpreterModule::GetReversePInvokeWrapper(d->method->klass->image, method, callConvention));
+        }
 
         Il2CppMethodPointer reversePInvokeWrapper = MetadataCache::GetReversePInvokeWrapper(d->method->klass->image, d->method);
         if (reversePInvokeWrapper == NULL)
@@ -480,7 +524,5 @@ namespace vm
     {
         return d->delegate_trampoline != NULL;
     }
-
-#endif // !IL2CPP_TINY
 } /* namespace vm */
 } /* namespace il2cpp */

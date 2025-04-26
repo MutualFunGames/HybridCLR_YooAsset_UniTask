@@ -150,7 +150,7 @@
 
 // PP_VARG_IS_NONEMPTY evaluates to 0 if no arguments are provided, and 1 otherwise
 // It should be used inside a PP_EVAL expression.
-#if COMPILER_MSVC
+#if COMPILER_MSVC && !COMPILER_MSVC_EMULATED_BY_CLANG
     #define PP_VARG_IS_NONEMPTY(...) PP_BOOLIFY(PP_FIRST(__VA_ARGS__ DETAIL__PP_VARG_END_MARKER)())
 #else
     #define PP_VARG_IS_NONEMPTY(...) PP_BOOLIFY(PP_DEFER(PP_FIRST)(DETAIL__PP_VARG_END_MARKER DETAIL__PP_VARG_UNPAREN_FIRST(__VA_ARGS__))())

@@ -1,6 +1,6 @@
 #include "os/c-api/il2cpp-config-platforms.h"
 
-#if IL2CPP_TARGET_LINUX && !RUNTIME_TINY
+#if IL2CPP_TARGET_LINUX || IL2CPP_TARGET_QNX
 
 #include "os/SystemCertificates.h"
 

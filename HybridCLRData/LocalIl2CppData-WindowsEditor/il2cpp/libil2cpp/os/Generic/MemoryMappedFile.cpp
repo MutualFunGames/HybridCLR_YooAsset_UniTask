@@ -37,14 +37,20 @@ namespace os
         int64_t size;
     };
 
-    static baselib::ReentrantLock s_Mutex;
-    static il2cpp::utils::dynamic_array<MemoryFileData*> s_MemoryFiles;
-    static il2cpp::utils::dynamic_array<void*> s_MemoryFileViews;
+
+    struct MemoryFilesContext
+    {
+        baselib::ReentrantLock m_Mutex;
+        il2cpp::utils::dynamic_array<MemoryFileData*> m_MemoryFiles;
+        il2cpp::utils::dynamic_array<void*> m_MemoryFileViews;
+    };
+
+    MemoryFilesContext* s_MemoryFilesContext = nullptr;
 
     static bool IsMemoryFile(void* possibleMemoryFile)
     {
-        os::FastAutoLock lock(&s_Mutex);
-        for (il2cpp::utils::dynamic_array<MemoryFileData*>::const_iterator it = s_MemoryFiles.begin(); it != s_MemoryFiles.end(); ++it)
+        os::FastAutoLock lock(&s_MemoryFilesContext->m_Mutex);
+        for (il2cpp::utils::dynamic_array<MemoryFileData*>::const_iterator it = s_MemoryFilesContext->m_MemoryFiles.begin(); it != s_MemoryFilesContext->m_MemoryFiles.end(); ++it)
         {
             if ((*it)->handle == possibleMemoryFile)
                 return true;
@@ -55,7 +61,7 @@ namespace os
 
     static MemoryFileData* FindMemoryFile(void* possibleMemoryFile)
     {
-        for (il2cpp::utils::dynamic_array<MemoryFileData*>::iterator it = s_MemoryFiles.begin(); it != s_MemoryFiles.end(); ++it)
+        for (il2cpp::utils::dynamic_array<MemoryFileData*>::iterator it = s_MemoryFilesContext->m_MemoryFiles.begin(); it != s_MemoryFilesContext->m_MemoryFiles.end(); ++it)
         {
             if ((*it)->handle == possibleMemoryFile)
             {
@@ -68,7 +74,7 @@ namespace os
 
     static MemoryFileData* FindMemoryFile(const char* mapName)
     {
-        for (il2cpp::utils::dynamic_array<MemoryFileData*>::iterator it = s_MemoryFiles.begin(); it != s_MemoryFiles.end(); ++it)
+        for (il2cpp::utils::dynamic_array<MemoryFileData*>::iterator it = s_MemoryFilesContext->m_MemoryFiles.begin(); it != s_MemoryFilesContext->m_MemoryFiles.end(); ++it)
         {
             if (strcmp((*it)->mapName, mapName) == 0)
             {
@@ -81,8 +87,19 @@ namespace os
 
     static bool IsMemoryFileView(void* possibleMemoryFile)
     {
-        os::FastAutoLock lock(&s_Mutex);
-        return std::find(s_MemoryFileViews.begin(), s_MemoryFileViews.end(), possibleMemoryFile) != s_MemoryFileViews.end();
+        os::FastAutoLock lock(&s_MemoryFilesContext->m_Mutex);
+        return std::find(s_MemoryFilesContext->m_MemoryFileViews.begin(), s_MemoryFilesContext->m_MemoryFileViews.end(), possibleMemoryFile) != s_MemoryFilesContext->m_MemoryFileViews.end();
+    }
+
+    void MemoryMappedFile::AllocateStaticData()
+    {
+        s_MemoryFilesContext = new MemoryFilesContext();
+    }
+
+    void MemoryMappedFile::FreeStaticData()
+    {
+        delete s_MemoryFilesContext;
+        s_MemoryFilesContext = nullptr;
     }
 
     FileHandle* MemoryMappedFile::Create(FileHandle* file, const char* mapName, int32_t mode, int64_t *capacity, MemoryMappedFileAccess access, int32_t options, MemoryMappedFileError* error)
@@ -91,7 +108,7 @@ namespace os
         {
             if (mapName != NULL)
             {
-                os::FastAutoLock lock(&s_Mutex);
+                os::FastAutoLock lock(&s_MemoryFilesContext->m_Mutex);
 
                 const MemoryFileData* memoryFileData = FindMemoryFile(mapName);
 
@@ -102,7 +119,7 @@ namespace os
                 else
                 {
                     MemoryFileData* memoryFileData = new MemoryFileData(mapName, *capacity);
-                    s_MemoryFiles.push_back(memoryFileData);
+                    s_MemoryFilesContext->m_MemoryFiles.push_back(memoryFileData);
 
                     file = (FileHandle*)memoryFileData->handle;
                 }
@@ -151,7 +168,7 @@ namespace os
 
     static MemoryMappedFile::MemoryMappedFileHandle ViewMemoryFile(void* mappedFileHandle, int64_t* length, int64_t offset, MemoryMappedFileAccess access, MemoryMappedFileError* error)
     {
-        os::FastAutoLock lock(&s_Mutex);
+        os::FastAutoLock lock(&s_MemoryFilesContext->m_Mutex);
         const MemoryFileData* memoryFileData = FindMemoryFile(mappedFileHandle);
         IL2CPP_ASSERT(memoryFileData != NULL);
 
@@ -167,7 +184,7 @@ namespace os
 
         void* memoryMappedFileView = (uint8_t*)memoryFileData->handle + offset;
 
-        s_MemoryFileViews.push_back(memoryMappedFileView);
+        s_MemoryFilesContext->m_MemoryFileViews.push_back(memoryMappedFileView);
 
         return memoryMappedFileView;
     }
@@ -190,7 +207,7 @@ namespace os
     bool MemoryMappedFile::UnmapView(MemoryMappedFileHandle memoryMappedFileData, int64_t length)
     {
         if (IsMemoryFileView(memoryMappedFileData))
-            s_MemoryFileViews.erase_swap_back(&memoryMappedFileData);
+            s_MemoryFilesContext->m_MemoryFileViews.erase_swap_back(&memoryMappedFileData);
         else if (!IsMemoryFile(memoryMappedFileData))
             IL2CPP_FREE(memoryMappedFileData);
         return true;
@@ -198,12 +215,12 @@ namespace os
 
     bool MemoryMappedFile::Close(FileHandle* file)
     {
-        os::FastAutoLock lock(&s_Mutex);
+        os::FastAutoLock lock(&s_MemoryFilesContext->m_Mutex);
         MemoryFileData* memoryFileData = FindMemoryFile((void*)file);
         if (memoryFileData != NULL)
         {
             delete memoryFileData;
-            s_MemoryFiles.erase_swap_back(&memoryFileData);
+            s_MemoryFilesContext->m_MemoryFiles.erase_swap_back(&memoryFileData);
         }
         return true;
     }

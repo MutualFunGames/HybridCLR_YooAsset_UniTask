@@ -11,7 +11,7 @@
 
 #include "config.h"
 
-#ifdef HAVE_SGEN_GC
+#if defined (HAVE_SGEN_GC) && !defined (DISABLE_SGEN_GC_BRIDGE)
 
 #include <stdlib.h>
 
@@ -385,7 +385,7 @@ set_config (const SgenBridgeProcessorConfig *config)
 static MonoGCBridgeObjectKind
 class_kind (MonoClass *klass)
 {
-	return bridge_callbacks.bridge_class_kind (klass);
+	return mono_bridge_callbacks.bridge_class_kind (klass);
 }
 
 static HashEntry*
@@ -677,7 +677,7 @@ processing_build_callback_data (int generation)
 	if (!dyn_array_ptr_size (&registered_bridges))
 		return;
 
-	g_assert (bridge_processing_in_progress);
+	g_assert (mono_bridge_processing_in_progress);
 
 	SGEN_TV_GETTIME (atv);
 
@@ -749,7 +749,7 @@ processing_build_callback_data (int generation)
 			HashEntryWithAccounting *entry = (HashEntryWithAccounting*)all_entries [i];
 			if (entry->entry.is_bridge) {
 				MonoClass *klass = SGEN_LOAD_VTABLE (entry->entry.obj)->klass;
-				mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_GC, "OBJECT %s::%s (%p) weight %f", klass->name_space, klass->name, entry->entry.obj, entry->weight);
+				mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_GC, "OBJECT %s::%s (%p) weight %f", m_class_get_name_space (klass), m_class_get_name (klass), entry->entry.obj, entry->weight);
 			}
 		}
 	}
@@ -868,7 +868,7 @@ processing_after_callback (int generation)
 		for (i = 0; i < num_sccs; ++i) {
 			for (j = 0; j < api_sccs [i]->num_objs; ++j) {
 				GCVTable vtable = SGEN_LOAD_VTABLE (api_sccs [i]->objs [j]);
-				mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_GC,
+				mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_GC,
 					"OBJECT %s.%s (%p) SCC [%d] %s",
 						sgen_client_vtable_get_namespace (vtable), sgen_client_vtable_get_name (vtable), api_sccs [i]->objs [j],
 						i,
@@ -877,7 +877,7 @@ processing_after_callback (int generation)
 		}
 	}
 
-	mono_trace (G_LOG_LEVEL_INFO, MONO_TRACE_GC, "GC_OLD_BRIDGE num-objects %d num_hash_entries %d sccs size %d init %.2fms df1 %.2fms sort %.2fms dfs2 %.2fms setup-cb %.2fms free-data %.2fms links %d/%d/%d/%d dfs passes %d/%d",
+	mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_GC, "GC_OLD_BRIDGE num-objects %d num_hash_entries %d sccs size %d init %.2fms df1 %.2fms sort %.2fms dfs2 %.2fms setup-cb %.2fms free-data %.2fms links %d/%d/%d/%d dfs passes %d/%d",
 		num_registered_bridges, hash_table_size, dyn_array_scc_size (&sccs),
 		step_1 / 10000.0f,
 		step_2 / 10000.0f,
@@ -929,5 +929,11 @@ sgen_old_bridge_init (SgenBridgeProcessor *collector)
 
 	bridge_processor = collector;
 }
+
+#else
+
+#include <mono/utils/mono-compiler.h>
+
+MONO_EMPTY_SOURCE_FILE (sgen_old_bridge);
 
 #endif

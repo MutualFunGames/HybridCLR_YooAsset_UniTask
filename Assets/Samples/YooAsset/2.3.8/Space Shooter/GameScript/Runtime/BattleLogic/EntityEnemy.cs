@@ -30,9 +30,9 @@ public class EntityEnemy : MonoBehaviour
         _audioSource = this.gameObject.GetComponent<AudioSource>();
         _shotSpawn = this.transform.Find("shot_spawn");
 
-        _rigidbody.velocity = this.transform.forward * -5f;
+        _rigidbody.linearVelocity = this.transform.forward * -5f;
         _lastFireTime = Time.time;
-        _currentSpeed = _rigidbody.velocity.z;
+        _currentSpeed = _rigidbody.linearVelocity.z;
         _targetManeuver = 0f;
 
         StartCoroutine(Evade());
@@ -48,8 +48,8 @@ public class EntityEnemy : MonoBehaviour
     }
     void FixedUpdate()
     {
-        float newManeuver = Mathf.MoveTowards(_rigidbody.velocity.x, _targetManeuver, Smoothing * Time.deltaTime);
-        _rigidbody.velocity = new Vector3(newManeuver, 0.0f, _currentSpeed);
+        float newManeuver = Mathf.MoveTowards(_rigidbody.linearVelocity.x, _targetManeuver, Smoothing * Time.deltaTime);
+        _rigidbody.linearVelocity = new Vector3(newManeuver, 0.0f, _currentSpeed);
         _rigidbody.position = new Vector3
         (
             Mathf.Clamp(_rigidbody.position.x, Boundary.xMin, Boundary.xMax),
@@ -58,7 +58,7 @@ public class EntityEnemy : MonoBehaviour
         );
 
         float tilt = 10f;
-        _rigidbody.rotation = Quaternion.Euler(0, 0, _rigidbody.velocity.x * -tilt);
+        _rigidbody.rotation = Quaternion.Euler(0, 0, _rigidbody.linearVelocity.x * -tilt);
     }
     void OnTriggerEnter(Collider other)
     {

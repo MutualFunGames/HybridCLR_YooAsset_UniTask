@@ -34,8 +34,6 @@ namespace winrt
         HANDLE m_Event;
         HRESULT m_HR;
 
-        typedef OperationType OperationType;
-
         inline SynchronousOperationBase(OperationType* op)
         {
             m_Event = CreateEventExW(nullptr, nullptr, CREATE_EVENT_MANUAL_RESET, EVENT_ALL_ACCESS);
@@ -67,6 +65,7 @@ namespace winrt
     class SynchronousOperation : public SynchronousOperationBase<ABI::Windows::Foundation::IAsyncOperation<T>, ABI::Windows::Foundation::IAsyncOperationCompletedHandler<T> >
     {
     private:
+        using OperationType = ABI::Windows::Foundation::IAsyncOperation<T>;
         typedef typename ResultTypeTraits<OperationType>::ResultType ResultType;
         ResultType m_Result;
 
@@ -114,6 +113,9 @@ namespace winrt
     template<>
     class SynchronousOperation<void> : public SynchronousOperationBase<ABI::Windows::Foundation::IAsyncAction, ABI::Windows::Foundation::IAsyncActionCompletedHandler>
     {
+    private:
+        using OperationType = ABI::Windows::Foundation::IAsyncAction;
+
     public:
         inline SynchronousOperation(OperationType* op) :
             SynchronousOperationBase(op)

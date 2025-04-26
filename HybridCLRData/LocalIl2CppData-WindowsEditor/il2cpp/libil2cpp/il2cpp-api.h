@@ -24,7 +24,7 @@ extern "C"
 #define DO_API_NO_RETURN(r, n, p)   IL2CPP_EXPORT NORETURN r n p;
 #include "il2cpp-api-functions.h"
 #undef DO_API
-#undef DO_API_NORETURN
+#undef DO_API_NO_RETURN
 #if defined(__cplusplus)
 }
 #endif // __cplusplus

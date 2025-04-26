@@ -1,98 +1,76 @@
 #include "private/gc_priv.h"
 
-static struct hblk* GetNextFreeBlock(ptr_t ptr)
-{
-	struct hblk* result = NULL;
-	unsigned i;
-
-	for (i = 0; i < N_HBLK_FLS + 1; i++)
-	{
-		struct hblk* freeBlock = GC_hblkfreelist[i];
-
-		for (freeBlock = GC_hblkfreelist[i]; freeBlock != NULL; freeBlock = HDR(freeBlock)->hb_next)
-		{
-			/* We're only interested in pointers after "ptr" argument */
-			if ((ptr_t)freeBlock < ptr)
-				continue;
-
-			/* If we haven't had a result before or our previous result is */
-			/* ahead of the current freeBlock, mark the current freeBlock as result */
-			if (result == NULL || result > freeBlock)
-				result = freeBlock;
-		}
-	}
-
-	return result;
-}
-
-static void CallHeapSectionCallback(void* user_data, ptr_t start, ptr_t end, GC_heap_section_proc callback)
-{
-	hdr *hhdr = HDR(start);
-
-	// Validate that the heap block is valid, then fire our callback.
-	if (IS_FORWARDING_ADDR_OR_NIL(hhdr) || HBLK_IS_FREE(hhdr)) {
-		return;
-	}
-	
-	callback(user_data, start, end);
-}
-
 void GC_foreach_heap_section(void* user_data, GC_heap_section_proc callback)
 {
-	unsigned i;
-	struct hblk* nextFreeBlock = NULL;
-
 	GC_ASSERT(I_HOLD_LOCK());
 
 	if (callback == NULL)
 		return;
 
-	for (i = 0; i < GC_n_heap_sects; i++)
+	// GC memory is organized in heap sections, which are split in heap blocks.
+	// Each block has header (can get via HDR(ptr)) and it's size is aligned to HBLKSIZE
+	// Block headers are kept separately from memory their points to, and quickly address
+	// headers GC maintains 2-level cache structure which uses address as a hash key.
+	for (unsigned i = 0; i < GC_n_heap_sects; i++)
 	{
 		ptr_t sectionStart = GC_heap_sects[i].hs_start;
 		ptr_t sectionEnd = sectionStart + GC_heap_sects[i].hs_bytes;
-       
-		/* Merge in contiguous sections. Copied from GC_dump_regions
 
-		A free block might start in one heap section and extend
-		into the next one. Merging the section avoids crashes when
-		trying to copy the start of section that is a free block
-		continued from the previous section. */
+		// Merge in contiguous sections.
+		// A heap block might start in one heap section and extend 
+		// into the next one. 
 		while (i + 1 < GC_n_heap_sects && GC_heap_sects[i + 1].hs_start == sectionEnd)
 		{
 			++i;
 			sectionEnd = GC_heap_sects[i].hs_start + GC_heap_sects[i].hs_bytes;
-        }
+		}
 
-		while (sectionStart < sectionEnd)
+		ptr_t blockStart = sectionStart;
+		while (blockStart < sectionEnd)
 		{
-			nextFreeBlock = GetNextFreeBlock(sectionStart);
+			// This does lookup into 2 level tree data structure,
+			// which uses address as hash key to find block header.
+			hdr* hhdr = HDR(blockStart);
 
-			if (nextFreeBlock == NULL || (ptr_t)nextFreeBlock > sectionEnd)
+			if (IS_FORWARDING_ADDR_OR_NIL(hhdr))
 			{
-				CallHeapSectionCallback(user_data, sectionStart, sectionEnd, callback);
-				break;
+				// This pointer has no header registered in headers cache.
+				// We skip one HBLKSIZE and attempt to get header for it.
+				// We don't report it, as we don't know is mapped or not.
+				blockStart = blockStart + HBLKSIZE;
+			}
+			else if (HBLK_IS_FREE(hhdr))
+			{
+				// We have a header, and the block is marked as free.
+				// Note: for "free" blocks "hb_sz" = the size in bytes of the whole block.
+				ptr_t blockEnd = blockStart + hhdr->hb_sz;
+
+#if USE_MUNMAP
+				// Only report free block if it's mapped.
+				if ((hhdr->hb_flags & WAS_UNMAPPED) != 0)
+				{
+					blockStart = blockEnd;
+					continue;
+				}
+#endif
+				callback(user_data, blockStart, blockEnd, GC_HEAP_SECTION_TYPE_FREE);
+
+				blockStart = blockEnd;
 			}
 			else
 			{
-				size_t sectionLength = (char*)nextFreeBlock - sectionStart;
-				if (sectionLength > 0)
-					CallHeapSectionCallback(user_data, sectionStart, sectionStart + sectionLength, callback);
-				sectionStart = (char*)nextFreeBlock + HDR(nextFreeBlock)->hb_sz;
+				// This heap block is used, report it.
+				// Note: for used blocks "hb_sz" = size in bytes, of objects in the block.
+				ptr_t blockEnd = blockStart + HBLKSIZE * OBJ_SZ_TO_BLOCKS(hhdr->hb_sz);
+				ptr_t usedBlocknEnd = blockStart + hhdr->hb_sz;
+
+				if (usedBlocknEnd > blockStart)
+					callback(user_data, blockStart, usedBlocknEnd, GC_HEAP_SECTION_TYPE_USED);
+				if (blockEnd > usedBlocknEnd)
+					callback(user_data, usedBlocknEnd, blockEnd, GC_HEAP_SECTION_TYPE_PADDING);
+
+				blockStart = blockEnd;
 			}
 		}
 	}
-}
-
-void HeapSectionCountIncrementer(void* context, GC_PTR start, GC_PTR end)
-{
-	GC_word* countPtr = (GC_word*)context;
-	(*countPtr)++;
-}
-
-GC_word GC_get_heap_section_count()
-{
-	GC_word count = 0;
-	GC_foreach_heap_section(&count, HeapSectionCountIncrementer);
-	return count;
 }

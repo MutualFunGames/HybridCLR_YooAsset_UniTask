@@ -15,6 +15,8 @@ namespace Reflection
     class LIBIL2CPP_CODEGEN_API RuntimeAssembly
     {
     public:
+        static void AllocateStaticData();
+        static void FreeStaticData();
         static bool get_global_assembly_cache(Il2CppObject* thisPtr);
         static bool get_ReflectionOnly(Il2CppObject* thisPtr);
         static bool GetAotIdInternal(Il2CppArray* aotid);
@@ -26,11 +28,7 @@ namespace Reflection
         static Il2CppArray* GetModulesInternal(Il2CppReflectionAssembly * thisPtr);
         static Il2CppString* get_code_base(Il2CppReflectionAssembly* reflectionAssembly, bool escaped);
         static Il2CppString* get_fullname(Il2CppReflectionAssembly* assembly);
-#if HYBRIDCLR_UNITY_VERSION >= 20210314
         static Il2CppString* get_location(Il2CppReflectionAssembly* assembly);
-#else
-        static Il2CppString* get_location(Il2CppObject* assembly);
-#endif
         static Il2CppString* InternalImageRuntimeVersion(Il2CppObject* a);
         static Il2CppArray* GetManifestResourceNames(Il2CppReflectionAssembly* assembly);
     };

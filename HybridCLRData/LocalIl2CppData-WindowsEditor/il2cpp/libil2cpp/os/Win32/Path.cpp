@@ -34,6 +34,9 @@ namespace os
 
     std::string Path::GetTempPath()
     {
+#if IL2CPP_TARGET_GAMECORE_XBOX
+        return "T:\\";
+#else
         WCHAR tempPath[MAX_PATH + 1];
         ::GetTempPathW(sizeof(tempPath) / sizeof(tempPath[0]), tempPath);
 #if !IL2CPP_TARGET_WINDOWS_GAMES
@@ -41,6 +44,7 @@ namespace os
 #endif // !IL2CPP_TARGET_WINDOWS_GAMES
 
         return utils::StringUtils::Utf16ToUtf8(tempPath);
+#endif
     }
 
     bool Path::IsAbsolute(const std::string& path)

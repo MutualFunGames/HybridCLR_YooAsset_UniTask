@@ -21,11 +21,11 @@ namespace InteropServices
     class LIBIL2CPP_CODEGEN_API GCHandle
     {
     public:
-        static bool CheckCurrentDomain(int32_t handle);
-        static void FreeHandle(int32_t handle);
-        static intptr_t GetAddrOfPinnedObject(int32_t handle);
-        static Il2CppObject * GetTarget(int32_t handle);
-        static int32_t GetTargetHandle(Il2CppObject * obj, int32_t handle, int32_t type);
+        static bool CheckCurrentDomain(intptr_t handle);
+        static void FreeHandle(intptr_t handle);
+        static intptr_t GetAddrOfPinnedObject(intptr_t handle);
+        static Il2CppObject * GetTarget(intptr_t handle);
+        static intptr_t GetTargetHandle(Il2CppObject * obj, intptr_t handle, int32_t type);
     };
 } /* namespace InteropServices */
 } /* namespace Runtime */

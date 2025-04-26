@@ -1,0 +1,247 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Bee.BinLog</name>
+    </assembly>
+    <members>
+        <member name="T:Bee.BinLog.BuildResult">
+            <summary>
+            An enum describing the result of a bee backend execution.
+            </summary>
+        </member>
+        <member name="F:Bee.BinLog.BuildResult.Success">
+            <summary>
+            All nodes built successfully
+            </summary>
+        </member>
+        <member name="F:Bee.BinLog.BuildResult.Interrupted">
+            <summary>
+            User interrupted the build (e.g CTRL+C)
+            </summary>
+        </member>
+        <member name="F:Bee.BinLog.BuildResult.Croak">
+            <summary>
+            An internal really bad error happened
+            </summary>
+        </member>
+        <member name="F:Bee.BinLog.BuildResult.BuildError">
+            <summary>
+            An action in the build graph failed
+            </summary>
+        </member>
+        <member name="F:Bee.BinLog.BuildResult.RequireFrontendRerun">
+            <summary>
+            Frontend needs to run again
+            </summary>
+        </member>
+        <member name="F:Bee.BinLog.BuildFinishedMessageRaw.reason">
+            <summary>
+            If the result of the build is RequestFrontendRerun, this will contain the reason why that was requested
+            </summary>
+        </member>
+        <member name="T:Bee.BinLog.BinLogReader">
+            <summary>
+            To parse a binlog, instantiate a BinLogReader, subscribe to the events you care about, and then invoke .ReadFromStream() repeatedly until you no longer
+            expect interesting messages. (once you receive OnBuildFinished, you know nothing interesting will follow anymore)
+            </summary>
+        </member>
+        <member name="F:Bee.BinLog.BinLogReader._nodeInfoMessagesRaw">
+            <summary>
+            every nodeinfo message that arrives, we store it in a separate array, so we can very quickly acces it. These messages are small, as they do not contain the actual
+            information like outputfile, outputdirectory etc,  but instead it contains offsets where these strings can be found in the binlog.
+            </summary>
+        </member>
+        <member name="T:Bee.BinLog.BinLogStorage">
+            <summary>
+            This class stores a binlog file in memory as it becomes available. We store it in chunks of 128k, allocating new chunks
+            as required. 
+            </summary>
+        </member>
+        <member name="T:Bee.BinLog.BinLogStorage.Span">
+            <summary>
+            A poor man's span, because we do not yet have the .netcore Span since we need to target .net47 for now.
+            </summary>
+        </member>
+        <member name="M:Bee.BinLog.BinLogStorage.GetSpan(System.Int32,System.Int32)">
+            <summary>
+            Get a linear-accesable span at a certain offset and length into the binlog.  The fast path for this will return an existing chunk with an offset + length.
+            </summary>
+        </member>
+        <member name="M:Bee.BinLog.BinLogStorage.GetSpanForChunkOverlappingRequest(System.Int32,System.Int32)">
+            <summary>
+            There will be some strings or messages whose contents straddle two chunks. Since chunks should be relatively big (megabyte-ish), it's okay if the one message we try
+            to read across the boundary is slow. 
+            </summary>
+        </member>
+        <member name="T:Bee.BinLog.BuildStartedMessage">
+            <summary>
+            A message for when a backend build starts
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.BuildStartedMessage.HighestThreadId">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.BuildStartedMessage.MaxNodesCount">
+            <summary>
+            
+            </summary>
+        </member>
+        <member name="T:Bee.BinLog.NodeInfo">
+            <summary>
+            Contains information about a node in the buildgraph
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.NodeInfo.NodeIndex">
+            <summary>
+            The node index of this node. This correspons to the index in the dag.json.
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.NodeInfo.Annotation">
+            <summary>
+            The annotation of this node.
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.NodeInfo.DisplayName">
+            <summary>
+            The display name of this node for showing in UI.
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.NodeInfo.OutputFile">
+            <summary>
+            The first output file (if any) of this node.
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.NodeInfo.OutputDirectory">
+            <summary>
+            The first output directory (if any) of this node.
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.NodeInfo.ProfilerOutput">
+            <summary>
+            The profiler output file (if any) of this node.
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.NodeInfo.RspFile">
+            <summary>
+            The first rsp file used by this node if any
+            </summary>
+        </member>
+        <member name="T:Bee.BinLog.NodeEnqueuedMessage">
+            <summary>
+            A message for when a node gets queued. Getting queued means that the bee backend has decided that this node has to somehow be produced.
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.NodeEnqueuedMessage.EnqueuedNode">
+            <summary>
+            The node being queued.
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.NodeEnqueuedMessage.EnqueueingNode">
+            <summary>
+            The node that required this node to be enqueued.
+            </summary>
+        </member>
+        <member name="T:Bee.BinLog.NodeStartedMessage">
+            <summary>
+            A message for when a node starts actually being executed.
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.NodeStartedMessage.Node">
+            <summary>
+            The node being started.
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.NodeStartedMessage.ThreadIndex">
+            <summary>
+            The index of the build thread that started executing this node.
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.NodeStartedMessage.StartIndex">
+            <summary>
+            You can use this number to figure out which node was started before/after which other node. The only guarantee is that the number is increasing.
+            </summary>
+        </member>
+        <member name="T:Bee.BinLog.NodeUpToDateMessage">
+            <summary>
+            A message for when the bee backend has determined that a node does not need to be executed because the version from the previous build is still good.
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.NodeUpToDateMessage.Node">
+            <summary>
+            The node that is up to date
+            </summary>
+        </member>
+        <member name="T:Bee.BinLog.NodeFinishedMessage">
+            <summary>
+            A message for when a node that was previously started is now finished
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.NodeFinishedMessage.Node">
+            <summary>
+            The node that finished.
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.NodeFinishedMessage.ThreadIndex">
+            <summary>
+            The index of the build thread that started executing this node.
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.NodeFinishedMessage.Output">
+            <summary>
+            The combined stdout + stderr of the execution.
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.NodeFinishedMessage.CmdLine">
+            <summary>
+            The commandline used to execute this node.
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.NodeFinishedMessage.ExitCode">
+            <summary>
+            The exit code of the execution.
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.NodeFinishedMessage.Duration">
+            <summary>
+            The duration of the execution.
+            </summary>
+        </member>
+        <member name="T:Bee.BinLog.BuildFinishedMessage">
+            <summary>
+            A message for when a backend build is finished
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.BuildFinishedMessage.Result">
+            <summary>
+            The result of the build
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.BuildFinishedMessage.Reason">
+            <summary>
+            If the buildResult is BuildResult.RequestFrontendRerun, this will contain the reason why that was requested
+            </summary>
+        </member>
+        <member name="T:Bee.BinLog.RPCActionMessage">
+            <summary>
+            A message for when a backend wants us to execute an RPC message
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.RPCActionMessage.NodeIndex">
+            <summary>
+            The node dag index
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.RPCActionMessage.Action">
+            <summary>
+            The action name
+            </summary>
+        </member>
+        <member name="P:Bee.BinLog.RPCActionMessage.Data">
+            <summary>
+            The action data
+            </summary>
+        </member>
+    </members>
+</doc>

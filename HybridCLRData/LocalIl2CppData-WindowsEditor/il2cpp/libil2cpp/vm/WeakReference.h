@@ -21,7 +21,7 @@ namespace vm
         virtual il2cpp_hresult_t STDCALL Resolve(const Il2CppGuid& iid, Il2CppIInspectable** object) IL2CPP_FINAL IL2CPP_OVERRIDE;
 
     private:
-        uint32_t m_GCHandle;
+        Il2CppGCHandle m_GCHandle;
         baselib::atomic<uint32_t> m_RefCount;
     };
 }

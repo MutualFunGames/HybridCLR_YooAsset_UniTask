@@ -15,9 +15,6 @@
 // so instead we used forwarded them to Fls* equivalents. Using Tls* functions directly
 // with these old SDKs causes linker errors.
 
-#define IL2CPP_USE_WINRT_FLS_WORKAROUND (IL2CPP_TARGET_WINRT && WINDOWS_SDK_BUILD_VERSION <= 10586)
-
-#if !IL2CPP_USE_WINRT_FLS_WORKAROUND
 extern "C" {
     __declspec(dllimport) unsigned long __stdcall TlsAlloc(void);
     __declspec(dllimport) void* __stdcall TlsGetValue(unsigned long dwTlsIndex);
@@ -25,21 +22,6 @@ extern "C" {
     __declspec(dllimport) int __stdcall TlsFree(unsigned long dwTlsIndex);
     __declspec(dllimport) unsigned long __stdcall GetLastError(void);
 }
-#else
-extern "C" {
-    typedef void (__stdcall* PFLS_CALLBACK_FUNCTION)(void* lpFlsData);
-    __declspec(dllimport) unsigned long __stdcall FlsAlloc(PFLS_CALLBACK_FUNCTION callback);
-    __declspec(dllimport) void* __stdcall FlsGetValue(unsigned long dwTlsIndex);
-    __declspec(dllimport) int __stdcall FlsSetValue(unsigned long dwTlsIndex, void* lpTlsValue);
-    __declspec(dllimport) int __stdcall FlsFree(unsigned long dwTlsIndex);
-    __declspec(dllimport) unsigned long __stdcall GetLastError(void);
-}
-
-#define TlsAlloc() FlsAlloc(NULL)
-#define TlsGetValue FlsGetValue
-#define TlsSetValue FlsSetValue
-#define TlsFree FlsFree
-#endif
 
 #define IL2CPP_TLS_OUT_OF_INDEXES ((unsigned long)0xFFFFFFFF)
 
@@ -89,12 +71,5 @@ namespace os
     };
 }
 }
-
-#if IL2CPP_USE_WINRT_FLS_WORKAROUND
-#undef TlsAlloc
-#undef TlsGetValue
-#undef TlsSetValue
-#undef TlsFree
-#endif
 
 #endif // IL2CPP_THREADS_WIN32

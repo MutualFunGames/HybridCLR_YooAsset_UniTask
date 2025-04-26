@@ -9,8 +9,8 @@
 #ifndef BROTLI_COMMON_DICTIONARY_H_
 #define BROTLI_COMMON_DICTIONARY_H_
 
-#include "../include/brotli/port.h"
-#include "../include/brotli/types.h"
+#include <brotli/port.h>
+#include <brotli/types.h>
 
 #if defined(__cplusplus) || defined(c_plusplus)
 extern "C" {

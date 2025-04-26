@@ -21,7 +21,8 @@ enum {
 	MONO_MMAP_SHARED  = 1 << 5,
 	MONO_MMAP_ANON    = 1 << 6,
 	MONO_MMAP_FIXED   = 1 << 7,
-	MONO_MMAP_32BIT   = 1 << 8
+	MONO_MMAP_32BIT   = 1 << 8,
+	MONO_MMAP_JIT     = 1 << 9
 };
 
 typedef enum {
@@ -38,6 +39,7 @@ typedef enum {
 	MONO_MEM_ACCOUNT_SGEN_BINARY_PROTOCOL,
 	MONO_MEM_ACCOUNT_EXCEPTIONS,
 	MONO_MEM_ACCOUNT_PROFILER,
+	MONO_MEM_ACCOUNT_INTERP_STACK,
 	MONO_MEM_ACCOUNT_OTHER,
 	MONO_MEM_ACCOUNT_MAX
 } MonoMemAccountType;
@@ -52,12 +54,20 @@ MONO_API guint64      mono_file_map_size  (MonoFileMap *fmap);
 MONO_API int          mono_file_map_fd    (MonoFileMap *fmap);
 MONO_API int          mono_file_map_close (MonoFileMap *fmap);
 
+MONO_API void  mono_setmmapjit (int flag);
 MONO_API int   mono_pagesize   (void);
 MONO_API int   mono_valloc_granule (void);
 MONO_API void* mono_valloc     (void *addr, size_t length, int flags, MonoMemAccountType type);
 MONO_API void* mono_valloc_aligned (size_t length, size_t alignment, int flags, MonoMemAccountType type);
 MONO_API int   mono_vfree      (void *addr, size_t length, MonoMemAccountType type);
 MONO_API void* mono_file_map   (size_t length, int flags, int fd, guint64 offset, void **ret_handle);
+
+// Last two parameters are optional.
+// This is mono_file_map but with optionally returning an error message.
+// See https://github.com/mono/mono/issues/8225.
+MONO_API
+void*
+mono_file_map_error (size_t length, int flags, int fd, guint64 offset, void **ret_handle, const char *filepath, char **error_message);
 MONO_API int   mono_file_unmap (void *addr, void *handle);
 #ifndef HOST_WIN32
 MONO_API void* mono_file_map_fileio   (size_t length, int flags, int fd, guint64 offset, void **ret_handle);

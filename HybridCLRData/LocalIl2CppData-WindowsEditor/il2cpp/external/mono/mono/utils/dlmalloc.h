@@ -25,10 +25,6 @@
 #ifndef MALLOC_280_H
 #define MALLOC_280_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include <stddef.h>   /* for size_t */
 #include <mono/utils/mono-compiler.h>
 
@@ -537,9 +533,5 @@ int mspace_trim(mspace msp, size_t pad);
 int mspace_mallopt(int, int);
 
 #endif  /* MSPACES */
-
-#ifdef __cplusplus
-};  /* end of extern "C" */
-#endif
 
 #endif /* MALLOC_280_H */

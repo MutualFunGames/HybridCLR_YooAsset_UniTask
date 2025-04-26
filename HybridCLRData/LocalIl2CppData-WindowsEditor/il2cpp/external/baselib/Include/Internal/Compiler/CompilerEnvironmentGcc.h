@@ -83,7 +83,11 @@
 #define COMPILER_DEBUG_TRAP()               __asm__ volatile(".inst 0xd4200000")
 #endif
 
-#define COMPILER_WARN_UNUSED_RESULT         __attribute__((warn_unused_result))
+#if __cplusplus >= 201703L
+    #define COMPILER_WARN_UNUSED_RESULT         [[nodiscard]]
+#else
+    #define COMPILER_WARN_UNUSED_RESULT         __attribute__((warn_unused_result))
+#endif
 
 #define HAS_CLANG_FEATURE(x) 0
 
@@ -97,3 +101,8 @@
 #define COMPILER_WARNINGS_PUSH              _Pragma("GCC diagnostic push")
 #define COMPILER_WARNINGS_POP               _Pragma("GCC diagnostic pop")
 #define COMPILER_WARNINGS_DISABLE(Warn)     _Pragma(PP_STRINGIZE(GCC diagnostic ignored Warn))
+
+// Prefetches memory for reading from address `address` if supported on the current architecture
+#define COMPILER_PREFETCH_READ(address)     __builtin_prefetch(address, 0)
+// Prefetches memory for writing from address `address` if supported on the current architecture
+#define COMPILER_PREFETCH_WRITE(address)    __builtin_prefetch(address, 1)

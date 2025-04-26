@@ -43,6 +43,8 @@ namespace IO
     class LIBIL2CPP_CODEGEN_API MonoIO
     {
     public:
+        static void AllocateStaticData();
+        static void FreeStaticData();
         static bool Cancel_internal(intptr_t handle, int32_t* error);
         static bool Close(intptr_t handle, int32_t* error);
         static bool CopyFile(Il2CppChar* path, Il2CppChar* dest, bool overwrite, int32_t* error);

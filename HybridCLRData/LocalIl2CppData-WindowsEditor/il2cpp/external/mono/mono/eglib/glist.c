@@ -26,16 +26,17 @@
  *
  * (C) 2006 Novell, Inc.
  */
+#include "config.h"
 #include <stdio.h>
 #include <glib.h>
 
 GList*
-g_list_alloc ()
+g_list_alloc (void)
 {
 	return g_new0 (GList, 1);
 }
 
-static inline GList*
+static GList*
 new_node (GList *prev, gpointer data, GList *next)
 {
 	GList *node = g_list_alloc ();
@@ -49,7 +50,7 @@ new_node (GList *prev, gpointer data, GList *next)
 	return node;
 }
 
-static inline GList*
+static GList*
 disconnect_node (GList *node)
 {
 	if (node->next)

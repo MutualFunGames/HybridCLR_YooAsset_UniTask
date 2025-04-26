@@ -22,7 +22,9 @@
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
 #endif
+#ifdef HAVE_NETINET_TCP_H
 #include <arpa/inet.h>
+#endif
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -40,9 +42,7 @@
 #ifdef HAVE_SYS_SOCKIO_H
 #include <sys/sockio.h>    /* defines SIOCATMARK */
 #endif
-#ifndef HAVE_MSG_NOSIGNAL
 #include <signal.h>
-#endif
 #ifdef HAVE_SYS_SENDFILE_H
 #include <sys/sendfile.h>
 #endif
@@ -55,6 +55,8 @@
 #include "utils/mono-logger-internals.h"
 #include "utils/mono-poll.h"
 #include "utils/mono-compiler.h"
+#include "icall-decl.h"
+#include "utils/mono-errno.h"
 
 typedef struct {
 	MonoFDHandle fdhandle;
@@ -122,10 +124,10 @@ socket_data_destroy (MonoFDHandle *fdhandle)
 void
 mono_w32socket_initialize (void)
 {
-	MonoFDHandleCallback socket_data_callbacks = {
-		.close = socket_data_close,
-		.destroy = socket_data_destroy
-	};
+	MonoFDHandleCallback socket_data_callbacks;
+	memset (&socket_data_callbacks, 0, sizeof (socket_data_callbacks));
+	socket_data_callbacks.close = socket_data_close;
+	socket_data_callbacks.destroy = socket_data_destroy;
 
 	mono_fdhandle_register (MONO_FDTYPE_SOCKET, &socket_data_callbacks);
 }
@@ -189,7 +191,7 @@ mono_w32socket_accept (SOCKET sock, struct sockaddr *addr, socklen_t *addrlen, g
 }
 
 int
-mono_w32socket_connect (SOCKET sock, const struct sockaddr *addr, int addrlen, gboolean blocking)
+mono_w32socket_connect (SOCKET sock, const struct sockaddr *addr, socklen_t addrlen, gboolean blocking)
 {
 	SocketHandle *sockethandle;
 	gint ret;
@@ -345,7 +347,7 @@ mono_w32socket_recvfrom (SOCKET sock, char *buf, int len, int flags, struct sock
 		 */
 		if (sockethandle->still_readable != 1) {
 			ret = -1;
-			errno = EINTR;
+			mono_set_errno (EINTR);
 		}
 	}
 
@@ -418,7 +420,7 @@ mono_w32socket_recvbuffers (SOCKET sock, WSABUF *buffers, guint32 count, guint32
 		/* see mono_w32socket_recvfrom */
 		if (sockethandle->still_readable != 1) {
 			ret = -1;
-			errno = EINTR;
+			mono_set_errno (EINTR);
 		}
 	}
 
@@ -438,7 +440,7 @@ mono_w32socket_recvbuffers (SOCKET sock, WSABUF *buffers, guint32 count, guint32
 }
 
 int
-mono_w32socket_send (SOCKET sock, char *buf, int len, int flags, gboolean blocking)
+mono_w32socket_send (SOCKET sock, void *buf, int len, int flags, gboolean blocking)
 {
 	SocketHandle *sockethandle;
 	int ret;
@@ -573,7 +575,7 @@ mono_w32socket_sendbuffers (SOCKET sock, WSABUF *buffers, guint32 count, guint32
 #define SF_BUFFER_SIZE	16384
 
 BOOL
-mono_w32socket_transmit_file (SOCKET sock, gpointer file_handle, TRANSMIT_FILE_BUFFERS *buffers, guint32 flags, gboolean blocking)
+mono_w32socket_transmit_file (SOCKET sock, gpointer file_handle, gpointer lpTransmitBuffers, guint32 flags, gboolean blocking)
 {
 	MonoThreadInfo *info;
 	SocketHandle *sockethandle;
@@ -582,18 +584,19 @@ mono_w32socket_transmit_file (SOCKET sock, gpointer file_handle, TRANSMIT_FILE_B
 #if defined(HAVE_SENDFILE) && (defined(__linux__) || defined(DARWIN))
 	struct stat statbuf;
 #else
-	gchar *buffer;
+	gpointer buffer;
 #endif
+	TRANSMIT_FILE_BUFFERS *buffers = (TRANSMIT_FILE_BUFFERS *)lpTransmitBuffers;
 
 	if (!mono_fdhandle_lookup_and_ref(sock, (MonoFDHandle**) &sockethandle)) {
 		mono_w32error_set_last (WSAENOTSOCK);
-		return SOCKET_ERROR;
+		return FALSE;
 	}
 
 	if (((MonoFDHandle*) sockethandle)->type != MONO_FDTYPE_SOCKET) {
 		mono_fdhandle_unref ((MonoFDHandle*) sockethandle);
 		mono_w32error_set_last (WSAENOTSOCK);
-		return SOCKET_ERROR;
+		return FALSE;
 	}
 
 	/* Write the header */
@@ -617,7 +620,7 @@ mono_w32socket_transmit_file (SOCKET sock, gpointer file_handle, TRANSMIT_FILE_B
 		gint errnum = errno;
 		mono_w32socket_set_last_error (mono_w32socket_convert_error (errnum));
 		mono_fdhandle_unref ((MonoFDHandle*) sockethandle);
-		return SOCKET_ERROR;
+		return FALSE;
 	}
 
 	do {
@@ -723,7 +726,8 @@ retry_socket:
 	 * https://bugzilla.novell.com/show_bug.cgi?id=MONO53992
 	 */
 	{
-		int ret, true_ = 1;
+		int ret;
+		const int true_ = 1;
 
 		MONO_ENTER_GC_SAFE;
 		ret = setsockopt (((MonoFDHandle*) sockethandle)->fd, SOL_SOCKET, SO_REUSEADDR, &true_, sizeof (true_));
@@ -798,9 +802,13 @@ mono_w32socket_getpeername (SOCKET sock, struct sockaddr *name, socklen_t *namel
 		return SOCKET_ERROR;
 	}
 
+#ifdef HAVE_GETPEERNAME
 	MONO_ENTER_GC_SAFE;
 	ret = getpeername (((MonoFDHandle*) sockethandle)->fd, name, namelen);
 	MONO_EXIT_GC_SAFE;
+#else
+	ret = -1;
+#endif
 	if (ret == -1) {
 		gint errnum = errno;
 		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_SOCKET, "%s: getpeername error: %s", __func__, g_strerror (errno));
@@ -901,11 +909,11 @@ mono_w32socket_getsockopt (SOCKET sock, gint level, gint optname, gpointer optva
 }
 
 gint
-mono_w32socket_setsockopt (SOCKET sock, gint level, gint optname, const gpointer optval, socklen_t optlen)
+mono_w32socket_setsockopt (SOCKET sock, gint level, gint optname, gconstpointer optval, socklen_t optlen)
 {
 	SocketHandle *sockethandle;
 	gint ret;
-	gpointer tmp_val;
+	gconstpointer tmp_val;
 #if defined (__linux__)
 	/* This has its address taken so it cannot be moved to the if block which uses it */
 	gint bufsize = 0;
@@ -1129,12 +1137,13 @@ extension_transmit_file (SOCKET sock, gpointer file_handle, guint32 bytes_to_wri
 	return ret;
 }
 
+const
 static struct {
 	GUID guid;
 	gpointer func;
 } extension_functions[] = {
-	{ {0x7fda2e11,0x8630,0x436f,{0xa0,0x31,0xf5,0x36,0xa6,0xee,0xc1,0x57}} /* WSAID_DISCONNECTEX */, extension_disconect },
-	{ {0xb5367df0,0xcbac,0x11cf,{0x95,0xca,0x00,0x80,0x5f,0x48,0xa1,0x92}} /* WSAID_TRANSMITFILE */, extension_transmit_file },
+	{ {0x7fda2e11,0x8630,0x436f,{0xa0,0x31,0xf5,0x36,0xa6,0xee,0xc1,0x57}} /* WSAID_DISCONNECTEX */, (gpointer)extension_disconect },
+	{ {0xb5367df0,0xcbac,0x11cf,{0x95,0xca,0x00,0x80,0x5f,0x48,0xa1,0x92}} /* WSAID_TRANSMITFILE */, (gpointer)extension_transmit_file },
 	{ {0} , NULL },
 };
 
@@ -1143,7 +1152,7 @@ mono_w32socket_ioctl (SOCKET sock, gint32 command, gchar *input, gint inputlen, 
 {
 	SocketHandle *sockethandle;
 	gint ret;
-	gchar *buffer;
+	gpointer buffer;
 
 	if (!mono_fdhandle_lookup_and_ref(sock, (MonoFDHandle**) &sockethandle)) {
 		mono_w32error_set_last (WSAENOTSOCK);
@@ -1453,6 +1462,7 @@ mono_w32socket_convert_error (gint error)
 #ifdef ECONNRESET
 	case ECONNRESET: return WSAECONNRESET;
 #endif
+	case EDOM: return WSAEINVAL; /* not a precise match, best wecan do. */
 	case EFAULT: return WSAEFAULT;
 #ifdef EHOSTUNREACH
 	case EHOSTUNREACH: return WSAEHOSTUNREACH;
@@ -1462,23 +1472,23 @@ mono_w32socket_convert_error (gint error)
 #endif
 	case EINTR: return WSAEINTR;
 	case EINVAL: return WSAEINVAL;
-	/*FIXME: case EIO: return WSAE????; */
+	case EIO: return WSA_INVALID_HANDLE; /* not a precise match, best we can do. */
 #ifdef EISCONN
 	case EISCONN: return WSAEISCONN;
 #endif
-	/* FIXME: case ELOOP: return WSA????; */
+	case ELOOP: return WSAELOOP;
+	case ENFILE: return WSAEMFILE; /* not a precise match, best we can do. */
 	case EMFILE: return WSAEMFILE;
 #ifdef EMSGSIZE
 	case EMSGSIZE: return WSAEMSGSIZE;
 #endif
-	/* FIXME: case ENAMETOOLONG: return WSAEACCES; */
+	case ENAMETOOLONG: return WSAENAMETOOLONG;
 #ifdef ENETUNREACH
 	case ENETUNREACH: return WSAENETUNREACH;
 #endif
 #ifdef ENOBUFS
 	case ENOBUFS: return WSAENOBUFS; /* not documented */
 #endif
-	/* case ENOENT: return WSAE????; */
 	case ENOMEM: return WSAENOBUFS;
 #ifdef ENOPROTOOPT
 	case ENOPROTOOPT: return WSAENOPROTOOPT;
@@ -1489,7 +1499,7 @@ mono_w32socket_convert_error (gint error)
 #ifdef ENOTCONN
 	case ENOTCONN: return WSAENOTCONN;
 #endif
-	/*FIXME: case ENOTDIR: return WSAE????; */
+	case ENOTDIR: return WSA_INVALID_PARAMETER; /* not a precise match, best we can do. */
 #ifdef ENOTSOCK
 	case ENOTSOCK: return WSAENOTSOCK;
 #endif
@@ -1536,15 +1546,21 @@ mono_w32socket_convert_error (gint error)
 #ifdef ENXIO
 	case ENXIO: return WSAENXIO;
 #endif
+#ifdef ENONET
+	case ENONET: return WSAENETUNREACH;
+#endif
+#ifdef ENOKEY
+	case ENOKEY: return WSAENETUNREACH;
+#endif
 	default:
 		g_error ("%s: no translation into winsock error for (%d) \"%s\"", __func__, error, g_strerror (error));
 	}
 }
 
-gboolean
-ves_icall_System_Net_Sockets_Socket_SupportPortReuse (MonoProtocolType proto, MonoError *error)
+#ifndef ENABLE_NETCORE
+MonoBoolean
+ves_icall_System_Net_Sockets_Socket_SupportPortReuse_icall (MonoProtocolType proto)
 {
-	error_init (error);
 #if defined (SO_REUSEPORT)
 	return TRUE;
 #else
@@ -1556,6 +1572,7 @@ ves_icall_System_Net_Sockets_Socket_SupportPortReuse (MonoProtocolType proto, Mo
 	return FALSE;
 #endif
 }
+#endif
 
 gboolean
 mono_w32socket_duplicate (gpointer handle, gint32 targetProcessId, gpointer *duplicate_handle)

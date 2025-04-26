@@ -152,6 +152,14 @@ GC_API struct GC_ms_entry * GC_CALL GC_mark_and_push(void * /* obj */,
            (GC_word)(obj) <= (GC_word)GC_greatest_plausible_heap_addr ? \
            GC_mark_and_push(obj, msp, lim, src) : (msp))
 
+GC_API struct GC_ms_entry * GC_CALL GC_custom_push_range(void * /* bottom */, void * /* top */,
+                                struct GC_ms_entry * /* mark_stack_ptr */,
+                                struct GC_ms_entry * /* mark_stack_limit */);
+
+GC_API struct GC_ms_entry * GC_CALL GC_custom_push_proc(GC_word /* proc */, void * /* start */,
+                                struct GC_ms_entry * /* mark_stack_ptr */,
+                                struct GC_ms_entry * /* mark_stack_limit */);
+
 GC_API size_t GC_debug_header_size;
        /* The size of the header added to objects allocated through    */
        /* the GC_debug routines.                                       */
@@ -286,6 +294,9 @@ GC_API void GC_CALL GC_push_all_eager(void * /* bottom */, void * /* top */);
 GC_API void GC_CALL GC_push_conditional(void * /* bottom */, void * /* top */,
                                         int /* bool all */);
 GC_API void GC_CALL GC_push_finalizer_structures(void);
+
+
+GC_API void GC_CALL GC_push_proc(GC_word /* proc */, void * /* start */);
 
 /* Set and get the client push-other-roots procedure.  A client         */
 /* supplied procedure should also call the original procedure.          */

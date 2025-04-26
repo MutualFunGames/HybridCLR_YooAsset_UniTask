@@ -4,7 +4,6 @@
 #include <cmath>
 #include <algorithm>
 
-#include "codegen/il2cpp-codegen-il2cpp.h"
 #include "vm/Object.h"
 #include "vm/Class.h"
 #include "vm/ClassInlines.h"
@@ -29,6 +28,7 @@
 #include "MemoryUtil.h"
 #include "InterpreterModule.h"
 #include "InterpreterUtil.h"
+#include "gc/WriteBarrier.h"
 
 using namespace hybridclr::metadata;
 
@@ -40,7 +40,7 @@ namespace interpreter
 
 #pragma region memory
 
-#define LOCAL_ALLOC(size) interpFrameGroup.AllocLoc(size)
+#define LOCAL_ALLOC(size) interpFrameGroup.AllocLoc(size, imi->initLocals)
 
 #pragma endregion
 
@@ -293,82 +293,112 @@ namespace interpreter
 
 	inline bool CheckConvertOverflow_f4_i1(float x)
 	{
-		return ((x < INT8_MIN) || (x > INT8_MAX)) || isnan(x);
+		return x < INT8_MIN || x > INT8_MAX || isnan(x);
 	}
 
 	inline bool CheckConvertOverflow_f4_u1(float x)
 	{
-		return truncf(x) < 0 || truncf(x) > UINT8_MAX || isnan(x);
+		return x < 0 || x > UINT8_MAX || isnan(x);
 	}
 
 	inline bool CheckConvertOverflow_f4_i2(float x)
 	{
-		return truncf(x) < INT16_MIN || truncf(x) > INT16_MAX || isnan(x);
+		return x < INT16_MIN || x > INT16_MAX || isnan(x);
 	}
 
 	inline bool CheckConvertOverflow_f4_u2(float x)
 	{
-		return truncf(x) < 0 || truncf(x) > UINT16_MAX || isnan(x);
+		return x < 0 || x > UINT16_MAX || isnan(x);
 	}
 
 	inline bool CheckConvertOverflow_f4_i4(float x)
 	{
-		return truncf(x) < INT32_MIN || truncf(x) > INT32_MAX || isnan(x);
+		if (isnan(x))
+		{
+			return true;
+		}
+		float y = truncf(x);
+		return y != (int32_t)x;
 	}
 
 	inline bool CheckConvertOverflow_f4_u4(float x)
 	{
-		return truncf(x) < 0 || truncf(x) > UINT32_MAX || isnan(x);
+		if (isnan(x) || x < 0)
+		{
+			return true;
+		}
+		float y = truncf(x);
+		return y != (uint32_t)x;
 	}
 
 	inline bool CheckConvertOverflow_f4_i8(float x)
 	{
-		return truncf(x) < INT64_MIN || truncf(x) > INT64_MAX || isnan(x);
+		if (isnan(x))
+		{
+			return true;
+		}
+		float y = truncf(x);
+		return y != (int64_t)x;
 	}
 
 	inline bool CheckConvertOverflow_f4_u8(float x)
 	{
-		return truncf(x) < 0 || truncf(x) > UINT64_MAX || isnan(x);
+		if (isnan(x) || x < 0)
+		{
+			return true;
+		}
+		float y = truncf(x);
+		return y != (uint64_t)x;
 	}
 
 	inline bool CheckConvertOverflow_f8_i1(double x)
 	{
-		return ((x < INT8_MIN) || (x > INT8_MAX)) || isnan(x);
+		return x < INT8_MIN || x > INT8_MAX || isnan(x);
 	}
 
 	inline bool CheckConvertOverflow_f8_u1(double x)
 	{
-		return trunc(x) < 0 || trunc(x) > UINT8_MAX || isnan(x);
+		return x < 0 || x > UINT8_MAX || isnan(x);
 	}
 
 	inline bool CheckConvertOverflow_f8_i2(double x)
 	{
-		return trunc(x) < INT16_MIN || trunc(x) > INT16_MAX || isnan(x);
+		return x < INT16_MIN || x > INT16_MAX || isnan(x);
 	}
 
 	inline bool CheckConvertOverflow_f8_u2(double x)
 	{
-		return trunc(x) < 0 || trunc(x) > UINT16_MAX || isnan(x);
+		return x < 0 || x > UINT16_MAX || isnan(x);
 	}
 
 	inline bool CheckConvertOverflow_f8_i4(double x)
 	{
-		return trunc(x) < INT32_MIN || trunc(x) > INT32_MAX || isnan(x);
+		return x < INT32_MIN || x > INT32_MAX || isnan(x);
 	}
 
 	inline bool CheckConvertOverflow_f8_u4(double x)
 	{
-		return trunc(x) < 0 || trunc(x) > UINT32_MAX || isnan(x);
+		return x < 0 || x > UINT32_MAX || isnan(x);
 	}
 
 	inline bool CheckConvertOverflow_f8_i8(double x)
 	{
-		return trunc(x) < INT64_MIN || trunc(x) > INT64_MAX || isnan(x);
+		if (isnan(x))
+		{
+			return true;
+		}
+		double y = trunc(x);
+		return y != (int64_t)x;
 	}
 
 	inline bool CheckConvertOverflow_f8_u8(double x)
 	{
-		return trunc(x) < 0 || trunc(x) > UINT64_MAX || isnan(x);
+		if (isnan(x) || x < 0)
+		{
+			return true;
+		}
+		double y = trunc(x);
+		return y != (uint64_t)x;
 	}
 
 	inline int32_t HiDiv(int32_t a, int32_t b)
@@ -765,6 +795,12 @@ namespace interpreter
 
 #define MAX_DIMENSION  10
 
+	inline void SetArrayElementWithSize(Il2CppArray* array, uint32_t elementSize, int32_t index, void* value)
+	{
+		void* __p = (void*) il2cpp_array_addr_with_size (array, elementSize, index);
+		memcpy(__p, value, elementSize);
+	}
+	
 	inline Il2CppArray* NewMdArray(Il2CppClass* fullArrKlass, StackObject* lengths, StackObject* lowerBounds)
 	{
 		il2cpp_array_size_t arrLengths[MAX_DIMENSION];
@@ -909,6 +945,14 @@ namespace interpreter
 		CopyBySize(GetMdArrayElementAddress(arr, indexs), value, arr->klass->element_size);
 	}
 
+	inline void SetMdArrayElementWriteBarrier(Il2CppArray* arr, StackObject* indexs, void* value)
+	{
+		void* dst = GetMdArrayElementAddress(arr, indexs);
+		uint32_t eleSize = arr->klass->element_size;
+		CopyBySize(dst, value, eleSize);
+		HYBRIDCLR_SET_WRITE_BARRIER((void**)dst, eleSize);
+	}
+
 #pragma endregion
 
 #pragma region nullable
@@ -918,13 +962,23 @@ namespace interpreter
 	{
 		IL2CPP_ASSERT(klass->castClass->size_inited);
 		uint32_t size = klass->castClass->instance_size - sizeof(Il2CppObject);
-		std::memmove(GetNulllableDataOffset(nullableValueTypeObj, klass), data, size);
+		void* dataPtr = GetNulllableDataOffset(nullableValueTypeObj, klass);
+		std::memmove(dataPtr, data, size);
+#if HYBRIDCLR_ENABLE_WRITE_BARRIERS
+		if (klass->castClass->has_references)
+		{
+			HYBRIDCLR_SET_WRITE_BARRIER((void**)dataPtr, size);
+		}
+#endif
 		*GetNulllableHasValueOffset(nullableValueTypeObj, klass) = 1;
 	}
 
 	inline void NewNullableValueType(void* nullableValueTypeObj, void* data, Il2CppClass* klass)
 	{
-		InitNullableValueType(nullableValueTypeObj, data, klass);
+		IL2CPP_ASSERT(klass->castClass->size_inited);
+		uint32_t size = klass->castClass->instance_size - sizeof(Il2CppObject);
+		std::memmove(GetNulllableDataOffset(nullableValueTypeObj, klass), data, size);
+		*GetNulllableHasValueOffset(nullableValueTypeObj, klass) = 1;
 	}
 
 	inline bool IsNullableHasValue(void* nullableValueObj, Il2CppClass* klass)
@@ -1185,6 +1239,13 @@ namespace interpreter
 		}
 	}
 
+	// align with the implementation of Enum::get_hashcode
+	inline int32_t GetEnumLongHashCode(void* data)
+	{
+		int64_t value = *((int64_t*)data);
+		return (int32_t)(value & 0xffffffff) ^ (int32_t)(value >> 32);
+	}
+
 	inline void ConstructorDelegate2(MethodInfo* ctor, Il2CppDelegate* del, Il2CppObject* target, MethodInfo* method)
 	{
 #if HYBRIDCLR_UNITY_2021_OR_NEW
@@ -1204,26 +1265,27 @@ namespace interpreter
 }
 
 #define LOAD_PREV_FRAME() { \
-	imi = frame->method; \
+	imi = (const InterpMethodInfo*)frame->method->interpData; \
 	ip = frame->ip; \
 	ipBase = imi->codes; \
 	localVarBase = frame->stackBasePtr; \
 }
 
-	// maxStackSize包含 arg + local + eval,对于解释器栈来说，可能多余
 #define PREPARE_NEW_FRAME_FROM_NATIVE(newMethodInfo, argBasePtr, retPtr) { \
 	imi = newMethodInfo->interpData ? (InterpMethodInfo*)newMethodInfo->interpData : InterpreterModule::GetInterpMethodInfo(newMethodInfo); \
-	frame = interpFrameGroup.EnterFrameFromNative(imi, argBasePtr); \
+	frame = interpFrameGroup.EnterFrameFromNative(newMethodInfo, argBasePtr); \
 	frame->ret = retPtr; \
 	ip = ipBase = imi->codes; \
+	frame->ip = (byte*)ip; \
 	localVarBase = frame->stackBasePtr; \
 }
 
 #define PREPARE_NEW_FRAME_FROM_INTERPRETER(newMethodInfo, argBasePtr, retPtr) { \
 	imi = newMethodInfo->interpData ? (InterpMethodInfo*)newMethodInfo->interpData : InterpreterModule::GetInterpMethodInfo(newMethodInfo); \
-	frame = interpFrameGroup.EnterFrameFromInterpreter(imi, argBasePtr); \
+	frame = interpFrameGroup.EnterFrameFromInterpreter(newMethodInfo, argBasePtr); \
 	frame->ret = retPtr; \
 	ip = ipBase = imi->codes; \
+	frame->ip = (byte*)ip; \
 	localVarBase = frame->stackBasePtr; \
 }
 
@@ -1270,6 +1332,10 @@ namespace interpreter
 
 inline void InvokeSingleDelegate(uint16_t invokeParamCount, const MethodInfo * method, Il2CppObject * obj, Managed2NativeCallMethod staticM2NMethod, Managed2NativeCallMethod instanceM2NMethod, uint16_t * argIdxs, StackObject * localVarBase, void* ret)
 {
+	if (!InitAndGetInterpreterDirectlyCallMethodPointer(method))
+	{
+		RaiseAOTGenericMethodNotInstantiatedException(method);
+	}
 	if (!InterpreterModule::HasImplementCallNative2Managed(method))
 	{
 		instanceM2NMethod = staticM2NMethod = InterpreterModule::Managed2NativeCallByReflectionInvoke;
@@ -1409,11 +1475,11 @@ while (true) \
 	ExceptionFlowInfo* efi = frame->GetCurExFlow(); \
 	IL2CPP_ASSERT(efi && efi->exFlowType == ExceptionFlowType::Exception); \
 	IL2CPP_ASSERT(efi->ex); \
-	int32_t exClauseNum = (int32_t)imi->exClauses.size(); \
+	int32_t exClauseNum = (int32_t)imi->exClauseCount; \
 	for (; efi->nextExClauseIndex < exClauseNum; ) \
 	{ \
 		for (ExceptionFlowInfo* prevExFlow; (prevExFlow = frame->GetPrevExFlow()) && efi->nextExClauseIndex >= prevExFlow->nextExClauseIndex ;) {\
-			InterpExceptionClause* prevIec = imi->exClauses[prevExFlow->nextExClauseIndex - 1]; \
+			const InterpExceptionClause* prevIec = &imi->exClauses[prevExFlow->nextExClauseIndex - 1]; \
 			if (!(prevIec->handlerBeginOffset <= efi->throwOffset && efi->throwOffset < prevIec->handlerEndOffset)) { \
 				PopPrevExceptionFlowInfo(frame, &efi);\
 			} \
@@ -1422,7 +1488,7 @@ while (true) \
 				break; \
 			} \
 		}\
-		InterpExceptionClause* iec = imi->exClauses[efi->nextExClauseIndex++]; \
+		const InterpExceptionClause* iec = &imi->exClauses[efi->nextExClauseIndex++]; \
 		if (iec->tryBeginOffset <= efi->throwOffset && efi->throwOffset < iec->tryEndOffset) \
 		{ \
 			switch (iec->flags) \
@@ -1479,38 +1545,24 @@ while (true) \
 
 #define THROW_EX(_ex_, _firstHandlerIndex_) { \
 	Il2CppException* ex = _ex_; \
+	il2cpp::vm::Exception::PrepareExceptionForThrow(ex, const_cast<MethodInfo*>(frame->method));\
 	CHECK_NOT_NULL_THROW(ex); \
-	il2cpp::vm::Exception::Raise(ex, const_cast<MethodInfo*>(imi->method)); \
 	PREPARE_EXCEPTION(ex, _firstHandlerIndex_); \
 	FIND_NEXT_EX_HANDLER_OR_UNWIND(); \
 }
 #define RETHROW_EX() { \
 	ExceptionFlowInfo* curExFlow = frame->GetCurExFlow(); \
 	IL2CPP_ASSERT(curExFlow->exFlowType == ExceptionFlowType::Catch); \
-	il2cpp::vm::Exception::Raise(curExFlow->ex, const_cast<MethodInfo*>(imi->method)); \
-}
-
-#define POP_CATCH_HANDLERS(leaveTarget)\
-{ \
-	for (ExceptionFlowInfo* prevExFlow; (prevExFlow = frame->GetPrevExFlow()) && prevExFlow->exFlowType == ExceptionFlowType::Catch ;) { \
-			InterpExceptionClause* prevIec = imi->exClauses[prevExFlow->nextExClauseIndex - 1]; \
-			if (!(prevIec->handlerBeginOffset <= leaveTarget && leaveTarget < prevIec->handlerEndOffset)) {	\
-					PopPrevExceptionFlowInfo(frame, nullptr); \
-			} \
-			else \
-			{ \
-				break; \
-			} \
-	}\
+	il2cpp::vm::Exception::Raise(curExFlow->ex, const_cast<MethodInfo*>(frame->method)); \
 }
 
 #define CONTINUE_NEXT_FINALLY() { \
 ExceptionFlowInfo* efi = frame->GetCurExFlow(); \
 IL2CPP_ASSERT(efi && efi->exFlowType == ExceptionFlowType::Leave); \
-int32_t exClauseNum = (int32_t)imi->exClauses.size(); \
+int32_t exClauseNum = (int32_t)imi->exClauseCount; \
 for (; efi->nextExClauseIndex < exClauseNum; ) \
 { \
-	InterpExceptionClause* iec = imi->exClauses[efi->nextExClauseIndex++]; \
+	const InterpExceptionClause* iec = &imi->exClauses[efi->nextExClauseIndex++]; \
 	if (iec->tryBeginOffset <= efi->throwOffset && efi->throwOffset < iec->tryEndOffset) \
 	{ \
 		if (iec->tryBeginOffset <= efi->leaveTarget && efi->leaveTarget < iec->tryEndOffset) \
@@ -1541,15 +1593,43 @@ ip = ipBase + efi->leaveTarget; \
 PopCurExceptionFlowInfo(frame); \
 }
 
+#define POP_PREV_CATCH_HANDLERS(leaveTarget)\
+{ \
+	for (ExceptionFlowInfo* prevExFlow; (prevExFlow = frame->GetPrevExFlow()) && prevExFlow->exFlowType == ExceptionFlowType::Catch ;) { \
+			const InterpExceptionClause* prevIec = &imi->exClauses[prevExFlow->nextExClauseIndex - 1]; \
+			if (!(prevIec->handlerBeginOffset <= leaveTarget && leaveTarget < prevIec->handlerEndOffset)) {	\
+					PopPrevExceptionFlowInfo(frame, nullptr); \
+			} \
+			else \
+			{ \
+				break; \
+			} \
+	}\
+}
+
 #define LEAVE_EX(target, firstHandlerIndex)  { \
 	PushExceptionFlowInfo(frame, machine, {ExceptionFlowType::Leave, (int32_t)(ip - ipBase), nullptr, firstHandlerIndex + 1, target}); \
-	InterpExceptionClause* iec = imi->exClauses[firstHandlerIndex]; \
-	POP_CATCH_HANDLERS(target); \
+	const InterpExceptionClause* iec = &imi->exClauses[firstHandlerIndex]; \
+	POP_PREV_CATCH_HANDLERS(target); \
 	ip = ipBase + iec->handlerBeginOffset; \
 }
 
+#define POP_CUR_CATCH_HANDLERS(leaveTarget)\
+{ \
+	for (ExceptionFlowInfo* prevExFlow; (prevExFlow = frame->GetCurExFlow()) && prevExFlow->exFlowType == ExceptionFlowType::Catch ;) { \
+			const InterpExceptionClause* prevIec = &imi->exClauses[prevExFlow->nextExClauseIndex - 1]; \
+			if (!(prevIec->handlerBeginOffset <= leaveTarget && leaveTarget < prevIec->handlerEndOffset)) {	\
+					PopCurExceptionFlowInfo(frame); \
+			} \
+			else \
+			{ \
+				break; \
+			} \
+	}\
+}
+
 #define LEAVE_EX_DIRECTLY(target)  { \
-	POP_CATCH_HANDLERS(target); \
+	POP_CUR_CATCH_HANDLERS(target); \
 	ip = ipBase + target; \
 }
 
@@ -1580,10 +1660,10 @@ else \
 
 #pragma endregion 
 
+const int32_t kMaxRetValueTypeStackObjectSize = 1024;
 
 	void Interpreter::Execute(const MethodInfo* methodInfo, StackObject* args, void* ret)
 	{
-		INIT_CLASS(methodInfo->klass);
 		MachineState& machine = InterpreterModule::GetCurrentThreadMachineState();
 		InterpFrameGroup interpFrameGroup(machine);
 
@@ -1594,10 +1674,9 @@ else \
 		byte* ip;
 
 		Il2CppException* lastUnwindException;
+		StackObject* tempRet = nullptr;
 
 		PREPARE_NEW_FRAME_FROM_NATIVE(methodInfo, args, ret);
-
-		StackObject tempRet[kMaxRetValueTypeStackObjectSize];
 
 	LoopStart:
 		try
@@ -1606,19 +1685,92 @@ else \
 			{
 				switch (*(HiOpcodeEnum*)ip)
 				{
+					// avoid decrement *ip when compute jump table,  boosts about 5% performance
+				case HiOpcodeEnum::None:
+				{
+					continue;
+				}
 #pragma region memory
 					//!!!{{MEMORY
 				case HiOpcodeEnum::InitLocals_n_2:
 				{
 					uint16_t __size = *(uint16_t*)(ip + 2);
-					InitDefaultN(localVarBase + imi->localVarBaseOffset, __size);
+					InitDefaultN(localVarBase, __size);
 				    ip += 8;
 				    continue;
 				}
 				case HiOpcodeEnum::InitLocals_n_4:
 				{
 					uint32_t __size = *(uint32_t*)(ip + 4);
-					InitDefaultN(localVarBase + imi->localVarBaseOffset, __size);
+					InitDefaultN(localVarBase, __size);
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::InitLocals_size_8:
+				{
+					InitDefault8(localVarBase);
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::InitLocals_size_16:
+				{
+					InitDefault16(localVarBase);
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::InitLocals_size_24:
+				{
+					InitDefault24(localVarBase);
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::InitLocals_size_32:
+				{
+					InitDefault32(localVarBase);
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::InitInlineLocals_n_2:
+				{
+					uint16_t __size = *(uint16_t*)(ip + 2);
+					uint32_t __offset = *(uint32_t*)(ip + 4);
+					InitDefaultN(localVarBase + __offset, __size);
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::InitInlineLocals_n_4:
+				{
+					uint32_t __size = *(uint32_t*)(ip + 4);
+					uint32_t __offset = *(uint32_t*)(ip + 8);
+					InitDefaultN(localVarBase + __offset, __size);
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::InitInlineLocals_size_8:
+				{
+					uint32_t __offset = *(uint32_t*)(ip + 4);
+					InitDefault8(localVarBase + __offset);
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::InitInlineLocals_size_16:
+				{
+					uint32_t __offset = *(uint32_t*)(ip + 4);
+					InitDefault16(localVarBase + __offset);
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::InitInlineLocals_size_24:
+				{
+					uint32_t __offset = *(uint32_t*)(ip + 4);
+					InitDefault24(localVarBase + __offset);
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::InitInlineLocals_size_32:
+				{
+					uint32_t __offset = *(uint32_t*)(ip + 4);
+					InitDefault32(localVarBase + __offset);
 				    ip += 8;
 				    continue;
 				}
@@ -1835,6 +1987,14 @@ else \
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
 					(*(double*)*(void**)(localVarBase + __dst)) = (*(double*)(localVarBase + __src));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::StindVarVar_ref:
+				{
+					uint16_t __dst = *(uint16_t*)(ip + 2);
+					uint16_t __src = *(uint16_t*)(ip + 4);
+					(*(Il2CppObject**)*(void**)(localVarBase + __dst)) = (*(Il2CppObject**)(localVarBase + __src));	HYBRIDCLR_SET_WRITE_BARRIER((void**)(*(void**)(localVarBase + __dst)));
 				    ip += 8;
 				    continue;
 				}
@@ -4049,13 +4209,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCgt((*(int32_t*)(localVarBase + __op1)), (*(int32_t*)(localVarBase + __op2))))
+				    if (CompareCle((*(int32_t*)(localVarBase + __op1)), (*(int32_t*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4064,13 +4224,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCgt((*(int64_t*)(localVarBase + __op1)), (*(int64_t*)(localVarBase + __op2))))
+				    if (CompareCle((*(int64_t*)(localVarBase + __op1)), (*(int64_t*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4079,13 +4239,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCgt((*(float*)(localVarBase + __op1)), (*(float*)(localVarBase + __op2))))
+				    if (CompareCle((*(float*)(localVarBase + __op1)), (*(float*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4094,13 +4254,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCgt((*(double*)(localVarBase + __op1)), (*(double*)(localVarBase + __op2))))
+				    if (CompareCle((*(double*)(localVarBase + __op1)), (*(double*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4109,13 +4269,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCgtUn((*(int32_t*)(localVarBase + __op1)), (*(int32_t*)(localVarBase + __op2))))
+				    if (CompareCleUn((*(int32_t*)(localVarBase + __op1)), (*(int32_t*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4124,13 +4284,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCgtUn((*(int64_t*)(localVarBase + __op1)), (*(int64_t*)(localVarBase + __op2))))
+				    if (CompareCleUn((*(int64_t*)(localVarBase + __op1)), (*(int64_t*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4139,13 +4299,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCgtUn((*(float*)(localVarBase + __op1)), (*(float*)(localVarBase + __op2))))
+				    if (CompareCleUn((*(float*)(localVarBase + __op1)), (*(float*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4154,13 +4314,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCgtUn((*(double*)(localVarBase + __op1)), (*(double*)(localVarBase + __op2))))
+				    if (CompareCleUn((*(double*)(localVarBase + __op1)), (*(double*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4169,13 +4329,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCge((*(int32_t*)(localVarBase + __op1)), (*(int32_t*)(localVarBase + __op2))))
+				    if (CompareClt((*(int32_t*)(localVarBase + __op1)), (*(int32_t*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4184,13 +4344,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCge((*(int64_t*)(localVarBase + __op1)), (*(int64_t*)(localVarBase + __op2))))
+				    if (CompareClt((*(int64_t*)(localVarBase + __op1)), (*(int64_t*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4199,13 +4359,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCge((*(float*)(localVarBase + __op1)), (*(float*)(localVarBase + __op2))))
+				    if (CompareClt((*(float*)(localVarBase + __op1)), (*(float*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4214,13 +4374,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCge((*(double*)(localVarBase + __op1)), (*(double*)(localVarBase + __op2))))
+				    if (CompareClt((*(double*)(localVarBase + __op1)), (*(double*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4229,13 +4389,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCgeUn((*(int32_t*)(localVarBase + __op1)), (*(int32_t*)(localVarBase + __op2))))
+				    if (CompareCltUn((*(int32_t*)(localVarBase + __op1)), (*(int32_t*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4244,13 +4404,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCgeUn((*(int64_t*)(localVarBase + __op1)), (*(int64_t*)(localVarBase + __op2))))
+				    if (CompareCltUn((*(int64_t*)(localVarBase + __op1)), (*(int64_t*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4259,13 +4419,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCgeUn((*(float*)(localVarBase + __op1)), (*(float*)(localVarBase + __op2))))
+				    if (CompareCltUn((*(float*)(localVarBase + __op1)), (*(float*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4274,13 +4434,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCgeUn((*(double*)(localVarBase + __op1)), (*(double*)(localVarBase + __op2))))
+				    if (CompareCltUn((*(double*)(localVarBase + __op1)), (*(double*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4289,13 +4449,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareClt((*(int32_t*)(localVarBase + __op1)), (*(int32_t*)(localVarBase + __op2))))
+				    if (CompareCge((*(int32_t*)(localVarBase + __op1)), (*(int32_t*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4304,13 +4464,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareClt((*(int64_t*)(localVarBase + __op1)), (*(int64_t*)(localVarBase + __op2))))
+				    if (CompareCge((*(int64_t*)(localVarBase + __op1)), (*(int64_t*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4319,13 +4479,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareClt((*(float*)(localVarBase + __op1)), (*(float*)(localVarBase + __op2))))
+				    if (CompareCge((*(float*)(localVarBase + __op1)), (*(float*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4334,13 +4494,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareClt((*(double*)(localVarBase + __op1)), (*(double*)(localVarBase + __op2))))
+				    if (CompareCge((*(double*)(localVarBase + __op1)), (*(double*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4349,13 +4509,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCltUn((*(int32_t*)(localVarBase + __op1)), (*(int32_t*)(localVarBase + __op2))))
+				    if (CompareCgeUn((*(int32_t*)(localVarBase + __op1)), (*(int32_t*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4364,13 +4524,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCltUn((*(int64_t*)(localVarBase + __op1)), (*(int64_t*)(localVarBase + __op2))))
+				    if (CompareCgeUn((*(int64_t*)(localVarBase + __op1)), (*(int64_t*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4379,13 +4539,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCltUn((*(float*)(localVarBase + __op1)), (*(float*)(localVarBase + __op2))))
+				    if (CompareCgeUn((*(float*)(localVarBase + __op1)), (*(float*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4394,13 +4554,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCltUn((*(double*)(localVarBase + __op1)), (*(double*)(localVarBase + __op2))))
+				    if (CompareCgeUn((*(double*)(localVarBase + __op1)), (*(double*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4409,13 +4569,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCle((*(int32_t*)(localVarBase + __op1)), (*(int32_t*)(localVarBase + __op2))))
+				    if (CompareCgt((*(int32_t*)(localVarBase + __op1)), (*(int32_t*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4424,13 +4584,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCle((*(int64_t*)(localVarBase + __op1)), (*(int64_t*)(localVarBase + __op2))))
+				    if (CompareCgt((*(int64_t*)(localVarBase + __op1)), (*(int64_t*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4439,13 +4599,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCle((*(float*)(localVarBase + __op1)), (*(float*)(localVarBase + __op2))))
+				    if (CompareCgt((*(float*)(localVarBase + __op1)), (*(float*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4454,13 +4614,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCle((*(double*)(localVarBase + __op1)), (*(double*)(localVarBase + __op2))))
+				    if (CompareCgt((*(double*)(localVarBase + __op1)), (*(double*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4469,13 +4629,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCleUn((*(int32_t*)(localVarBase + __op1)), (*(int32_t*)(localVarBase + __op2))))
+				    if (CompareCgtUn((*(int32_t*)(localVarBase + __op1)), (*(int32_t*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4484,13 +4644,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCleUn((*(int64_t*)(localVarBase + __op1)), (*(int64_t*)(localVarBase + __op2))))
+				    if (CompareCgtUn((*(int64_t*)(localVarBase + __op1)), (*(int64_t*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4499,13 +4659,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCleUn((*(float*)(localVarBase + __op1)), (*(float*)(localVarBase + __op2))))
+				    if (CompareCgtUn((*(float*)(localVarBase + __op1)), (*(float*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4514,13 +4674,13 @@ else \
 					uint16_t __op1 = *(uint16_t*)(ip + 2);
 					uint16_t __op2 = *(uint16_t*)(ip + 4);
 					int32_t __offset = *(int32_t*)(ip + 8);
-				    if (CompareCleUn((*(double*)(localVarBase + __op1)), (*(double*)(localVarBase + __op2))))
+				    if (CompareCgtUn((*(double*)(localVarBase + __op1)), (*(double*)(localVarBase + __op2))))
 				    {
-				        ip = ipBase + __offset;
+				        ip += 16;
 				    }
 				    else
 				    {
-				        ip += 16;
+				        ip = ipBase + __offset;
 				    }
 				    continue;
 				}
@@ -4597,7 +4757,6 @@ else \
 				    StackObject* _frameBasePtr = localVarBase + _argIdxs[0];
 				    Il2CppObject* _this = (Il2CppObject*)(_frameBasePtr - GetStackSizeByByteSize(_typeSize));
 				    _frameBasePtr->ptr = _this;
-				    InitDefaultN(_this, _typeSize);
 				    ((Managed2NativeCallMethod)__managed2NativeMethod)(__method, _argIdxs, localVarBase, nullptr);
 				    std::memmove((void*)(localVarBase + __obj), _this, _typeSize);
 				    ip += 16;
@@ -4643,8 +4802,6 @@ else \
 				    StackObject* _frameBasePtr = (StackObject*)(void*)(localVarBase + __ctorFrameBase);
 				    std::memmove(_frameBasePtr + 1, (void*)(localVarBase + __argBase), __argStackObjectNum * sizeof(StackObject)); // move arg
 				    _frameBasePtr->ptr = (StackObject*)(void*)(localVarBase + __obj);
-				    int32_t _typeSize = GetTypeValueSize(__method->klass);
-				    InitDefaultN((void*)(localVarBase + __obj), _typeSize); // init after move
 				    CALL_INTERP_VOID((ip + 16), __method, _frameBasePtr);
 				    continue;
 				}
@@ -4966,83 +5123,128 @@ else \
 				case HiOpcodeEnum::CallInd_void:
 				{
 					uint32_t __managed2NativeMethod = *(uint32_t*)(ip + 4);
-					uint32_t __methodInfo = *(uint32_t*)(ip + 8);
-					uint32_t __argIdxs = *(uint32_t*)(ip + 12);
+					uint32_t __managed2NativeFunctionPointerMethod = *(uint32_t*)(ip + 8);
+					uint8_t& __isMethodInfoPointer = *(uint8_t*)(ip + 2);
+					uint32_t __methodInfo = *(uint32_t*)(ip + 12);
+					uint32_t __argIdxs = *(uint32_t*)(ip + 16);
 				    Managed2NativeCallMethod _nativeMethodPointer = ((Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod]);
+				    Managed2NativeFunctionPointerCallMethod _nativeMethodPointer2 = ((Managed2NativeFunctionPointerCallMethod)imi->resolveDatas[__managed2NativeFunctionPointerMethod]);
 					uint16_t* _argIdxsPtr = (uint16_t*)&imi->resolveDatas[__argIdxs];
 					StackObject* _argBasePtr = localVarBase + _argIdxsPtr[0];
-					MethodInfo* _method = (MethodInfo*)(localVarBase + __methodInfo)->ptr;
-					if (metadata::IsInstanceMethod(_method))
+					void* _methodPointer = (localVarBase + __methodInfo)->ptr;
+					if (__isMethodInfoPointer == 0)
 					{
-				        CHECK_NOT_NULL_THROW(_argBasePtr->obj);
+				        __isMethodInfoPointer = hybridclr::interpreter::InterpreterModule::IsMethodInfoPointer(_methodPointer) ? 1 : 2;
 					}
-					if (IsInterpreterImplement(_method))
+					if (__isMethodInfoPointer == 1)
 					{
-				        CALL_INTERP_VOID((ip + 16), _method, _argBasePtr);
-				        continue;
-					}
-					if (!InitAndGetInterpreterDirectlyCallMethodPointer(_method))
-					{
-				        RaiseAOTGenericMethodNotInstantiatedException(_method);
-					}
-				    _nativeMethodPointer(_method, _argIdxsPtr, localVarBase, nullptr);
-				    ip += 16;
+					    MethodInfo* _method = (MethodInfo*)_methodPointer;
+					    if (metadata::IsInstanceMethod(_method))
+					    {
+				            CHECK_NOT_NULL_THROW(_argBasePtr->obj);
+					    }
+					    if (IsInterpreterImplement(_method))
+					    {
+				            CALL_INTERP_VOID((ip + 24), _method, _argBasePtr);
+				            continue;
+					    }
+					    if (!InitAndGetInterpreterDirectlyCallMethodPointer(_method))
+					    {
+				            RaiseAOTGenericMethodNotInstantiatedException(_method);
+					    }
+				        _nativeMethodPointer(_method, _argIdxsPtr, localVarBase, nullptr);
+				    }
+				    else
+				    {
+				        _nativeMethodPointer2(_methodPointer, _argIdxsPtr, localVarBase, nullptr);
+				    }
+				    ip += 24;
 				    continue;
 				}
 				case HiOpcodeEnum::CallInd_ret:
 				{
-					uint32_t __managed2NativeMethod = *(uint32_t*)(ip + 4);
-					uint32_t __methodInfo = *(uint32_t*)(ip + 8);
-					uint32_t __argIdxs = *(uint32_t*)(ip + 12);
-					uint16_t __ret = *(uint16_t*)(ip + 2);
+					uint32_t __managed2NativeMethod = *(uint32_t*)(ip + 8);
+					uint32_t __managed2NativeFunctionPointerMethod = *(uint32_t*)(ip + 12);
+					uint8_t& __isMethodInfoPointer = *(uint8_t*)(ip + 2);
+					uint32_t __methodInfo = *(uint32_t*)(ip + 16);
+					uint32_t __argIdxs = *(uint32_t*)(ip + 20);
+					uint16_t __ret = *(uint16_t*)(ip + 4);
 				    void* _ret = (void*)(localVarBase + __ret);
 				    Managed2NativeCallMethod _nativeMethodPointer = ((Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod]);
+				    Managed2NativeFunctionPointerCallMethod _nativeMethodPointer2 = ((Managed2NativeFunctionPointerCallMethod)imi->resolveDatas[__managed2NativeFunctionPointerMethod]);
 					uint16_t* _argIdxsPtr = (uint16_t*)&imi->resolveDatas[__argIdxs];
 					StackObject* _argBasePtr = localVarBase + _argIdxsPtr[0];
-					MethodInfo* _method = (MethodInfo*)(localVarBase + __methodInfo)->ptr;
-					if (metadata::IsInstanceMethod(_method))
+					void* _methodPointer = (localVarBase + __methodInfo)->ptr;
+					if (__isMethodInfoPointer == 0)
 					{
-				        CHECK_NOT_NULL_THROW(_argBasePtr->obj);
+				        __isMethodInfoPointer = hybridclr::interpreter::InterpreterModule::IsMethodInfoPointer(_methodPointer) ? 1 : 2;
 					}
-					if (IsInterpreterImplement(_method))
+					if (__isMethodInfoPointer == 1)
 					{
-				        CALL_INTERP_RET((ip + 16), _method, _argBasePtr, _ret);
-				        continue;
-					}
-					if (!InitAndGetInterpreterDirectlyCallMethodPointer(_method))
-					{
-				        RaiseAOTGenericMethodNotInstantiatedException(_method);
-					}
-				    _nativeMethodPointer(_method, _argIdxsPtr, localVarBase, _ret);
-				    ip += 16;
+					    MethodInfo* _method = (MethodInfo*)_methodPointer;
+					    if (metadata::IsInstanceMethod(_method))
+					    {
+				            CHECK_NOT_NULL_THROW(_argBasePtr->obj);
+					    }
+					    if (IsInterpreterImplement(_method))
+					    {
+				            CALL_INTERP_RET((ip + 24), _method, _argBasePtr, _ret);
+				            continue;
+					    }
+					    if (!InitAndGetInterpreterDirectlyCallMethodPointer(_method))
+					    {
+				            RaiseAOTGenericMethodNotInstantiatedException(_method);
+					    }
+				        _nativeMethodPointer(_method, _argIdxsPtr, localVarBase, _ret);
+				    }
+				    else
+				    {
+				        _nativeMethodPointer2(_methodPointer, _argIdxsPtr, localVarBase, _ret);
+				    }
+				    ip += 24;
 				    continue;
 				}
 				case HiOpcodeEnum::CallInd_ret_expand:
 				{
 					uint32_t __managed2NativeMethod = *(uint32_t*)(ip + 8);
-					uint32_t __methodInfo = *(uint32_t*)(ip + 12);
-					uint32_t __argIdxs = *(uint32_t*)(ip + 16);
+					uint32_t __managed2NativeFunctionPointerMethod = *(uint32_t*)(ip + 12);
+					uint8_t& __isMethodInfoPointer = *(uint8_t*)(ip + 2);
+					uint32_t __methodInfo = *(uint32_t*)(ip + 16);
+					uint32_t __argIdxs = *(uint32_t*)(ip + 20);
 					uint16_t __ret = *(uint16_t*)(ip + 4);
-					uint8_t __retLocationType = *(uint8_t*)(ip + 2);
+					uint8_t __retLocationType = *(uint8_t*)(ip + 3);
 				    void* _ret = (void*)(localVarBase + __ret);
 				    Managed2NativeCallMethod _nativeMethodPointer = ((Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeMethod]);
+				    Managed2NativeFunctionPointerCallMethod _nativeMethodPointer2 = ((Managed2NativeFunctionPointerCallMethod)imi->resolveDatas[__managed2NativeFunctionPointerMethod]);
 					uint16_t* _argIdxsPtr = (uint16_t*)&imi->resolveDatas[__argIdxs];
 					StackObject* _argBasePtr = localVarBase + _argIdxsPtr[0];
-					MethodInfo* _method = (MethodInfo*)(localVarBase + __methodInfo)->ptr;
-					if (metadata::IsInstanceMethod(_method))
+					void* _methodPointer = (localVarBase + __methodInfo)->ptr;
+					if (__isMethodInfoPointer == 0)
 					{
-				        CHECK_NOT_NULL_THROW(_argBasePtr->obj);
+				        __isMethodInfoPointer = hybridclr::interpreter::InterpreterModule::IsMethodInfoPointer(_methodPointer) ? 1 : 2;
 					}
-					if (IsInterpreterImplement(_method))
+					if (__isMethodInfoPointer == 1)
 					{
-				        CALL_INTERP_RET((ip + 24), _method, _argBasePtr, _ret);
-				        continue;
-					}
-					if (!InitAndGetInterpreterDirectlyCallMethodPointer(_method))
-					{
-				        RaiseAOTGenericMethodNotInstantiatedException(_method);
-					}
-				    _nativeMethodPointer(_method, _argIdxsPtr, localVarBase, _ret);
+					    MethodInfo* _method = (MethodInfo*)_methodPointer;
+					    if (metadata::IsInstanceMethod(_method))
+					    {
+				            CHECK_NOT_NULL_THROW(_argBasePtr->obj);
+					    }
+					    if (IsInterpreterImplement(_method))
+					    {
+				            CALL_INTERP_RET((ip + 24), _method, _argBasePtr, _ret);
+				            continue;
+					    }
+					    if (!InitAndGetInterpreterDirectlyCallMethodPointer(_method))
+					    {
+				            RaiseAOTGenericMethodNotInstantiatedException(_method);
+					    }
+				        _nativeMethodPointer(_method, _argIdxsPtr, localVarBase, _ret);
+				    }
+				    else
+				    {
+				        _nativeMethodPointer2(_methodPointer, _argIdxsPtr, localVarBase, _ret);
+				    }
 				    ExpandLocationData2StackDataByType(_ret, (LocationDataType)__retLocationType);
 				    ip += 24;
 				    continue;
@@ -5103,7 +5305,7 @@ else \
 						{
 							Managed2NativeCallMethod _staticM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeStaticMethod];
 							Managed2NativeCallMethod _instanceM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeInstanceMethod];
-							InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, tempRet);
+							InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, _ret);
 						}
 					}
 					else
@@ -5118,7 +5320,7 @@ else \
 							IL2CPP_ASSERT(subDel->delegates == nullptr);
 							const MethodInfo* method = subDel->delegate.method;
 							Il2CppObject* target = subDel->delegate.target;
-							InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, tempRet);
+							InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, _ret);
 						}
 					}
 				    ip += 16;
@@ -5133,6 +5335,8 @@ else \
 					uint16_t __invokeParamCount = *(uint16_t*)(ip + 4);
 					uint16_t __retTypeStackObjectSize = *(uint16_t*)(ip + 6);
 				    void* _ret = (void*)(localVarBase + __ret);
+					IL2CPP_ASSERT(__retTypeStackObjectSize <= kMaxRetValueTypeStackObjectSize);
+					StackObject* _tempRet = tempRet ? tempRet : (tempRet = (StackObject*)alloca(sizeof(StackObject) * kMaxRetValueTypeStackObjectSize));
 					uint16_t* _resolvedArgIdxs = ((uint16_t*)&imi->resolveDatas[__argIdxs]);
 					StackObject* _argBasePtr = localVarBase + _resolvedArgIdxs[0];
 					Il2CppMulticastDelegate* _del = (Il2CppMulticastDelegate*)_argBasePtr->obj;
@@ -5182,7 +5386,7 @@ else \
 						{
 							Managed2NativeCallMethod _staticM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeStaticMethod];
 							Managed2NativeCallMethod _instanceM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeInstanceMethod];
-							InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, tempRet);
+							InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, _tempRet);
 						}
 					}
 					else
@@ -5197,10 +5401,10 @@ else \
 							IL2CPP_ASSERT(subDel->delegates == nullptr);
 							const MethodInfo* method = subDel->delegate.method;
 							Il2CppObject* target = subDel->delegate.target;
-							InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, tempRet);
+							InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, _tempRet);
 						}
 					}
-					CopyStackObject((StackObject*)_ret, tempRet, __retTypeStackObjectSize);
+					CopyStackObject((StackObject*)_ret, _tempRet, __retTypeStackObjectSize);
 				    ip += 24;
 				    continue;
 				}
@@ -5213,6 +5417,7 @@ else \
 					uint16_t __invokeParamCount = *(uint16_t*)(ip + 6);
 					uint8_t __retLocationType = *(uint8_t*)(ip + 2);
 				    void* _ret = (void*)(localVarBase + __ret);
+					StackObject _tempRet[1];
 					uint16_t* _resolvedArgIdxs = ((uint16_t*)&imi->resolveDatas[__argIdxs]);
 					StackObject* _argBasePtr = localVarBase + _resolvedArgIdxs[0];
 					Il2CppMulticastDelegate* _del = (Il2CppMulticastDelegate*)_argBasePtr->obj;
@@ -5262,7 +5467,7 @@ else \
 						{
 							Managed2NativeCallMethod _staticM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeStaticMethod];
 							Managed2NativeCallMethod _instanceM2NMethod = (Managed2NativeCallMethod)imi->resolveDatas[__managed2NativeInstanceMethod];
-							InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, tempRet);
+							InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, _tempRet);
 						}
 					}
 					else
@@ -5277,10 +5482,10 @@ else \
 							IL2CPP_ASSERT(subDel->delegates == nullptr);
 							const MethodInfo* method = subDel->delegate.method;
 							Il2CppObject* target = subDel->delegate.target;
-							InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, tempRet);
+							InvokeSingleDelegate(__invokeParamCount, method, target, _staticM2NMethod, _instanceM2NMethod, _resolvedArgIdxs, localVarBase, _tempRet);
 						}
 					}
-				    CopyLocationData2StackDataByType((StackObject*)_ret, tempRet, (LocationDataType)__retLocationType);
+				    CopyLocationData2StackDataByType((StackObject*)_ret, _tempRet, (LocationDataType)__retLocationType);
 				    ip += 24;
 				    continue;
 				}
@@ -5447,45 +5652,6 @@ else \
 				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
 				    typedef double(*_NativeMethod_)(void*, MethodInfo*);
 				    *(double*)(void*)(localVarBase + __ret) = ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(_self, _resolvedMethod);
-				    ip += 16;
-				    continue;
-				}
-				case HiOpcodeEnum::CallCommonNativeInstance_v2f_0:
-				{
-					uint32_t __method = *(uint32_t*)(ip + 8);
-					uint16_t __self = *(uint16_t*)(ip + 2);
-					uint16_t __ret = *(uint16_t*)(ip + 4);
-				    void* _self = (*(void**)(localVarBase + __self));
-				    CHECK_NOT_NULL_THROW(_self);
-				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    typedef HtVector2f(*_NativeMethod_)(void*, MethodInfo*);
-				    *(HtVector2f*)(void*)(localVarBase + __ret) = ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(_self, _resolvedMethod);
-				    ip += 16;
-				    continue;
-				}
-				case HiOpcodeEnum::CallCommonNativeInstance_v3f_0:
-				{
-					uint32_t __method = *(uint32_t*)(ip + 8);
-					uint16_t __self = *(uint16_t*)(ip + 2);
-					uint16_t __ret = *(uint16_t*)(ip + 4);
-				    void* _self = (*(void**)(localVarBase + __self));
-				    CHECK_NOT_NULL_THROW(_self);
-				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    typedef HtVector3f(*_NativeMethod_)(void*, MethodInfo*);
-				    *(HtVector3f*)(void*)(localVarBase + __ret) = ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(_self, _resolvedMethod);
-				    ip += 16;
-				    continue;
-				}
-				case HiOpcodeEnum::CallCommonNativeInstance_v4f_0:
-				{
-					uint32_t __method = *(uint32_t*)(ip + 8);
-					uint16_t __self = *(uint16_t*)(ip + 2);
-					uint16_t __ret = *(uint16_t*)(ip + 4);
-				    void* _self = (*(void**)(localVarBase + __self));
-				    CHECK_NOT_NULL_THROW(_self);
-				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    typedef HtVector4f(*_NativeMethod_)(void*, MethodInfo*);
-				    *(HtVector4f*)(void*)(localVarBase + __ret) = ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(_self, _resolvedMethod);
 				    ip += 16;
 				    continue;
 				}
@@ -7059,39 +7225,6 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::CallCommonNativeStatic_v2f_0:
-				{
-					uint32_t __method = *(uint32_t*)(ip + 4);
-					uint16_t __ret = *(uint16_t*)(ip + 2);
-				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
-				    typedef HtVector2f(*_NativeMethod_)(MethodInfo*);
-				    *(HtVector2f*)(void*)(localVarBase + __ret) = ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(_resolvedMethod);
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::CallCommonNativeStatic_v3f_0:
-				{
-					uint32_t __method = *(uint32_t*)(ip + 4);
-					uint16_t __ret = *(uint16_t*)(ip + 2);
-				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
-				    typedef HtVector3f(*_NativeMethod_)(MethodInfo*);
-				    *(HtVector3f*)(void*)(localVarBase + __ret) = ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(_resolvedMethod);
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::CallCommonNativeStatic_v4f_0:
-				{
-					uint32_t __method = *(uint32_t*)(ip + 4);
-					uint16_t __ret = *(uint16_t*)(ip + 2);
-				    MethodInfo* _resolvedMethod = ((MethodInfo*)imi->resolveDatas[__method]);
-				    RuntimeInitClassCCtorWithoutInitClass(_resolvedMethod);
-				    typedef HtVector4f(*_NativeMethod_)(MethodInfo*);
-				    *(HtVector4f*)(void*)(localVarBase + __ret) = ((_NativeMethod_)_resolvedMethod->methodPointerCallByInterp)(_resolvedMethod);
-				    ip += 8;
-				    continue;
-				}
 				case HiOpcodeEnum::CallCommonNativeStatic_v_i4_1:
 				{
 					uint32_t __method = *(uint32_t*)(ip + 4);
@@ -8455,6 +8588,16 @@ else \
 				    ip += 16;
 				    continue;
 				}
+				case HiOpcodeEnum::CpobjVarVar_ref:
+				{
+					uint16_t __dst = *(uint16_t*)(ip + 2);
+					uint16_t __src = *(uint16_t*)(ip + 4);
+				    void** _dstAddr_ = (void**)((*(void**)(localVarBase + __dst)));
+				    *_dstAddr_ = *(void**)(*(void**)(localVarBase + __src));
+				    HYBRIDCLR_SET_WRITE_BARRIER(_dstAddr_);
+				    ip += 8;
+				    continue;
+				}
 				case HiOpcodeEnum::CpobjVarVar_1:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
@@ -8540,7 +8683,7 @@ else \
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
 					uint16_t __size = *(uint16_t*)(ip + 6);
-					std::memmove((*(void**)(localVarBase + __dst)), (*(void**)(localVarBase + __src)), (*(uint16_t*)(localVarBase + __size)));
+					std::memmove((*(void**)(localVarBase + __dst)), (*(void**)(localVarBase + __src)), __size);
 				    ip += 8;
 				    continue;
 				}
@@ -8548,8 +8691,38 @@ else \
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
+					uint32_t __size = *(uint32_t*)(ip + 8);
+					std::memmove((*(void**)(localVarBase + __dst)), (*(void**)(localVarBase + __src)), __size);
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::CpobjVarVar_WriteBarrier_n_2:
+				{
+					uint16_t __dst = *(uint16_t*)(ip + 2);
+					uint16_t __src = *(uint16_t*)(ip + 4);
 					uint16_t __size = *(uint16_t*)(ip + 6);
-					std::memmove((*(void**)(localVarBase + __dst)), (*(void**)(localVarBase + __src)), (*(uint32_t*)(localVarBase + __size)));
+				    void* _dstAddr_ = (void*)((*(void**)(localVarBase + __dst)));
+				    std::memmove(_dstAddr_, (*(void**)(localVarBase + __src)), __size);
+				    HYBRIDCLR_SET_WRITE_BARRIER((void**)_dstAddr_, __size);
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::CpobjVarVar_WriteBarrier_n_4:
+				{
+					uint16_t __dst = *(uint16_t*)(ip + 2);
+					uint16_t __src = *(uint16_t*)(ip + 4);
+					uint32_t __size = *(uint32_t*)(ip + 8);
+				    void* _dstAddr_ = (void*)((*(void**)(localVarBase + __dst)));
+				    std::memmove(_dstAddr_, (*(void**)(localVarBase + __src)), __size);
+				    HYBRIDCLR_SET_WRITE_BARRIER((void**)_dstAddr_, __size);
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::LdobjVarVar_ref:
+				{
+					uint16_t __dst = *(uint16_t*)(ip + 2);
+					uint16_t __src = *(uint16_t*)(ip + 4);
+					*(void**)(void*)(localVarBase + __dst) = (*(void**)*(void**)(localVarBase + __src));
 				    ip += 8;
 				    continue;
 				}
@@ -8637,8 +8810,18 @@ else \
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
-					uint16_t __size = *(uint16_t*)(ip + 6);
+					uint32_t __size = *(uint32_t*)(ip + 8);
 					std::memmove((void*)(localVarBase + __dst), (*(void**)(localVarBase + __src)), __size);
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::StobjVarVar_ref:
+				{
+					uint16_t __dst = *(uint16_t*)(ip + 2);
+					uint16_t __src = *(uint16_t*)(ip + 4);
+				    void** _dstAddr_ = (void**)((*(void**)(localVarBase + __dst)));
+				    *_dstAddr_ = (*(Il2CppObject**)(localVarBase + __src));
+				    HYBRIDCLR_SET_WRITE_BARRIER(_dstAddr_);
 				    ip += 8;
 				    continue;
 				}
@@ -8726,8 +8909,29 @@ else \
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __src = *(uint16_t*)(ip + 4);
-					uint16_t __size = *(uint16_t*)(ip + 6);
+					uint32_t __size = *(uint32_t*)(ip + 8);
 					std::memmove((*(void**)(localVarBase + __dst)), (void*)(localVarBase + __src), __size);
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::StobjVarVar_WriteBarrier_n_4:
+				{
+					uint16_t __dst = *(uint16_t*)(ip + 2);
+					uint16_t __src = *(uint16_t*)(ip + 4);
+					uint32_t __size = *(uint32_t*)(ip + 8);
+				    void* _dstAddr_ = (*(void**)(localVarBase + __dst));
+				    std::memmove(_dstAddr_, (void*)(localVarBase + __src), __size);
+				    HYBRIDCLR_SET_WRITE_BARRIER((void**)_dstAddr_, __size);
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::InitobjVar_ref:
+				{
+					uint16_t __obj = *(uint16_t*)(ip + 2);
+				    void* _objAddr_ = (*(void**)(localVarBase + __obj));
+				    CHECK_NOT_NULL_THROW(_objAddr_);
+				    *(void**)_objAddr_ = nullptr;
+				    HYBRIDCLR_SET_WRITE_BARRIER((void**)_objAddr_);
 				    ip += 8;
 				    continue;
 				}
@@ -8814,6 +9018,26 @@ else \
 					uint16_t __obj = *(uint16_t*)(ip + 2);
 					uint32_t __size = *(uint32_t*)(ip + 4);
 					InitDefaultN((*(void**)(localVarBase + __obj)), __size);
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::InitobjVar_WriteBarrier_n_2:
+				{
+					uint16_t __obj = *(uint16_t*)(ip + 2);
+					uint16_t __size = *(uint16_t*)(ip + 4);
+				    void* _objAddr_ = (*(void**)(localVarBase + __obj));
+				    InitDefaultN(_objAddr_, __size);
+				    HYBRIDCLR_SET_WRITE_BARRIER((void**)_objAddr_, __size);
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::InitobjVar_WriteBarrier_n_4:
+				{
+					uint16_t __obj = *(uint16_t*)(ip + 2);
+					uint32_t __size = *(uint32_t*)(ip + 4);
+				    void* _objAddr_ = (*(void**)(localVarBase + __obj));
+				    InitDefaultN(_objAddr_, __size);
+				    HYBRIDCLR_SET_WRITE_BARRIER((void**)_objAddr_, __size);
 				    ip += 8;
 				    continue;
 				}
@@ -9168,7 +9392,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 4);
 					uint16_t __data = *(uint16_t*)(ip + 6);
 				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
-				    *(int8_t*)((uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset) = (*(int8_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
+				    *(int8_t*)(_fieldAddr_) = (*(int8_t*)(localVarBase + __data));
 				    ip += 8;
 				    continue;
 				}
@@ -9178,7 +9403,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 4);
 					uint16_t __data = *(uint16_t*)(ip + 6);
 				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
-				    *(uint8_t*)((uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset) = (*(uint8_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
+				    *(uint8_t*)(_fieldAddr_) = (*(uint8_t*)(localVarBase + __data));
 				    ip += 8;
 				    continue;
 				}
@@ -9188,7 +9414,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 4);
 					uint16_t __data = *(uint16_t*)(ip + 6);
 				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
-				    *(int16_t*)((uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset) = (*(int16_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
+				    *(int16_t*)(_fieldAddr_) = (*(int16_t*)(localVarBase + __data));
 				    ip += 8;
 				    continue;
 				}
@@ -9198,7 +9425,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 4);
 					uint16_t __data = *(uint16_t*)(ip + 6);
 				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
-				    *(uint16_t*)((uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset) = (*(uint16_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
+				    *(uint16_t*)(_fieldAddr_) = (*(uint16_t*)(localVarBase + __data));
 				    ip += 8;
 				    continue;
 				}
@@ -9208,7 +9436,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 4);
 					uint16_t __data = *(uint16_t*)(ip + 6);
 				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
-				    *(int32_t*)((uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset) = (*(int32_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
+				    *(int32_t*)(_fieldAddr_) = (*(int32_t*)(localVarBase + __data));
 				    ip += 8;
 				    continue;
 				}
@@ -9218,7 +9447,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 4);
 					uint16_t __data = *(uint16_t*)(ip + 6);
 				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
-				    *(uint32_t*)((uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset) = (*(uint32_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
+				    *(uint32_t*)(_fieldAddr_) = (*(uint32_t*)(localVarBase + __data));
 				    ip += 8;
 				    continue;
 				}
@@ -9228,7 +9458,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 4);
 					uint16_t __data = *(uint16_t*)(ip + 6);
 				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
-				    *(int64_t*)((uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset) = (*(int64_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
+				    *(int64_t*)(_fieldAddr_) = (*(int64_t*)(localVarBase + __data));
 				    ip += 8;
 				    continue;
 				}
@@ -9238,7 +9469,19 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 4);
 					uint16_t __data = *(uint16_t*)(ip + 6);
 				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
-				    *(uint64_t*)((uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset) = (*(uint64_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
+				    *(uint64_t*)(_fieldAddr_) = (*(uint64_t*)(localVarBase + __data));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::StfldVarVar_ref:
+				{
+					uint16_t __obj = *(uint16_t*)(ip + 2);
+					uint16_t __offset = *(uint16_t*)(ip + 4);
+					uint16_t __data = *(uint16_t*)(ip + 6);
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
+				    void* _fieldAddr_ = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
+				    *(Il2CppObject**)(_fieldAddr_) = (*(Il2CppObject**)(localVarBase + __data));HYBRIDCLR_SET_WRITE_BARRIER((void**)_fieldAddr_);
 				    ip += 8;
 				    continue;
 				}
@@ -9331,6 +9574,32 @@ else \
 					uint32_t __size = *(uint32_t*)(ip + 8);
 				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
 				    std::memmove((uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset, (void*)(localVarBase + __data), __size);
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::StfldVarVar_WriteBarrier_n_2:
+				{
+					uint16_t __obj = *(uint16_t*)(ip + 2);
+					uint16_t __offset = *(uint16_t*)(ip + 4);
+					uint16_t __data = *(uint16_t*)(ip + 6);
+					uint16_t __size = *(uint16_t*)(ip + 8);
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
+				    void* _fieldAddr_ = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
+				    std::memmove(_fieldAddr_, (void*)(localVarBase + __data), __size);
+				    HYBRIDCLR_SET_WRITE_BARRIER((void**)_fieldAddr_, (size_t)__size);
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::StfldVarVar_WriteBarrier_n_4:
+				{
+					uint16_t __obj = *(uint16_t*)(ip + 2);
+					uint16_t __offset = *(uint16_t*)(ip + 4);
+					uint16_t __data = *(uint16_t*)(ip + 6);
+					uint32_t __size = *(uint32_t*)(ip + 8);
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
+				    void* _fieldAddr_ = (uint8_t*)(*(Il2CppObject**)(localVarBase + __obj)) + __offset;
+				    std::memmove(_fieldAddr_, (void*)(localVarBase + __data), __size);
+				    HYBRIDCLR_SET_WRITE_BARRIER((void**)_fieldAddr_, (size_t)__size);
 				    ip += 16;
 				    continue;
 				}
@@ -9512,7 +9781,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 2);
 					uint16_t __data = *(uint16_t*)(ip + 4);
 				    RuntimeInitClassCCtorWithoutInitClass(__klass);
-				    *(int8_t*)(((byte*)__klass->static_fields) + __offset) = (*(int8_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = ((byte*)__klass->static_fields) + __offset;
+				    *(int8_t*)(_fieldAddr_) = (*(int8_t*)(localVarBase + __data));
 				    ip += 16;
 				    continue;
 				}
@@ -9522,7 +9792,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 2);
 					uint16_t __data = *(uint16_t*)(ip + 4);
 				    RuntimeInitClassCCtorWithoutInitClass(__klass);
-				    *(uint8_t*)(((byte*)__klass->static_fields) + __offset) = (*(uint8_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = ((byte*)__klass->static_fields) + __offset;
+				    *(uint8_t*)(_fieldAddr_) = (*(uint8_t*)(localVarBase + __data));
 				    ip += 16;
 				    continue;
 				}
@@ -9532,7 +9803,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 2);
 					uint16_t __data = *(uint16_t*)(ip + 4);
 				    RuntimeInitClassCCtorWithoutInitClass(__klass);
-				    *(int16_t*)(((byte*)__klass->static_fields) + __offset) = (*(int16_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = ((byte*)__klass->static_fields) + __offset;
+				    *(int16_t*)(_fieldAddr_) = (*(int16_t*)(localVarBase + __data));
 				    ip += 16;
 				    continue;
 				}
@@ -9542,7 +9814,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 2);
 					uint16_t __data = *(uint16_t*)(ip + 4);
 				    RuntimeInitClassCCtorWithoutInitClass(__klass);
-				    *(uint16_t*)(((byte*)__klass->static_fields) + __offset) = (*(uint16_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = ((byte*)__klass->static_fields) + __offset;
+				    *(uint16_t*)(_fieldAddr_) = (*(uint16_t*)(localVarBase + __data));
 				    ip += 16;
 				    continue;
 				}
@@ -9552,7 +9825,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 2);
 					uint16_t __data = *(uint16_t*)(ip + 4);
 				    RuntimeInitClassCCtorWithoutInitClass(__klass);
-				    *(int32_t*)(((byte*)__klass->static_fields) + __offset) = (*(int32_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = ((byte*)__klass->static_fields) + __offset;
+				    *(int32_t*)(_fieldAddr_) = (*(int32_t*)(localVarBase + __data));
 				    ip += 16;
 				    continue;
 				}
@@ -9562,7 +9836,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 2);
 					uint16_t __data = *(uint16_t*)(ip + 4);
 				    RuntimeInitClassCCtorWithoutInitClass(__klass);
-				    *(uint32_t*)(((byte*)__klass->static_fields) + __offset) = (*(uint32_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = ((byte*)__klass->static_fields) + __offset;
+				    *(uint32_t*)(_fieldAddr_) = (*(uint32_t*)(localVarBase + __data));
 				    ip += 16;
 				    continue;
 				}
@@ -9572,7 +9847,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 2);
 					uint16_t __data = *(uint16_t*)(ip + 4);
 				    RuntimeInitClassCCtorWithoutInitClass(__klass);
-				    *(int64_t*)(((byte*)__klass->static_fields) + __offset) = (*(int64_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = ((byte*)__klass->static_fields) + __offset;
+				    *(int64_t*)(_fieldAddr_) = (*(int64_t*)(localVarBase + __data));
 				    ip += 16;
 				    continue;
 				}
@@ -9582,7 +9858,19 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 2);
 					uint16_t __data = *(uint16_t*)(ip + 4);
 				    RuntimeInitClassCCtorWithoutInitClass(__klass);
-				    *(uint64_t*)(((byte*)__klass->static_fields) + __offset) = (*(uint64_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = ((byte*)__klass->static_fields) + __offset;
+				    *(uint64_t*)(_fieldAddr_) = (*(uint64_t*)(localVarBase + __data));
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::StsfldVarVar_ref:
+				{
+					Il2CppClass* __klass = ((Il2CppClass*)imi->resolveDatas[*(uint32_t*)(ip + 8)]);
+					uint16_t __offset = *(uint16_t*)(ip + 2);
+					uint16_t __data = *(uint16_t*)(ip + 4);
+				    RuntimeInitClassCCtorWithoutInitClass(__klass);
+				    void* _fieldAddr_ = ((byte*)__klass->static_fields) + __offset;
+				    *(Il2CppObject**)(_fieldAddr_) = (*(Il2CppObject**)(localVarBase + __data));HYBRIDCLR_SET_WRITE_BARRIER((void**)_fieldAddr_);
 				    ip += 16;
 				    continue;
 				}
@@ -9675,6 +9963,32 @@ else \
 					uint32_t __size = *(uint32_t*)(ip + 12);
 				    RuntimeInitClassCCtorWithoutInitClass(__klass);
 				    std::memmove(((byte*)__klass->static_fields) + __offset, (void*)(localVarBase + __data), __size);
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::StsfldVarVar_WriteBarrier_n_2:
+				{
+					Il2CppClass* __klass = ((Il2CppClass*)imi->resolveDatas[*(uint32_t*)(ip + 8)]);
+					uint16_t __offset = *(uint16_t*)(ip + 2);
+					uint16_t __data = *(uint16_t*)(ip + 4);
+					uint16_t __size = *(uint16_t*)(ip + 6);
+				    RuntimeInitClassCCtorWithoutInitClass(__klass);
+				    void* _fieldAddr_ = ((byte*)__klass->static_fields) + __offset;
+				    std::memmove(_fieldAddr_, (void*)(localVarBase + __data), __size);
+				    HYBRIDCLR_SET_WRITE_BARRIER((void**)_fieldAddr_, (size_t)__size);
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::StsfldVarVar_WriteBarrier_n_4:
+				{
+					Il2CppClass* __klass = ((Il2CppClass*)imi->resolveDatas[*(uint32_t*)(ip + 8)]);
+					uint16_t __offset = *(uint16_t*)(ip + 2);
+					uint16_t __data = *(uint16_t*)(ip + 4);
+					uint32_t __size = *(uint32_t*)(ip + 12);
+				    RuntimeInitClassCCtorWithoutInitClass(__klass);
+				    void* _fieldAddr_ = ((byte*)__klass->static_fields) + __offset;
+				    std::memmove(_fieldAddr_, (void*)(localVarBase + __data), __size);
+				    HYBRIDCLR_SET_WRITE_BARRIER((void**)_fieldAddr_, (size_t)__size);
 				    ip += 16;
 				    continue;
 				}
@@ -9884,7 +10198,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 2);
 					uint16_t __data = *(uint16_t*)(ip + 4);
 				    RuntimeInitClassCCtorWithoutInitClass(__klass);
-				    *(int8_t*)((byte*)(il2cpp::vm::Thread::GetThreadStaticData(__klass->thread_static_fields_offset)) + __offset) = (*(int8_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = ((byte*)(il2cpp::vm::Thread::GetThreadStaticData(__klass->thread_static_fields_offset))) + __offset;
+				    *(int8_t*)_fieldAddr_ = (*(int8_t*)(localVarBase + __data));
 				    ip += 16;
 				    continue;
 				}
@@ -9894,7 +10209,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 2);
 					uint16_t __data = *(uint16_t*)(ip + 4);
 				    RuntimeInitClassCCtorWithoutInitClass(__klass);
-				    *(uint8_t*)((byte*)(il2cpp::vm::Thread::GetThreadStaticData(__klass->thread_static_fields_offset)) + __offset) = (*(uint8_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = ((byte*)(il2cpp::vm::Thread::GetThreadStaticData(__klass->thread_static_fields_offset))) + __offset;
+				    *(uint8_t*)_fieldAddr_ = (*(uint8_t*)(localVarBase + __data));
 				    ip += 16;
 				    continue;
 				}
@@ -9904,7 +10220,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 2);
 					uint16_t __data = *(uint16_t*)(ip + 4);
 				    RuntimeInitClassCCtorWithoutInitClass(__klass);
-				    *(int16_t*)((byte*)(il2cpp::vm::Thread::GetThreadStaticData(__klass->thread_static_fields_offset)) + __offset) = (*(int16_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = ((byte*)(il2cpp::vm::Thread::GetThreadStaticData(__klass->thread_static_fields_offset))) + __offset;
+				    *(int16_t*)_fieldAddr_ = (*(int16_t*)(localVarBase + __data));
 				    ip += 16;
 				    continue;
 				}
@@ -9914,7 +10231,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 2);
 					uint16_t __data = *(uint16_t*)(ip + 4);
 				    RuntimeInitClassCCtorWithoutInitClass(__klass);
-				    *(uint16_t*)((byte*)(il2cpp::vm::Thread::GetThreadStaticData(__klass->thread_static_fields_offset)) + __offset) = (*(uint16_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = ((byte*)(il2cpp::vm::Thread::GetThreadStaticData(__klass->thread_static_fields_offset))) + __offset;
+				    *(uint16_t*)_fieldAddr_ = (*(uint16_t*)(localVarBase + __data));
 				    ip += 16;
 				    continue;
 				}
@@ -9924,7 +10242,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 2);
 					uint16_t __data = *(uint16_t*)(ip + 4);
 				    RuntimeInitClassCCtorWithoutInitClass(__klass);
-				    *(int32_t*)((byte*)(il2cpp::vm::Thread::GetThreadStaticData(__klass->thread_static_fields_offset)) + __offset) = (*(int32_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = ((byte*)(il2cpp::vm::Thread::GetThreadStaticData(__klass->thread_static_fields_offset))) + __offset;
+				    *(int32_t*)_fieldAddr_ = (*(int32_t*)(localVarBase + __data));
 				    ip += 16;
 				    continue;
 				}
@@ -9934,7 +10253,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 2);
 					uint16_t __data = *(uint16_t*)(ip + 4);
 				    RuntimeInitClassCCtorWithoutInitClass(__klass);
-				    *(uint32_t*)((byte*)(il2cpp::vm::Thread::GetThreadStaticData(__klass->thread_static_fields_offset)) + __offset) = (*(uint32_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = ((byte*)(il2cpp::vm::Thread::GetThreadStaticData(__klass->thread_static_fields_offset))) + __offset;
+				    *(uint32_t*)_fieldAddr_ = (*(uint32_t*)(localVarBase + __data));
 				    ip += 16;
 				    continue;
 				}
@@ -9944,7 +10264,8 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 2);
 					uint16_t __data = *(uint16_t*)(ip + 4);
 				    RuntimeInitClassCCtorWithoutInitClass(__klass);
-				    *(int64_t*)((byte*)(il2cpp::vm::Thread::GetThreadStaticData(__klass->thread_static_fields_offset)) + __offset) = (*(int64_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = ((byte*)(il2cpp::vm::Thread::GetThreadStaticData(__klass->thread_static_fields_offset))) + __offset;
+				    *(int64_t*)_fieldAddr_ = (*(int64_t*)(localVarBase + __data));
 				    ip += 16;
 				    continue;
 				}
@@ -9954,7 +10275,19 @@ else \
 					uint16_t __offset = *(uint16_t*)(ip + 2);
 					uint16_t __data = *(uint16_t*)(ip + 4);
 				    RuntimeInitClassCCtorWithoutInitClass(__klass);
-				    *(uint64_t*)((byte*)(il2cpp::vm::Thread::GetThreadStaticData(__klass->thread_static_fields_offset)) + __offset) = (*(uint64_t*)(localVarBase + __data));
+				    void* _fieldAddr_ = ((byte*)(il2cpp::vm::Thread::GetThreadStaticData(__klass->thread_static_fields_offset))) + __offset;
+				    *(uint64_t*)_fieldAddr_ = (*(uint64_t*)(localVarBase + __data));
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::StthreadlocalVarVar_ref:
+				{
+					Il2CppClass* __klass = ((Il2CppClass*)imi->resolveDatas[*(uint32_t*)(ip + 8)]);
+					uint16_t __offset = *(uint16_t*)(ip + 2);
+					uint16_t __data = *(uint16_t*)(ip + 4);
+				    RuntimeInitClassCCtorWithoutInitClass(__klass);
+				    void* _fieldAddr_ = ((byte*)(il2cpp::vm::Thread::GetThreadStaticData(__klass->thread_static_fields_offset))) + __offset;
+				    *(Il2CppObject**)_fieldAddr_ = (*(Il2CppObject**)(localVarBase + __data));HYBRIDCLR_SET_WRITE_BARRIER((void**)_fieldAddr_);
 				    ip += 16;
 				    continue;
 				}
@@ -10050,13 +10383,53 @@ else \
 				    ip += 16;
 				    continue;
 				}
+				case HiOpcodeEnum::StthreadlocalVarVar_WriteBarrier_n_2:
+				{
+					Il2CppClass* __klass = ((Il2CppClass*)imi->resolveDatas[*(uint32_t*)(ip + 8)]);
+					uint16_t __offset = *(uint16_t*)(ip + 2);
+					uint16_t __data = *(uint16_t*)(ip + 4);
+					uint16_t __size = *(uint16_t*)(ip + 6);
+				    RuntimeInitClassCCtorWithoutInitClass(__klass);
+				    void* _fieldAddr_ = ((byte*)(il2cpp::vm::Thread::GetThreadStaticData(__klass->thread_static_fields_offset))) + __offset;
+				    std::memmove(_fieldAddr_, (void*)(localVarBase + __data), __size);
+				    HYBRIDCLR_SET_WRITE_BARRIER((void**)_fieldAddr_, (size_t)__size);
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::StthreadlocalVarVar_WriteBarrier_n_4:
+				{
+					Il2CppClass* __klass = ((Il2CppClass*)imi->resolveDatas[*(uint32_t*)(ip + 8)]);
+					uint16_t __offset = *(uint16_t*)(ip + 2);
+					uint16_t __data = *(uint16_t*)(ip + 4);
+					uint32_t __size = *(uint32_t*)(ip + 12);
+				    RuntimeInitClassCCtorWithoutInitClass(__klass);
+				    void* _fieldAddr_ = ((byte*)(il2cpp::vm::Thread::GetThreadStaticData(__klass->thread_static_fields_offset))) + __offset;
+				    std::memmove(_fieldAddr_, (void*)(localVarBase + __data), __size);
+				    HYBRIDCLR_SET_WRITE_BARRIER((void**)_fieldAddr_, (size_t)__size);
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::CheckThrowIfNullVar:
+				{
+					uint16_t __obj = *(uint16_t*)(ip + 2);
+				    CHECK_NOT_NULL_THROW((*(Il2CppObject**)(localVarBase + __obj)));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::InitClassStaticCtor:
+				{
+					uint64_t __klass = *(uint64_t*)(ip + 8);
+				    RuntimeInitClassCCtorWithoutInitClass((Il2CppClass*)(__klass));
+				    ip += 16;
+				    continue;
+				}
 
 				//!!!}}OBJECT
 #pragma endregion
 
 #pragma region ARRAY
 		//!!!{{ARRAY
-				case HiOpcodeEnum::NewArrVarVar_4:
+				case HiOpcodeEnum::NewArrVarVar:
 				{
 					uint16_t __arr = *(uint16_t*)(ip + 2);
 					uint16_t __size = *(uint16_t*)(ip + 4);
@@ -10065,34 +10438,16 @@ else \
 				    ip += 16;
 				    continue;
 				}
-				case HiOpcodeEnum::NewArrVarVar_8:
-				{
-					uint16_t __arr = *(uint16_t*)(ip + 2);
-					uint16_t __size = *(uint16_t*)(ip + 4);
-					Il2CppClass* __klass = ((Il2CppClass*)imi->resolveDatas[*(uint32_t*)(ip + 8)]);
-				    (*(Il2CppArray**)(localVarBase + __arr)) =  il2cpp::vm::Array::NewSpecific(__klass, (*(int64_t*)(localVarBase + __size)));
-				    ip += 16;
-				    continue;
-				}
-				case HiOpcodeEnum::GetArrayLengthVarVar_4:
+				case HiOpcodeEnum::GetArrayLengthVarVar:
 				{
 					uint16_t __len = *(uint16_t*)(ip + 2);
 					uint16_t __arr = *(uint16_t*)(ip + 4);
 				    CHECK_NOT_NULL_THROW((*(Il2CppArray**)(localVarBase + __arr)));
-				    (*(uint32_t*)(localVarBase + __len)) = (uint32_t)il2cpp::vm::Array::GetLength((*(Il2CppArray**)(localVarBase + __arr)));
+				    (*(int64_t*)(localVarBase + __len)) = (int64_t)il2cpp::vm::Array::GetLength((*(Il2CppArray**)(localVarBase + __arr)));
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::GetArrayLengthVarVar_8:
-				{
-					uint16_t __len = *(uint16_t*)(ip + 2);
-					uint16_t __arr = *(uint16_t*)(ip + 4);
-				    CHECK_NOT_NULL_THROW((*(Il2CppArray**)(localVarBase + __arr)));
-				    (*(uint64_t*)(localVarBase + __len)) = (uint64_t)il2cpp::vm::Array::GetLength((*(Il2CppArray**)(localVarBase + __arr)));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::GetArrayElementAddressAddrVarVar_i4:
+				case HiOpcodeEnum::GetArrayElementAddressAddrVarVar:
 				{
 					uint16_t __addr = *(uint16_t*)(ip + 2);
 					uint16_t __arr = *(uint16_t*)(ip + 4);
@@ -10103,18 +10458,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::GetArrayElementAddressAddrVarVar_i8:
-				{
-					uint16_t __addr = *(uint16_t*)(ip + 2);
-					uint16_t __arr = *(uint16_t*)(ip + 4);
-					uint16_t __index = *(uint16_t*)(ip + 6);
-				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int64_t*)(localVarBase + __index)));
-				    (*(void**)(localVarBase + __addr)) = GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int64_t*)(localVarBase + __index)), il2cpp::vm::Array::GetElementSize(arr->klass));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::GetArrayElementAddressCheckAddrVarVar_i4:
+				case HiOpcodeEnum::GetArrayElementAddressCheckAddrVarVar:
 				{
 					uint16_t __addr = *(uint16_t*)(ip + 2);
 					uint16_t __arr = *(uint16_t*)(ip + 4);
@@ -10127,20 +10471,7 @@ else \
 				    ip += 16;
 				    continue;
 				}
-				case HiOpcodeEnum::GetArrayElementAddressCheckAddrVarVar_i8:
-				{
-					uint16_t __addr = *(uint16_t*)(ip + 2);
-					uint16_t __arr = *(uint16_t*)(ip + 4);
-					uint16_t __index = *(uint16_t*)(ip + 6);
-					Il2CppClass* __eleKlass = ((Il2CppClass*)imi->resolveDatas[*(uint32_t*)(ip + 8)]);
-				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int64_t*)(localVarBase + __index)));
-				    CheckArrayElementTypeMatch(arr->klass, __eleKlass);
-				    (*(void**)(localVarBase + __addr)) = GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int64_t*)(localVarBase + __index)), il2cpp::vm::Array::GetElementSize(arr->klass));
-				    ip += 16;
-				    continue;
-				}
-				case HiOpcodeEnum::GetArrayElementVarVar_i1_4:
+				case HiOpcodeEnum::GetArrayElementVarVar_i1:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __arr = *(uint16_t*)(ip + 4);
@@ -10151,7 +10482,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::GetArrayElementVarVar_u1_4:
+				case HiOpcodeEnum::GetArrayElementVarVar_u1:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __arr = *(uint16_t*)(ip + 4);
@@ -10162,7 +10493,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::GetArrayElementVarVar_i2_4:
+				case HiOpcodeEnum::GetArrayElementVarVar_i2:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __arr = *(uint16_t*)(ip + 4);
@@ -10173,7 +10504,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::GetArrayElementVarVar_u2_4:
+				case HiOpcodeEnum::GetArrayElementVarVar_u2:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __arr = *(uint16_t*)(ip + 4);
@@ -10184,7 +10515,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::GetArrayElementVarVar_i4_4:
+				case HiOpcodeEnum::GetArrayElementVarVar_i4:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __arr = *(uint16_t*)(ip + 4);
@@ -10195,7 +10526,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::GetArrayElementVarVar_u4_4:
+				case HiOpcodeEnum::GetArrayElementVarVar_u4:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __arr = *(uint16_t*)(ip + 4);
@@ -10206,7 +10537,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::GetArrayElementVarVar_i8_4:
+				case HiOpcodeEnum::GetArrayElementVarVar_i8:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __arr = *(uint16_t*)(ip + 4);
@@ -10217,7 +10548,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::GetArrayElementVarVar_u8_4:
+				case HiOpcodeEnum::GetArrayElementVarVar_u8:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __arr = *(uint16_t*)(ip + 4);
@@ -10228,7 +10559,51 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::GetArrayElementVarVar_size_12_4:
+				case HiOpcodeEnum::GetArrayElementVarVar_size_1:
+				{
+					uint16_t __dst = *(uint16_t*)(ip + 2);
+					uint16_t __arr = *(uint16_t*)(ip + 4);
+					uint16_t __index = *(uint16_t*)(ip + 6);
+				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
+				    Copy1((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), 1));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::GetArrayElementVarVar_size_2:
+				{
+					uint16_t __dst = *(uint16_t*)(ip + 2);
+					uint16_t __arr = *(uint16_t*)(ip + 4);
+					uint16_t __index = *(uint16_t*)(ip + 6);
+				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
+				    Copy2((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), 2));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::GetArrayElementVarVar_size_4:
+				{
+					uint16_t __dst = *(uint16_t*)(ip + 2);
+					uint16_t __arr = *(uint16_t*)(ip + 4);
+					uint16_t __index = *(uint16_t*)(ip + 6);
+				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
+				    Copy4((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), 4));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::GetArrayElementVarVar_size_8:
+				{
+					uint16_t __dst = *(uint16_t*)(ip + 2);
+					uint16_t __arr = *(uint16_t*)(ip + 4);
+					uint16_t __index = *(uint16_t*)(ip + 6);
+				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
+				    Copy8((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), 8));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::GetArrayElementVarVar_size_12:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __arr = *(uint16_t*)(ip + 4);
@@ -10239,7 +10614,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::GetArrayElementVarVar_size_16_4:
+				case HiOpcodeEnum::GetArrayElementVarVar_size_16:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __arr = *(uint16_t*)(ip + 4);
@@ -10250,7 +10625,51 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::GetArrayElementVarVar_n_4:
+				case HiOpcodeEnum::GetArrayElementVarVar_size_20:
+				{
+					uint16_t __dst = *(uint16_t*)(ip + 2);
+					uint16_t __arr = *(uint16_t*)(ip + 4);
+					uint16_t __index = *(uint16_t*)(ip + 6);
+				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
+				    Copy20((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), 20));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::GetArrayElementVarVar_size_24:
+				{
+					uint16_t __dst = *(uint16_t*)(ip + 2);
+					uint16_t __arr = *(uint16_t*)(ip + 4);
+					uint16_t __index = *(uint16_t*)(ip + 6);
+				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
+				    Copy24((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), 24));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::GetArrayElementVarVar_size_28:
+				{
+					uint16_t __dst = *(uint16_t*)(ip + 2);
+					uint16_t __arr = *(uint16_t*)(ip + 4);
+					uint16_t __index = *(uint16_t*)(ip + 6);
+				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
+				    Copy28((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), 28));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::GetArrayElementVarVar_size_32:
+				{
+					uint16_t __dst = *(uint16_t*)(ip + 2);
+					uint16_t __arr = *(uint16_t*)(ip + 4);
+					uint16_t __index = *(uint16_t*)(ip + 6);
+				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int32_t*)(localVarBase + __index)));
+				    Copy32((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int32_t*)(localVarBase + __index)), 32));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::GetArrayElementVarVar_n:
 				{
 					uint16_t __dst = *(uint16_t*)(ip + 2);
 					uint16_t __arr = *(uint16_t*)(ip + 4);
@@ -10262,129 +10681,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::GetArrayElementVarVar_i1_8:
-				{
-					uint16_t __dst = *(uint16_t*)(ip + 2);
-					uint16_t __arr = *(uint16_t*)(ip + 4);
-					uint16_t __index = *(uint16_t*)(ip + 6);
-				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int64_t*)(localVarBase + __index)));
-				    (*(int32_t*)(localVarBase + __dst)) = il2cpp_array_get(arr, int8_t, (*(int64_t*)(localVarBase + __index)));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::GetArrayElementVarVar_u1_8:
-				{
-					uint16_t __dst = *(uint16_t*)(ip + 2);
-					uint16_t __arr = *(uint16_t*)(ip + 4);
-					uint16_t __index = *(uint16_t*)(ip + 6);
-				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int64_t*)(localVarBase + __index)));
-				    (*(int32_t*)(localVarBase + __dst)) = il2cpp_array_get(arr, uint8_t, (*(int64_t*)(localVarBase + __index)));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::GetArrayElementVarVar_i2_8:
-				{
-					uint16_t __dst = *(uint16_t*)(ip + 2);
-					uint16_t __arr = *(uint16_t*)(ip + 4);
-					uint16_t __index = *(uint16_t*)(ip + 6);
-				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int64_t*)(localVarBase + __index)));
-				    (*(int32_t*)(localVarBase + __dst)) = il2cpp_array_get(arr, int16_t, (*(int64_t*)(localVarBase + __index)));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::GetArrayElementVarVar_u2_8:
-				{
-					uint16_t __dst = *(uint16_t*)(ip + 2);
-					uint16_t __arr = *(uint16_t*)(ip + 4);
-					uint16_t __index = *(uint16_t*)(ip + 6);
-				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int64_t*)(localVarBase + __index)));
-				    (*(int32_t*)(localVarBase + __dst)) = il2cpp_array_get(arr, uint16_t, (*(int64_t*)(localVarBase + __index)));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::GetArrayElementVarVar_i4_8:
-				{
-					uint16_t __dst = *(uint16_t*)(ip + 2);
-					uint16_t __arr = *(uint16_t*)(ip + 4);
-					uint16_t __index = *(uint16_t*)(ip + 6);
-				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int64_t*)(localVarBase + __index)));
-				    (*(int32_t*)(localVarBase + __dst)) = il2cpp_array_get(arr, int32_t, (*(int64_t*)(localVarBase + __index)));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::GetArrayElementVarVar_u4_8:
-				{
-					uint16_t __dst = *(uint16_t*)(ip + 2);
-					uint16_t __arr = *(uint16_t*)(ip + 4);
-					uint16_t __index = *(uint16_t*)(ip + 6);
-				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int64_t*)(localVarBase + __index)));
-				    (*(int32_t*)(localVarBase + __dst)) = il2cpp_array_get(arr, uint32_t, (*(int64_t*)(localVarBase + __index)));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::GetArrayElementVarVar_i8_8:
-				{
-					uint16_t __dst = *(uint16_t*)(ip + 2);
-					uint16_t __arr = *(uint16_t*)(ip + 4);
-					uint16_t __index = *(uint16_t*)(ip + 6);
-				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int64_t*)(localVarBase + __index)));
-				    (*(int64_t*)(localVarBase + __dst)) = il2cpp_array_get(arr, int64_t, (*(int64_t*)(localVarBase + __index)));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::GetArrayElementVarVar_u8_8:
-				{
-					uint16_t __dst = *(uint16_t*)(ip + 2);
-					uint16_t __arr = *(uint16_t*)(ip + 4);
-					uint16_t __index = *(uint16_t*)(ip + 6);
-				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int64_t*)(localVarBase + __index)));
-				    (*(int64_t*)(localVarBase + __dst)) = il2cpp_array_get(arr, uint64_t, (*(int64_t*)(localVarBase + __index)));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::GetArrayElementVarVar_size_12_8:
-				{
-					uint16_t __dst = *(uint16_t*)(ip + 2);
-					uint16_t __arr = *(uint16_t*)(ip + 4);
-					uint16_t __index = *(uint16_t*)(ip + 6);
-				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int64_t*)(localVarBase + __index)));
-				    Copy12((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int64_t*)(localVarBase + __index)), 12));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::GetArrayElementVarVar_size_16_8:
-				{
-					uint16_t __dst = *(uint16_t*)(ip + 2);
-					uint16_t __arr = *(uint16_t*)(ip + 4);
-					uint16_t __index = *(uint16_t*)(ip + 6);
-				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int64_t*)(localVarBase + __index)));
-				    Copy16((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int64_t*)(localVarBase + __index)), 16));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::GetArrayElementVarVar_n_8:
-				{
-					uint16_t __dst = *(uint16_t*)(ip + 2);
-					uint16_t __arr = *(uint16_t*)(ip + 4);
-					uint16_t __index = *(uint16_t*)(ip + 6);
-				    Il2CppArray* arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(arr, (*(int64_t*)(localVarBase + __index)));
-				    int32_t eleSize = il2cpp::vm::Array::GetElementSize(arr->klass);
-				    std::memmove((void*)(localVarBase + __dst), GET_ARRAY_ELEMENT_ADDRESS(arr, (*(int64_t*)(localVarBase + __index)), eleSize), eleSize);
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::SetArrayElementVarVar_i1_4:
+				case HiOpcodeEnum::SetArrayElementVarVar_i1:
 				{
 					uint16_t __arr = *(uint16_t*)(ip + 2);
 					uint16_t __index = *(uint16_t*)(ip + 4);
@@ -10395,7 +10692,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::SetArrayElementVarVar_u1_4:
+				case HiOpcodeEnum::SetArrayElementVarVar_u1:
 				{
 					uint16_t __arr = *(uint16_t*)(ip + 2);
 					uint16_t __index = *(uint16_t*)(ip + 4);
@@ -10406,7 +10703,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::SetArrayElementVarVar_i2_4:
+				case HiOpcodeEnum::SetArrayElementVarVar_i2:
 				{
 					uint16_t __arr = *(uint16_t*)(ip + 2);
 					uint16_t __index = *(uint16_t*)(ip + 4);
@@ -10417,7 +10714,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::SetArrayElementVarVar_u2_4:
+				case HiOpcodeEnum::SetArrayElementVarVar_u2:
 				{
 					uint16_t __arr = *(uint16_t*)(ip + 2);
 					uint16_t __index = *(uint16_t*)(ip + 4);
@@ -10428,7 +10725,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::SetArrayElementVarVar_i4_4:
+				case HiOpcodeEnum::SetArrayElementVarVar_i4:
 				{
 					uint16_t __arr = *(uint16_t*)(ip + 2);
 					uint16_t __index = *(uint16_t*)(ip + 4);
@@ -10439,7 +10736,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::SetArrayElementVarVar_u4_4:
+				case HiOpcodeEnum::SetArrayElementVarVar_u4:
 				{
 					uint16_t __arr = *(uint16_t*)(ip + 2);
 					uint16_t __index = *(uint16_t*)(ip + 4);
@@ -10450,7 +10747,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::SetArrayElementVarVar_i8_4:
+				case HiOpcodeEnum::SetArrayElementVarVar_i8:
 				{
 					uint16_t __arr = *(uint16_t*)(ip + 2);
 					uint16_t __index = *(uint16_t*)(ip + 4);
@@ -10461,7 +10758,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::SetArrayElementVarVar_u8_4:
+				case HiOpcodeEnum::SetArrayElementVarVar_u8:
 				{
 					uint16_t __arr = *(uint16_t*)(ip + 2);
 					uint16_t __index = *(uint16_t*)(ip + 4);
@@ -10472,7 +10769,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::SetArrayElementVarVar_ref_4:
+				case HiOpcodeEnum::SetArrayElementVarVar_ref:
 				{
 					uint16_t __arr = *(uint16_t*)(ip + 2);
 					uint16_t __index = *(uint16_t*)(ip + 4);
@@ -10484,7 +10781,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::SetArrayElementVarVar_size_12_4:
+				case HiOpcodeEnum::SetArrayElementVarVar_size_12:
 				{
 					uint16_t __arr = *(uint16_t*)(ip + 2);
 					uint16_t __index = *(uint16_t*)(ip + 4);
@@ -10495,7 +10792,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::SetArrayElementVarVar_size_16_4:
+				case HiOpcodeEnum::SetArrayElementVarVar_size_16:
 				{
 					uint16_t __arr = *(uint16_t*)(ip + 2);
 					uint16_t __index = *(uint16_t*)(ip + 4);
@@ -10506,7 +10803,19 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::SetArrayElementVarVar_n_4:
+				case HiOpcodeEnum::SetArrayElementVarVar_n:
+				{
+					uint16_t __arr = *(uint16_t*)(ip + 2);
+					uint16_t __index = *(uint16_t*)(ip + 4);
+					uint16_t __ele = *(uint16_t*)(ip + 6);
+				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
+				    int32_t _eleSize = il2cpp::vm::Array::GetElementSize(_arr->klass);
+				    SetArrayElementWithSize(_arr, _eleSize, (*(int32_t*)(localVarBase + __index)), (void*)(localVarBase + __ele));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::SetArrayElementVarVar_WriteBarrier_n:
 				{
 					uint16_t __arr = *(uint16_t*)(ip + 2);
 					uint16_t __index = *(uint16_t*)(ip + 4);
@@ -10515,140 +10824,6 @@ else \
 				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int32_t*)(localVarBase + __index)));
 				    int32_t _eleSize = il2cpp::vm::Array::GetElementSize(_arr->klass);
 				    il2cpp_array_setrefwithsize(_arr, _eleSize, (*(int32_t*)(localVarBase + __index)), (void*)(localVarBase + __ele));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::SetArrayElementVarVar_i1_8:
-				{
-					uint16_t __arr = *(uint16_t*)(ip + 2);
-					uint16_t __index = *(uint16_t*)(ip + 4);
-					uint16_t __ele = *(uint16_t*)(ip + 6);
-				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int64_t*)(localVarBase + __index)));
-				    il2cpp_array_set((*(Il2CppArray**)(localVarBase + __arr)), int8_t, (*(int64_t*)(localVarBase + __index)), (*(int8_t*)(localVarBase + __ele)));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::SetArrayElementVarVar_u1_8:
-				{
-					uint16_t __arr = *(uint16_t*)(ip + 2);
-					uint16_t __index = *(uint16_t*)(ip + 4);
-					uint16_t __ele = *(uint16_t*)(ip + 6);
-				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int64_t*)(localVarBase + __index)));
-				    il2cpp_array_set((*(Il2CppArray**)(localVarBase + __arr)), uint8_t, (*(int64_t*)(localVarBase + __index)), (*(uint8_t*)(localVarBase + __ele)));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::SetArrayElementVarVar_i2_8:
-				{
-					uint16_t __arr = *(uint16_t*)(ip + 2);
-					uint16_t __index = *(uint16_t*)(ip + 4);
-					uint16_t __ele = *(uint16_t*)(ip + 6);
-				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int64_t*)(localVarBase + __index)));
-				    il2cpp_array_set((*(Il2CppArray**)(localVarBase + __arr)), int16_t, (*(int64_t*)(localVarBase + __index)), (*(int16_t*)(localVarBase + __ele)));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::SetArrayElementVarVar_u2_8:
-				{
-					uint16_t __arr = *(uint16_t*)(ip + 2);
-					uint16_t __index = *(uint16_t*)(ip + 4);
-					uint16_t __ele = *(uint16_t*)(ip + 6);
-				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int64_t*)(localVarBase + __index)));
-				    il2cpp_array_set((*(Il2CppArray**)(localVarBase + __arr)), uint16_t, (*(int64_t*)(localVarBase + __index)), (*(uint16_t*)(localVarBase + __ele)));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::SetArrayElementVarVar_i4_8:
-				{
-					uint16_t __arr = *(uint16_t*)(ip + 2);
-					uint16_t __index = *(uint16_t*)(ip + 4);
-					uint16_t __ele = *(uint16_t*)(ip + 6);
-				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int64_t*)(localVarBase + __index)));
-				    il2cpp_array_set((*(Il2CppArray**)(localVarBase + __arr)), int32_t, (*(int64_t*)(localVarBase + __index)), (*(int32_t*)(localVarBase + __ele)));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::SetArrayElementVarVar_u4_8:
-				{
-					uint16_t __arr = *(uint16_t*)(ip + 2);
-					uint16_t __index = *(uint16_t*)(ip + 4);
-					uint16_t __ele = *(uint16_t*)(ip + 6);
-				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int64_t*)(localVarBase + __index)));
-				    il2cpp_array_set((*(Il2CppArray**)(localVarBase + __arr)), uint32_t, (*(int64_t*)(localVarBase + __index)), (*(uint32_t*)(localVarBase + __ele)));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::SetArrayElementVarVar_i8_8:
-				{
-					uint16_t __arr = *(uint16_t*)(ip + 2);
-					uint16_t __index = *(uint16_t*)(ip + 4);
-					uint16_t __ele = *(uint16_t*)(ip + 6);
-				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int64_t*)(localVarBase + __index)));
-				    il2cpp_array_set((*(Il2CppArray**)(localVarBase + __arr)), int64_t, (*(int64_t*)(localVarBase + __index)), (*(int64_t*)(localVarBase + __ele)));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::SetArrayElementVarVar_u8_8:
-				{
-					uint16_t __arr = *(uint16_t*)(ip + 2);
-					uint16_t __index = *(uint16_t*)(ip + 4);
-					uint16_t __ele = *(uint16_t*)(ip + 6);
-				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int64_t*)(localVarBase + __index)));
-				    il2cpp_array_set((*(Il2CppArray**)(localVarBase + __arr)), uint64_t, (*(int64_t*)(localVarBase + __index)), (*(uint64_t*)(localVarBase + __ele)));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::SetArrayElementVarVar_ref_8:
-				{
-					uint16_t __arr = *(uint16_t*)(ip + 2);
-					uint16_t __index = *(uint16_t*)(ip + 4);
-					uint16_t __ele = *(uint16_t*)(ip + 6);
-				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int64_t*)(localVarBase + __index)));
-				    CheckArrayElementTypeCompatible((*(Il2CppArray**)(localVarBase + __arr)), (*(Il2CppObject**)(localVarBase + __ele)));
-				    il2cpp_array_setref((*(Il2CppArray**)(localVarBase + __arr)), (*(int64_t*)(localVarBase + __index)), (*(Il2CppObject**)(localVarBase + __ele)));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::SetArrayElementVarVar_size_12_8:
-				{
-					uint16_t __arr = *(uint16_t*)(ip + 2);
-					uint16_t __index = *(uint16_t*)(ip + 4);
-					uint16_t __ele = *(uint16_t*)(ip + 6);
-				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int64_t*)(localVarBase + __index)));
-				    Copy12(GET_ARRAY_ELEMENT_ADDRESS(_arr, (*(int64_t*)(localVarBase + __index)), 12), (void*)(localVarBase + __ele));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::SetArrayElementVarVar_size_16_8:
-				{
-					uint16_t __arr = *(uint16_t*)(ip + 2);
-					uint16_t __index = *(uint16_t*)(ip + 4);
-					uint16_t __ele = *(uint16_t*)(ip + 6);
-				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int64_t*)(localVarBase + __index)));
-				    Copy16(GET_ARRAY_ELEMENT_ADDRESS(_arr, (*(int64_t*)(localVarBase + __index)), 16), (void*)(localVarBase + __ele));
-				    ip += 8;
-				    continue;
-				}
-				case HiOpcodeEnum::SetArrayElementVarVar_n_8:
-				{
-					uint16_t __arr = *(uint16_t*)(ip + 2);
-					uint16_t __index = *(uint16_t*)(ip + 4);
-					uint16_t __ele = *(uint16_t*)(ip + 6);
-				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
-				    CHECK_NOT_NULL_AND_ARRAY_BOUNDARY(_arr, (*(int64_t*)(localVarBase + __index)));
-				    int32_t _eleSize = il2cpp::vm::Array::GetElementSize(_arr->klass);
-				    il2cpp_array_setrefwithsize(_arr, _eleSize, (*(int64_t*)(localVarBase + __index)), (void*)(localVarBase + __ele));
 				    ip += 8;
 				    continue;
 				}
@@ -10743,7 +10918,7 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::GetMdArrElementVarVar_size:
+				case HiOpcodeEnum::GetMdArrElementVarVar_n:
 				{
 					uint16_t __arr = *(uint16_t*)(ip + 2);
 					uint16_t __lengthIdxs = *(uint16_t*)(ip + 4);
@@ -10761,12 +10936,122 @@ else \
 				    ip += 8;
 				    continue;
 				}
-				case HiOpcodeEnum::SetMdArrElementVarVar:
+				case HiOpcodeEnum::SetMdArrElementVarVar_i1:
 				{
 					uint16_t __arr = *(uint16_t*)(ip + 2);
 					uint16_t __lengthIdxs = *(uint16_t*)(ip + 4);
-					uint16_t __value = *(uint16_t*)(ip + 6);
-				    SetMdArrayElement((*(Il2CppArray**)(localVarBase + __arr)), (StackObject*)(void*)(localVarBase + __lengthIdxs), (void*)(localVarBase + __value));
+					uint16_t __ele = *(uint16_t*)(ip + 6);
+				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    void* _addr = GetMdArrayElementAddress(_arr, (StackObject*)(void*)(localVarBase + __lengthIdxs));
+				    *(int8_t*)_addr = (*(int8_t*)(localVarBase + __ele));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::SetMdArrElementVarVar_u1:
+				{
+					uint16_t __arr = *(uint16_t*)(ip + 2);
+					uint16_t __lengthIdxs = *(uint16_t*)(ip + 4);
+					uint16_t __ele = *(uint16_t*)(ip + 6);
+				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    void* _addr = GetMdArrayElementAddress(_arr, (StackObject*)(void*)(localVarBase + __lengthIdxs));
+				    *(uint8_t*)_addr = (*(uint8_t*)(localVarBase + __ele));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::SetMdArrElementVarVar_i2:
+				{
+					uint16_t __arr = *(uint16_t*)(ip + 2);
+					uint16_t __lengthIdxs = *(uint16_t*)(ip + 4);
+					uint16_t __ele = *(uint16_t*)(ip + 6);
+				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    void* _addr = GetMdArrayElementAddress(_arr, (StackObject*)(void*)(localVarBase + __lengthIdxs));
+				    *(int16_t*)_addr = (*(int16_t*)(localVarBase + __ele));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::SetMdArrElementVarVar_u2:
+				{
+					uint16_t __arr = *(uint16_t*)(ip + 2);
+					uint16_t __lengthIdxs = *(uint16_t*)(ip + 4);
+					uint16_t __ele = *(uint16_t*)(ip + 6);
+				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    void* _addr = GetMdArrayElementAddress(_arr, (StackObject*)(void*)(localVarBase + __lengthIdxs));
+				    *(uint16_t*)_addr = (*(uint16_t*)(localVarBase + __ele));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::SetMdArrElementVarVar_i4:
+				{
+					uint16_t __arr = *(uint16_t*)(ip + 2);
+					uint16_t __lengthIdxs = *(uint16_t*)(ip + 4);
+					uint16_t __ele = *(uint16_t*)(ip + 6);
+				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    void* _addr = GetMdArrayElementAddress(_arr, (StackObject*)(void*)(localVarBase + __lengthIdxs));
+				    *(int32_t*)_addr = (*(int32_t*)(localVarBase + __ele));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::SetMdArrElementVarVar_u4:
+				{
+					uint16_t __arr = *(uint16_t*)(ip + 2);
+					uint16_t __lengthIdxs = *(uint16_t*)(ip + 4);
+					uint16_t __ele = *(uint16_t*)(ip + 6);
+				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    void* _addr = GetMdArrayElementAddress(_arr, (StackObject*)(void*)(localVarBase + __lengthIdxs));
+				    *(uint32_t*)_addr = (*(uint32_t*)(localVarBase + __ele));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::SetMdArrElementVarVar_i8:
+				{
+					uint16_t __arr = *(uint16_t*)(ip + 2);
+					uint16_t __lengthIdxs = *(uint16_t*)(ip + 4);
+					uint16_t __ele = *(uint16_t*)(ip + 6);
+				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    void* _addr = GetMdArrayElementAddress(_arr, (StackObject*)(void*)(localVarBase + __lengthIdxs));
+				    *(int64_t*)_addr = (*(int64_t*)(localVarBase + __ele));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::SetMdArrElementVarVar_u8:
+				{
+					uint16_t __arr = *(uint16_t*)(ip + 2);
+					uint16_t __lengthIdxs = *(uint16_t*)(ip + 4);
+					uint16_t __ele = *(uint16_t*)(ip + 6);
+				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    void* _addr = GetMdArrayElementAddress(_arr, (StackObject*)(void*)(localVarBase + __lengthIdxs));
+				    *(uint64_t*)_addr = (*(uint64_t*)(localVarBase + __ele));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::SetMdArrElementVarVar_ref:
+				{
+					uint16_t __arr = *(uint16_t*)(ip + 2);
+					uint16_t __lengthIdxs = *(uint16_t*)(ip + 4);
+					uint16_t __ele = *(uint16_t*)(ip + 6);
+				    Il2CppArray* _arr = (*(Il2CppArray**)(localVarBase + __arr));
+				    void* _addr = GetMdArrayElementAddress(_arr, (StackObject*)(void*)(localVarBase + __lengthIdxs));
+				    CheckArrayElementTypeCompatible(_arr, (*(Il2CppObject**)(localVarBase + __ele)));
+				    *(Il2CppObject**)_addr = (*(Il2CppObject**)(localVarBase + __ele));
+				    HYBRIDCLR_SET_WRITE_BARRIER((void**)_addr);
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::SetMdArrElementVarVar_n:
+				{
+					uint16_t __arr = *(uint16_t*)(ip + 2);
+					uint16_t __lengthIdxs = *(uint16_t*)(ip + 4);
+					uint16_t __ele = *(uint16_t*)(ip + 6);
+				    SetMdArrayElement((*(Il2CppArray**)(localVarBase + __arr)), (StackObject*)(void*)(localVarBase + __lengthIdxs), (void*)(localVarBase + __ele));
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::SetMdArrElementVarVar_WriteBarrier_n:
+				{
+					uint16_t __arr = *(uint16_t*)(ip + 2);
+					uint16_t __lengthIdxs = *(uint16_t*)(ip + 4);
+					uint16_t __ele = *(uint16_t*)(ip + 6);
+				    SetMdArrayElementWriteBarrier((*(Il2CppArray**)(localVarBase + __arr)), (StackObject*)(void*)(localVarBase + __lengthIdxs), (void*)(localVarBase + __ele));
 				    ip += 8;
 				    continue;
 				}
@@ -10943,7 +11228,7 @@ else \
 					uint16_t __obj = *(uint16_t*)(ip + 2);
 					uint16_t __x = *(uint16_t*)(ip + 4);
 					uint16_t __y = *(uint16_t*)(ip + 6);
-				    *(HtVector2f*)(*(void**)(localVarBase + __obj)) = {(*(float*)(localVarBase + __x)), (*(float*)(localVarBase + __y))};
+				    *(HtVector2f*)(void*)(localVarBase + __obj) = {(*(float*)(localVarBase + __x)), (*(float*)(localVarBase + __y))};
 				    ip += 8;
 				    continue;
 				}
@@ -10952,7 +11237,7 @@ else \
 					uint16_t __obj = *(uint16_t*)(ip + 2);
 					uint16_t __x = *(uint16_t*)(ip + 4);
 					uint16_t __y = *(uint16_t*)(ip + 6);
-				    *(HtVector3f*)(*(void**)(localVarBase + __obj)) = {(*(float*)(localVarBase + __x)), (*(float*)(localVarBase + __y)), 0};
+				    *(HtVector3f*)(void*)(localVarBase + __obj) = {(*(float*)(localVarBase + __x)), (*(float*)(localVarBase + __y)), 0};
 				    ip += 8;
 				    continue;
 				}
@@ -10962,7 +11247,7 @@ else \
 					uint16_t __x = *(uint16_t*)(ip + 4);
 					uint16_t __y = *(uint16_t*)(ip + 6);
 					uint16_t __z = *(uint16_t*)(ip + 8);
-				    *(HtVector3f*)(*(void**)(localVarBase + __obj)) = {(*(float*)(localVarBase + __x)), (*(float*)(localVarBase + __y)), (*(float*)(localVarBase + __z))};
+				    *(HtVector3f*)(void*)(localVarBase + __obj) = {(*(float*)(localVarBase + __x)), (*(float*)(localVarBase + __y)), (*(float*)(localVarBase + __z))};
 				    ip += 16;
 				    continue;
 				}
@@ -10971,7 +11256,7 @@ else \
 					uint16_t __obj = *(uint16_t*)(ip + 2);
 					uint16_t __x = *(uint16_t*)(ip + 4);
 					uint16_t __y = *(uint16_t*)(ip + 6);
-				    *(HtVector4f*)(*(void**)(localVarBase + __obj)) = {(*(float*)(localVarBase + __x)), (*(float*)(localVarBase + __y)), 0, 0};
+				    *(HtVector4f*)(void*)(localVarBase + __obj) = {(*(float*)(localVarBase + __x)), (*(float*)(localVarBase + __y)), 0, 0};
 				    ip += 8;
 				    continue;
 				}
@@ -10981,11 +11266,69 @@ else \
 					uint16_t __x = *(uint16_t*)(ip + 4);
 					uint16_t __y = *(uint16_t*)(ip + 6);
 					uint16_t __z = *(uint16_t*)(ip + 8);
-				    *(HtVector4f*)(*(void**)(localVarBase + __obj)) = {(*(float*)(localVarBase + __x)), (*(float*)(localVarBase + __y)), (*(float*)(localVarBase + __z)), 0};
+				    *(HtVector4f*)(void*)(localVarBase + __obj) = {(*(float*)(localVarBase + __x)), (*(float*)(localVarBase + __y)), (*(float*)(localVarBase + __z)), 0};
 				    ip += 16;
 				    continue;
 				}
 				case HiOpcodeEnum::NewVector4_4:
+				{
+					uint16_t __obj = *(uint16_t*)(ip + 2);
+					uint16_t __x = *(uint16_t*)(ip + 4);
+					uint16_t __y = *(uint16_t*)(ip + 6);
+					uint16_t __z = *(uint16_t*)(ip + 8);
+					uint16_t __w = *(uint16_t*)(ip + 10);
+				    *(HtVector4f*)(void*)(localVarBase + __obj) = {(*(float*)(localVarBase + __x)), (*(float*)(localVarBase + __y)), (*(float*)(localVarBase + __z)), (*(float*)(localVarBase + __w))};
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::CtorVector2:
+				{
+					uint16_t __obj = *(uint16_t*)(ip + 2);
+					uint16_t __x = *(uint16_t*)(ip + 4);
+					uint16_t __y = *(uint16_t*)(ip + 6);
+				    *(HtVector2f*)(*(void**)(localVarBase + __obj)) = {(*(float*)(localVarBase + __x)), (*(float*)(localVarBase + __y))};
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::CtorVector3_2:
+				{
+					uint16_t __obj = *(uint16_t*)(ip + 2);
+					uint16_t __x = *(uint16_t*)(ip + 4);
+					uint16_t __y = *(uint16_t*)(ip + 6);
+				    *(HtVector3f*)(*(void**)(localVarBase + __obj)) = {(*(float*)(localVarBase + __x)), (*(float*)(localVarBase + __y)), 0};
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::CtorVector3_3:
+				{
+					uint16_t __obj = *(uint16_t*)(ip + 2);
+					uint16_t __x = *(uint16_t*)(ip + 4);
+					uint16_t __y = *(uint16_t*)(ip + 6);
+					uint16_t __z = *(uint16_t*)(ip + 8);
+				    *(HtVector3f*)(*(void**)(localVarBase + __obj)) = {(*(float*)(localVarBase + __x)), (*(float*)(localVarBase + __y)), (*(float*)(localVarBase + __z))};
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::CtorVector4_2:
+				{
+					uint16_t __obj = *(uint16_t*)(ip + 2);
+					uint16_t __x = *(uint16_t*)(ip + 4);
+					uint16_t __y = *(uint16_t*)(ip + 6);
+				    *(HtVector4f*)(*(void**)(localVarBase + __obj)) = {(*(float*)(localVarBase + __x)), (*(float*)(localVarBase + __y)), 0, 0};
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::CtorVector4_3:
+				{
+					uint16_t __obj = *(uint16_t*)(ip + 2);
+					uint16_t __x = *(uint16_t*)(ip + 4);
+					uint16_t __y = *(uint16_t*)(ip + 6);
+					uint16_t __z = *(uint16_t*)(ip + 8);
+				    *(HtVector4f*)(*(void**)(localVarBase + __obj)) = {(*(float*)(localVarBase + __x)), (*(float*)(localVarBase + __y)), (*(float*)(localVarBase + __z)), 0};
+				    ip += 16;
+				    continue;
+				}
+				case HiOpcodeEnum::CtorVector4_4:
 				{
 					uint16_t __obj = *(uint16_t*)(ip + 2);
 					uint16_t __x = *(uint16_t*)(ip + 4);
@@ -11071,10 +11414,25 @@ else \
 				    ip += 8;
 				    continue;
 				}
+				case HiOpcodeEnum::GetEnumHashCode:
+				{
+					uint16_t __dst = *(uint16_t*)(ip + 2);
+					uint16_t __src = *(uint16_t*)(ip + 4);
+				    (*(int32_t*)(localVarBase + __dst)) = GetEnumLongHashCode((*(void**)(localVarBase + __src)));
+				    ip += 8;
+				    continue;
+				}
 				case HiOpcodeEnum::AssemblyGetExecutingAssembly:
 				{
 					uint16_t __ret = *(uint16_t*)(ip + 2);
-				    (*(Il2CppObject**)(localVarBase + __ret)) = (Il2CppObject*)il2cpp::vm::Reflection::GetAssemblyObject(imi->method->klass->image->assembly);
+				    (*(Il2CppObject**)(localVarBase + __ret)) = (Il2CppObject*)il2cpp::vm::Reflection::GetAssemblyObject(frame->method->klass->image->assembly);
+				    ip += 8;
+				    continue;
+				}
+				case HiOpcodeEnum::MethodBaseGetCurrentMethod:
+				{
+					uint16_t __ret = *(uint16_t*)(ip + 2);
+				    (*(Il2CppObject**)(localVarBase + __ret)) = (Il2CppObject*)il2cpp::vm::Reflection::GetMethodObject(frame->method, nullptr);
 				    ip += 8;
 				    continue;
 				}

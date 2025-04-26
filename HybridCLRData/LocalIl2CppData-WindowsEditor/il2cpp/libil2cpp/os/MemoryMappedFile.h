@@ -52,6 +52,8 @@ namespace os
     {
     public:
         typedef void* MemoryMappedFileHandle;
+        static void AllocateStaticData();
+        static void FreeStaticData();
 
         static FileHandle* Create(FileHandle* file, const char* mapName, int32_t mode, int64_t *capacity, MemoryMappedFileAccess access, int32_t options, MemoryMappedFileError* error);
         static MemoryMappedFileHandle View(FileHandle* mappedFileHandle, int64_t* length, int64_t offset, MemoryMappedFileAccess access, int64_t* actualOffset, MemoryMappedFileError* error);

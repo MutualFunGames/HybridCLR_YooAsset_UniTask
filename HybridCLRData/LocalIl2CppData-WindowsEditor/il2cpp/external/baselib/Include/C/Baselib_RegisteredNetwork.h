@@ -13,6 +13,14 @@ BASELIB_C_INTERFACE
 #endif
 
 // ------------------------------------------------------------------------------------------------
+// General info
+
+// Check if registered network is emulated or natively supported.
+//
+// \returns true if emulated.
+BASELIB_API bool Baselib_RegisteredNetwork_IsEmulated(void);
+
+// ------------------------------------------------------------------------------------------------
 // Network buffers
 
 // Implementation defined internal buffer id.

@@ -18,13 +18,11 @@
 #include "vm-utils/BlobReader.h"
 #include "Thread.h"
 
-#include "hybridclr/metadata/MetadataUtil.h"
-
 namespace il2cpp
 {
 namespace vm
 {
-    const char* Field::GetName(FieldInfo *field)
+    const char* Field::GetName(const FieldInfo *field)
     {
         return field->name;
     }
@@ -63,11 +61,6 @@ namespace vm
 
     Il2CppObject* Field::GetValueObject(FieldInfo *field, Il2CppObject *obj)
     {
-        return GetValueObjectForThread(field, obj, il2cpp::vm::Thread::Current());
-    }
-
-    Il2CppObject* Field::GetValueObjectForThread(FieldInfo *field, Il2CppObject *obj, Il2CppThread *thread)
-    {
         Il2CppClass* fieldType = Class::FromIl2CppType(field->type);
 
         if (field->type->attrs & FIELD_ATTRIBUTE_LITERAL)
@@ -93,7 +86,7 @@ namespace vm
             {
                 Runtime::ClassInit(field->parent);
                 int threadStaticFieldOffset = MetadataCache::GetThreadLocalStaticOffsetForField(field);
-                void* threadStaticData = Thread::GetThreadStaticDataForThread(field->parent->thread_static_fields_offset, thread);
+                void* threadStaticData = Thread::GetThreadStaticData(field->parent->thread_static_fields_offset);
                 fieldAddress = static_cast<uint8_t*>(threadStaticData) + threadStaticFieldOffset;
             }
             else
@@ -142,34 +135,20 @@ namespace vm
         const char* data;
 
         data = Class::GetFieldDefaultValue(field, &type);
-        utils::BlobReader::GetConstantValueFromBlob(field->parent->image, type->type, data, value, nullptr, hybridclr::metadata::IsInterpreterType(field->parent));
+        utils::BlobReader::GetConstantValueFromBlob(field->parent->image, type->type, data, value);
     }
 
     void Field::StaticGetValue(FieldInfo *field, void *value)
     {
-        // ensure parent is initialized so that static fields memory has been allocated
-        Class::SetupFields(field->parent);
-
-        void* threadStaticData = NULL;
-        if (field->offset == THREAD_STATIC_FIELD_OFFSET)
-            threadStaticData = Thread::GetThreadStaticDataForThread(field->parent->thread_static_fields_offset, il2cpp::vm::Thread::Current());
-
-        StaticGetValueInternal(field, value, threadStaticData);
+        StaticGetValueInternal(field, value, NULL);
     }
 
     void Field::StaticGetValueForThread(FieldInfo* field, void* value, Il2CppInternalThread* thread)
     {
-        // ensure parent is initialized so that static fields memory has been allocated
-        Class::SetupFields(field->parent);
-
-        void* threadStaticData = NULL;
-        if (field->offset == THREAD_STATIC_FIELD_OFFSET)
-            threadStaticData = Thread::GetThreadStaticDataForThread(field->parent->thread_static_fields_offset, thread);
-
-        StaticGetValueInternal(field, value, threadStaticData);
+        StaticGetValueInternal(field, value, thread);
     }
 
-    void Field::StaticGetValueInternal(FieldInfo* field, void* value, void* threadStaticData)
+    void Field::StaticGetValueInternal(FieldInfo* field, void* value, Il2CppInternalThread* thread)
     {
         void *src = NULL;
 
@@ -186,8 +165,11 @@ namespace vm
 
         if (field->offset == THREAD_STATIC_FIELD_OFFSET)
         {
-            IL2CPP_ASSERT(NULL != threadStaticData);
             int threadStaticFieldOffset = MetadataCache::GetThreadLocalStaticOffsetForField(field);
+
+            void* threadStaticData = thread == NULL ? Thread::GetThreadStaticData(field->parent->thread_static_fields_offset) : Thread::GetThreadStaticDataForThread(field->parent->thread_static_fields_offset, thread);
+            IL2CPP_ASSERT(NULL != threadStaticData);
+
             src = ((char*)threadStaticData) + threadStaticFieldOffset;
         }
         else
@@ -200,11 +182,6 @@ namespace vm
 
     void Field::StaticSetValue(FieldInfo *field, void *value)
     {
-        StaticSetValueForThread(field, value, il2cpp::vm::Thread::Current());
-    }
-
-    void Field::StaticSetValueForThread(FieldInfo* field, void* value, Il2CppThread* thread)
-    {
         void *dest = NULL;
 
         IL2CPP_ASSERT(field->type->attrs & FIELD_ATTRIBUTE_STATIC);
@@ -216,7 +193,7 @@ namespace vm
         if (field->offset == THREAD_STATIC_FIELD_OFFSET)
         {
             int threadStaticFieldOffset = MetadataCache::GetThreadLocalStaticOffsetForField(field);
-            void* threadStaticData = Thread::GetThreadStaticDataForThread(field->parent->thread_static_fields_offset, thread);
+            void* threadStaticData = Thread::GetThreadStaticData(field->parent->thread_static_fields_offset);
             dest = ((char*)threadStaticData) + threadStaticFieldOffset;
         }
         else

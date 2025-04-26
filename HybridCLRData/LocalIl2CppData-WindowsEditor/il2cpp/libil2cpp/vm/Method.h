@@ -49,7 +49,6 @@ namespace vm
         static bool IsAmbiguousMethodInfo(const MethodInfo* method);
         static bool IsEntryPointNotFoundMethodInfo(const MethodInfo* method);
         static bool HasFullGenericSharingSignature(const MethodInfo* method);
-        static Il2CppMethodPointer GetVirtualCallMethodPointer(const MethodInfo* method);
     };
 } /* namespace vm */
 } /* namespace il2cpp */

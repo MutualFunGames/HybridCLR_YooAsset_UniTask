@@ -1,7 +1,8 @@
 #include "os/c-api/il2cpp-config-platforms.h"
 #if IL2CPP_THREADS_WIN32
 
-#include "MutexImpl.h"
+#include "WindowsHeaders.h"
+#include "os/Win32/MutexImpl.h"
 #include "ConditionVariableImpl.h"
 #include "WindowsHelpers.h"
 

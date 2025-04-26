@@ -40,13 +40,15 @@ namespace vm
                 return utils::Read16(ptr);
 
             case IL2CPP_TYPE_I4: // Sign extend
-                return static_cast<int64_t>(static_cast<int32_t>(hybridclr::metadata::IsInterpreterType(enumType) ? (int32_t)utils::Read32(&ptr) : utils::ReadCompressedInt32(&ptr)));
+                return static_cast<int64_t>(static_cast<int32_t>(utils::ReadCompressedInt32(&ptr)));
 
             case IL2CPP_TYPE_U4:
-                return hybridclr::metadata::IsInterpreterType(enumType) ? utils::Read32(&ptr) : utils::ReadCompressedUInt32(&ptr);
+                return utils::ReadCompressedUInt32(&ptr);
 
             case IL2CPP_TYPE_U8:
             case IL2CPP_TYPE_I8:
+            case IL2CPP_TYPE_U:
+            case IL2CPP_TYPE_I:
                 return utils::Read64(ptr);
 
             default:

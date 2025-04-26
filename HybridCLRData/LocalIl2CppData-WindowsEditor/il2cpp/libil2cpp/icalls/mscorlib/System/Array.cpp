@@ -246,9 +246,7 @@ namespace System
                 (ind[i] >= ARRAY_LENGTH_AS_INT32(ao->bounds[i].length) + ao->bounds[i].lower_bound))
                 vm::Exception::Raise(vm::Exception::GetIndexOutOfRangeException());
 
-        pos = ind[0] - ao->bounds[0].lower_bound;
-        for (i = 1; i < ac->rank; i++)
-            pos = pos * ao->bounds[i].length + ind[i] - ao->bounds[i].lower_bound;
+        pos = vm::Array::IndexFromIndices(ao, ind);
 
         return GetValueImpl(thisPtr, ARRAY_LENGTH_AS_INT32(pos));
     }
@@ -303,10 +301,7 @@ namespace System
                 (ind[i] >= (il2cpp_array_lower_bound_t)thisPtr->bounds[i].length + thisPtr->bounds[i].lower_bound))
                 vm::Exception::Raise(vm::Exception::GetIndexOutOfRangeException());
 
-        pos = ind[0] - thisPtr->bounds[0].lower_bound;
-        for (i = 1; i < ac->rank; i++)
-            pos = pos * thisPtr->bounds[i].length + ind[i] -
-                thisPtr->bounds[i].lower_bound;
+        pos = vm::Array::IndexFromIndices(thisPtr, ind);
 
         SetValueImpl(thisPtr, value, ARRAY_LENGTH_AS_INT32(pos));
     }

@@ -11,6 +11,7 @@
 #include <config.h>
 #include <glib.h>
 #include <errno.h>
+#include <mono/utils/mono-errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,14 +36,10 @@ mono_mkstemp (char *templ)
 
 	len = strlen (templ);
 	do {
-#if HOST_WIN32
-		t = _mktemp (templ);
-#else
-		t = mktemp (templ);
-#endif
+		t = g_mktemp (templ);
 
 		if (t == NULL) {
-			errno = EINVAL;
+			mono_set_errno (EINVAL);
 			return -1;
 		}
 
@@ -50,11 +47,7 @@ mono_mkstemp (char *templ)
 			return -1;
 		}
 
-#if HOST_WIN32
-		ret = _open (templ, O_RDWR | O_BINARY | O_CREAT | O_EXCL, 0600);
-#else
-		ret = open(templ, O_RDWR | O_BINARY | O_CREAT | O_EXCL, 0600);
-#endif
+		ret = g_open (templ, O_RDWR | O_BINARY | O_CREAT | O_EXCL, 0600);
 		if (ret == -1) {
 			if (errno != EEXIST)
 				return -1;
@@ -67,5 +60,12 @@ mono_mkstemp (char *templ)
 
 	return ret;
 }
+
+#else
+
+#include <mono/utils/mono-compiler.h>
+
+MONO_EMPTY_SOURCE_FILE (mono_stdlib);
+
 #endif
 

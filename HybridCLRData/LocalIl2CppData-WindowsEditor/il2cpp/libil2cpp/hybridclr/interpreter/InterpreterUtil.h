@@ -1,6 +1,10 @@
 #pragma once
 
+#if HYBRIDCLR_UNITY_2023_OR_NEW
+#include "codegen/il2cpp-codegen.h"
+#else
 #include "codegen/il2cpp-codegen-il2cpp.h"
+#endif
 
 #include "InterpreterDefs.h"
 
@@ -8,6 +12,12 @@ namespace hybridclr
 {
 namespace interpreter
 {
+	
+	struct TypeDesc
+	{
+		LocationDataType type;
+		uint32_t stackObjectSize; //
+	};
 
 	IL2CPP_FORCE_INLINE void RuntimeInitClassCCtor(Il2CppClass* klass)
 	{
@@ -41,7 +51,7 @@ namespace interpreter
 		return type < LocationDataType::U8;
 	}
 
-	ArgDesc GetTypeArgDesc(const Il2CppType* type);
+	TypeDesc GetTypeArgDesc(const Il2CppType* type);
 
 	inline LocationDataType GetLocationDataTypeByType(const Il2CppType* type)
 	{
@@ -52,16 +62,16 @@ namespace interpreter
 	{
 		switch (type)
 		{
-		case hybridclr::interpreter::LocationDataType::I1:
+		case LocationDataType::I1:
 			*(int32_t*)retValue = *(int8_t*)retValue;
 			break;
-		case hybridclr::interpreter::LocationDataType::U1:
+		case LocationDataType::U1:
 			*(int32_t*)retValue = *(uint8_t*)retValue;
 			break;
-		case hybridclr::interpreter::LocationDataType::I2:
+		case LocationDataType::I2:
 			*(int32_t*)retValue = *(int16_t*)retValue;
 			break;
-		case hybridclr::interpreter::LocationDataType::U2:
+		case LocationDataType::U2:
 			*(int32_t*)retValue = *(uint16_t*)retValue;
 			break;
 		default:
@@ -73,16 +83,16 @@ namespace interpreter
 	{
 		switch (type)
 		{
-		case hybridclr::interpreter::LocationDataType::I1:
+		case LocationDataType::I1:
 			*(int32_t*)dst = *(int8_t*)src;
 			break;
-		case hybridclr::interpreter::LocationDataType::U1:
+		case LocationDataType::U1:
 			*(int32_t*)dst = *(uint8_t*)src;
 			break;
-		case hybridclr::interpreter::LocationDataType::I2:
+		case LocationDataType::I2:
 			*(int32_t*)dst = *(int16_t*)src;
 			break;
-		case hybridclr::interpreter::LocationDataType::U2:
+		case LocationDataType::U2:
 			*(int32_t*)dst = *(uint16_t*)src;
 			break;
 		default:
@@ -91,13 +101,10 @@ namespace interpreter
 		}
 	}
 
-	ArgDesc GetValueTypeArgDescBySize(uint32_t size);
-
-	inline bool IsSimpleStackObjectCopyArg(LocationDataType type)
-	{
-		return type <= LocationDataType::U8;
-	}
+	TypeDesc GetValueTypeArgDescBySize(uint32_t size);
+	
 	Il2CppObject* TranslateNativeValueToBoxValue(const Il2CppType* type, void* value);
+
 
 }
 }

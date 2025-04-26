@@ -16,6 +16,8 @@
 #include "config.h"
 #ifdef HAVE_SGEN_GC
 
+#ifndef DISABLE_SGEN_SPLIT_NURSERY
+
 #include <string.h>
 #include <stdlib.h>
 
@@ -137,7 +139,7 @@ static AgeAllocationBuffer age_alloc_buffers [MAX_AGE];
 /* The collector allocs from here. */
 static SgenFragmentAllocator collector_allocator;
 
-static inline int
+static int
 get_object_age (GCObject *object)
 {
 	size_t idx = ((char*)object - sgen_nursery_start) >> SGEN_TO_SPACE_GRANULE_BITS;
@@ -155,7 +157,7 @@ set_age_in_range (char *start, char *end, int age)
 	memset (region_start, age, length);
 }
 
-static inline void
+static void
 mark_bit (char *space_bitmap, char *pos)
 {
 	size_t idx = (pos - sgen_nursery_start) >> SGEN_TO_SPACE_GRANULE_BITS;
@@ -248,7 +250,7 @@ alloc_for_promotion_slow_path (int age, size_t objsize)
 	return p;
 }
 
-static inline GCObject*
+static GCObject*
 alloc_for_promotion (GCVTable vtable, GCObject *obj, size_t objsize, gboolean has_references)
 {
 	char *p = NULL;
@@ -256,8 +258,8 @@ alloc_for_promotion (GCVTable vtable, GCObject *obj, size_t objsize, gboolean ha
 
 	age = get_object_age (obj);
 	if (age >= promote_age) {
-		total_promoted_size += objsize;
-		return major_collector.alloc_object (vtable, objsize, has_references);
+		sgen_total_promoted_size += objsize;
+		return sgen_major_collector.alloc_object (vtable, objsize, has_references);
 	}
 
 	/* Promote! */
@@ -269,8 +271,8 @@ alloc_for_promotion (GCVTable vtable, GCObject *obj, size_t objsize, gboolean ha
 	} else {
 		p = alloc_for_promotion_slow_path (age, objsize);
 		if (!p) {
-			total_promoted_size += objsize;
-			return major_collector.alloc_object (vtable, objsize, has_references);
+			sgen_total_promoted_size += objsize;
+			return sgen_major_collector.alloc_object (vtable, objsize, has_references);
 		}
 	}
 
@@ -287,7 +289,7 @@ minor_alloc_for_promotion (GCVTable vtable, GCObject *obj, size_t objsize, gbool
 	We only need to check for a non-nursery object if we're doing a major collection.
 	*/
 	if (!sgen_ptr_in_nursery (obj))
-		return major_collector.alloc_object (vtable, objsize, has_references);
+		return sgen_major_collector.alloc_object (vtable, objsize, has_references);
 
 	return alloc_for_promotion (vtable, obj, objsize, has_references);
 }
@@ -469,5 +471,12 @@ sgen_split_nursery_init (SgenMinorCollector *collector)
 	fill_serial_with_concurrent_major_ops (&collector->serial_ops_with_concurrent_major);
 }
 
+#else
+
+#include <mono/utils/mono-compiler.h>
+
+MONO_EMPTY_SOURCE_FILE (sgen_split_nursery);
+
+#endif //#ifndef DISABLE_SGEN_SPLIT_NURSERY
 
 #endif

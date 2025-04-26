@@ -5,10 +5,6 @@
 #include "il2cpp-config.h"
 #include "il2cpp-metadata.h"
 
-#if IL2CPP_TINY_DEBUGGER
-#include <string>
-#endif
-
 namespace il2cpp
 {
 namespace vm
@@ -20,10 +16,6 @@ namespace vm
     public:
         static void InitializeStackTracesForCurrentThread();
         static void CleanupStackTracesForCurrentThread();
-
-#if IL2CPP_TINY_DEBUGGER
-        static const char* GetStackTrace();
-#endif
 
         // Current thread functions
         static const StackFrames* GetStackFrames();

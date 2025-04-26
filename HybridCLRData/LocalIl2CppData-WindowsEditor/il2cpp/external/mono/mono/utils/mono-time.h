@@ -7,7 +7,6 @@
 
 #include <mono/utils/mono-compiler.h>
 #include <glib.h>
-
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif
@@ -29,6 +28,20 @@ gint64 mono_100ns_datetime (void);
 #ifndef HOST_WIN32
 gint64 mono_100ns_datetime_from_timeval (struct timeval tv);
 #endif
+
+#if defined(HOST_DARWIN)
+#include <mach/clock.h>
+typedef clock_serv_t mono_clock_id_t;
+#elif defined(HAVE_CLOCKID_T)
+#include <sys/types.h>
+typedef clockid_t mono_clock_id_t;
+#else
+typedef void *mono_clock_id_t;
+#endif
+
+void mono_clock_init (mono_clock_id_t *clk_id);
+void mono_clock_cleanup (mono_clock_id_t clk_id);
+guint64 mono_clock_get_time_ns (mono_clock_id_t clk_id);
 
 /* Stopwatch class for internal runtime use */
 typedef struct {
@@ -60,5 +73,8 @@ mono_stopwatch_elapsed_ms (MonoStopwatch *w)
 	return (mono_stopwatch_elapsed (w) + 500) / 1000;
 }
 
-#endif /* __UTILS_MONO_TIME_H__ */
+// Expand non-portable strftime shorthands.
+#define MONO_STRFTIME_F "%Y-%m-%d" // %F in some systems, but this works on all.
+#define MONO_STRFTIME_T "%H:%M:%S" // %T in some systems, but this works on all.
 
+#endif /* __UTILS_MONO_TIME_H__ */

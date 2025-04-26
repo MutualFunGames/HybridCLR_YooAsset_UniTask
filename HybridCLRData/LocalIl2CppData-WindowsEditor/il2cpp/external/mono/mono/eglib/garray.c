@@ -25,7 +25,7 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-
+#include "config.h"
 #include <stdlib.h>
 #include <glib.h>
 
@@ -50,7 +50,7 @@ ensure_capacity (GArrayPriv *priv, guint capacity)
 	if (capacity <= priv->capacity)
 		return;
 	
-	new_capacity = (capacity + 63) & ~63;
+	new_capacity = (capacity + (capacity >> 1) + 63) & ~63;
 	
 	priv->array.data = g_realloc (priv->array.data, element_length (priv, new_capacity));
 	

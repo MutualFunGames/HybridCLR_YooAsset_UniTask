@@ -193,11 +193,13 @@ int32_t ReadZStream(intptr_t zstream, intptr_t zbuffer, int32_t length)
             intptr_t gchandle_ptr = reinterpret_cast<intptr_t>(stream->gchandle);
 
             n = stream->func(buffer_ptr, BUFFER_SIZE, gchandle_ptr);
-            if (n <= 0)
-            {
-                stream->eof = 1;
-                break;
-            }
+            if (n < 0)
+                n = 0;
+
+            // Even if avail_in reports zero, and we have no more data from the stream,
+            // inflate may have more data to return.  So we cannot break here and need to
+            // keep calling inflate until it returns Z_STREAM_END.
+
             stream->total_in += n;
             zs->next_in = stream->buffer;
             zs->avail_in = n;

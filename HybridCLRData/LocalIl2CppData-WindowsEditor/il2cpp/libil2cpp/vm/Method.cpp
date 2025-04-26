@@ -298,6 +298,14 @@ namespace vm
         if (!method->methodMetadataHandle)
             return 0;
 
+#if SUPPORT_METHOD_RETURN_TYPE_CUSTOM_ATTRIBUTE
+        // We are looking at the return parameter, which is not stored as a parameter, but the method has its token
+        if (index == -1)
+        {
+            return MetadataCache::GetReturnParameterToken(method->methodMetadataHandle);
+        }
+#endif
+
         Il2CppMetadataParameterInfo paramInfo = MetadataCache::GetParameterInfo(method->klass, method->methodMetadataHandle, index);
 
         return paramInfo.token;
@@ -382,13 +390,6 @@ namespace vm
     bool Method::HasFullGenericSharingSignature(const MethodInfo* method)
     {
         return method->has_full_generic_sharing_signature;
-    }
-
-    Il2CppMethodPointer Method::GetVirtualCallMethodPointer(const MethodInfo* method)
-    {
-        if (method->is_inflated)
-            return il2cpp::metadata::GenericMethod::GetVirtualCallMethodPointer(method);
-        return method->virtualMethodPointer;
     }
 } /* namespace vm */
 } /* namespace il2cpp */

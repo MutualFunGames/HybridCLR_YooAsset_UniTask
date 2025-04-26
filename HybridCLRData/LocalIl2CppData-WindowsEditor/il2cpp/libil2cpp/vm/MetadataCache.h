@@ -8,6 +8,7 @@
 #include "utils/HashUtils.h"
 #include "utils/Il2CppHashMap.h"
 #include "utils/StringUtils.h"
+#include "metadata/CustomAttributeDataReader.h"
 #include "metadata/Il2CppGenericContextCompare.h"
 #include "metadata/Il2CppGenericContextHash.h"
 #include "metadata/Il2CppGenericInstCompare.h"
@@ -38,6 +39,13 @@ namespace vm
         bool isFullGenericShared;
     } Il2CppGenericMethodPointers;
 
+    typedef struct Il2CppUnresolvedCallStubs
+    {
+        Il2CppMethodPointer methodPointer;
+        Il2CppMethodPointer virtualMethodPointer;
+        bool stubsFound;
+    } Il2CppUnresolvedCallStubs;
+
     enum GenericParameterRestriction
     {
         GenericParameterRestrictionNone,
@@ -47,7 +55,7 @@ namespace vm
 
     typedef Il2CppHashMap<const char*, Il2CppClass*, il2cpp::utils::StringUtils::StringHasher<const char*>, il2cpp::utils::VmStringUtils::CaseSensitiveComparer> WindowsRuntimeTypeNameToClassMap;
     typedef Il2CppHashMap<const Il2CppClass*, const char*, il2cpp::utils::PointerHash<Il2CppClass> > ClassToWindowsRuntimeTypeNameMap;
-    typedef Il2CppHashMap<il2cpp::metadata::Il2CppSignature, Il2CppMethodPointer, il2cpp::metadata::Il2CppSignatureHash, il2cpp::metadata::Il2CppSignatureCompare> Il2CppUnresolvedSignatureMap;
+    typedef Il2CppHashMap<il2cpp::metadata::Il2CppSignature, int32_t, il2cpp::metadata::Il2CppSignatureHash, il2cpp::metadata::Il2CppSignatureCompare> Il2CppUnresolvedSignatureMap;
     typedef Il2CppHashMap<const Il2CppGenericMethod*, const Il2CppGenericMethodIndices*, il2cpp::metadata::Il2CppGenericMethodHash, il2cpp::metadata::Il2CppGenericMethodCompare> Il2CppMethodTableMap;
 
     class LIBIL2CPP_CODEGEN_API MetadataCache
@@ -97,7 +105,7 @@ namespace vm
         static const Il2CppInteropData* GetInteropDataForType(const Il2CppType* type);
         static Il2CppMethodPointer GetReversePInvokeWrapper(const Il2CppImage* image, const MethodInfo* method);
 
-        static Il2CppMethodPointer GetUnresolvedVirtualCallStub(const MethodInfo* method);
+        static Il2CppUnresolvedCallStubs GetUnresovledCallStubs(const MethodInfo* method);
 
         static const Il2CppAssembly* GetAssemblyByName(const char* nameToFind);
 
@@ -110,6 +118,7 @@ namespace vm
         static Il2CppMetadataGenericParameterHandle GetGenericParameterFromIndex(Il2CppMetadataGenericContainerHandle handle, GenericContainerParameterIndex index);
         static Il2CppClass* GetContainerDeclaringType(Il2CppMetadataGenericContainerHandle handle);
         static Il2CppClass* GetParameterDeclaringType(Il2CppMetadataGenericParameterHandle handle);
+        static const MethodInfo* GetParameterDeclaringMethod(Il2CppMetadataGenericParameterHandle handle);
 
         static const Il2CppType* GetGenericParameterConstraintFromIndex(Il2CppMetadataGenericParameterHandle handle, GenericParameterConstraintIndex index);
         static Il2CppClass* GetNestedTypeFromOffset(const Il2CppClass* klass, TypeNestedTypeIndex offset);
@@ -129,11 +138,8 @@ namespace vm
         static const Il2CppAssembly* GetReferencedAssembly(const Il2CppAssembly* assembly, int32_t referencedAssemblyTableIndex);
 
         static Il2CppMetadataCustomAttributeHandle GetCustomAttributeTypeToken(const Il2CppImage* image, uint32_t token);
-        static std::tuple<void*, void*> GetCustomAttributeDataRange(const Il2CppImage* image, uint32_t token);
-        static CustomAttributesCache* GenerateCustomAttributesCache(Il2CppMetadataCustomAttributeHandle token);
-        static CustomAttributesCache* GenerateCustomAttributesCache(const Il2CppImage* image, uint32_t token);
-        static bool HasAttribute(Il2CppMetadataCustomAttributeHandle token, Il2CppClass* attribute);
-        static bool HasAttribute(const Il2CppImage* image, uint32_t token, Il2CppClass* attribute);
+        static il2cpp::metadata::CustomAttributeDataReader GetCustomAttributeDataReader(const Il2CppImage* image, uint32_t token);
+        static il2cpp::metadata::CustomAttributeDataReader GetCustomAttributeDataReader(Il2CppMetadataCustomAttributeHandle handle);
 
         typedef void(*WalkTypesCallback)(Il2CppClass* type, void* context);
         static void WalkPointerTypes(WalkTypesCallback callback, void* context);
@@ -154,6 +160,9 @@ namespace vm
         static Il2CppMetadataParameterInfo GetParameterInfo(const Il2CppClass* klass, Il2CppMetadataMethodDefinitionHandle handle, MethodParameterIndex index);
         static Il2CppMetadataPropertyInfo GetPropertyInfo(const Il2CppClass* klass, TypePropertyIndex index);
         static Il2CppMetadataEventInfo GetEventInfo(const Il2CppClass* klass, TypeEventIndex index);
+#if SUPPORT_METHOD_RETURN_TYPE_CUSTOM_ATTRIBUTE
+        static uint32_t GetReturnParameterToken(Il2CppMetadataMethodDefinitionHandle handle);
+#endif
 
         static void MakeGenericArgType(Il2CppMetadataGenericContainerHandle containerHandle, Il2CppMetadataGenericParameterHandle paramHandle, Il2CppType* arg);
         static uint32_t GetGenericContainerCount(Il2CppMetadataGenericContainerHandle handle);
@@ -191,7 +200,7 @@ namespace vm
         static Il2CppMetadataTypeHandle GetTypeHandleFromIndex(const Il2CppImage* image, TypeDefinitionIndex typeIndex);
 
         static void RegisterInterpreterAssembly(Il2CppAssembly* assembly);
-        static const Il2CppAssembly* LoadAssemblyFromBytes(const char* assemblyBytes, size_t length);
+        static const Il2CppAssembly* LoadAssemblyFromBytes(const char* assemblyBytes, size_t length, const char* rawSymbolStoreBytes, size_t rawSymbolStoreLength);
         static const Il2CppGenericMethod* FindGenericMethod(std::function<bool(const Il2CppGenericMethod*)> predic);
         static void FixThreadLocalStaticOffsetForFieldLocked(FieldInfo* field, int32_t offset, const il2cpp::os::FastAutoLock& lock);
 

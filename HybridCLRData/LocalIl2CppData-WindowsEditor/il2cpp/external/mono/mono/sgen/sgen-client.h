@@ -187,9 +187,9 @@ void sgen_client_scan_thread_data (void *start_nursery, void *end_nursery, gbool
  * Stop and restart the world, i.e., all threads that interact with the managed heap.  For
  * single-threaded programs this is a nop.
  */
-void sgen_client_stop_world (int generation)
+void sgen_client_stop_world (int generation, gboolean serial_collection)
     MONO_PERMIT (need (sgen_gc_locked));
-void sgen_client_restart_world (int generation, gint64 *stw_time)
+void sgen_client_restart_world (int generation, gboolean serial_collection, gint64 *stw_time)
     MONO_PERMIT (need (sgen_gc_locked));
 
 /*
@@ -207,11 +207,19 @@ void sgen_client_bridge_processing_finish (int generation);
 gboolean sgen_client_bridge_is_bridge_object (GCObject *obj);
 void sgen_client_bridge_register_finalized_object (GCObject *object);
 
+#ifndef DISABLE_SGEN_TOGGLEREF
 /*
  * No action is necessary.
  */
 void sgen_client_mark_togglerefs (char *start, char *end, ScanCopyContext ctx);
 void sgen_client_clear_togglerefs (char *start, char *end, ScanCopyContext ctx);
+void sgen_foreach_toggleref_root (void (*callback)(MonoObject*, gpointer), gpointer data);
+#else
+static inline void sgen_client_mark_togglerefs (char *start, char *end, ScanCopyContext ctx) { }
+static inline void sgen_client_clear_togglerefs (char *start, char *end, ScanCopyContext ctx) { }
+static inline void sgen_foreach_toggleref_root (void (*callback)(MonoObject*, gpointer), gpointer data) { }
+#endif
+
 
 /*
  * Called to handle `MONO_GC_PARAMS` and `MONO_GC_DEBUG` options.  The `handle` functions

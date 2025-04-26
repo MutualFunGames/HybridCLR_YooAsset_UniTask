@@ -8,7 +8,6 @@ Input defines: (those to be defined by the includer file)
 Required:
 DECL_OFFSET(struct,field)
 DECL_OFFSET2(struct,field,offset)
-DECL_ALIGN(name,type)
 DECL_ALIGN2(name,alignment)
 
 Optional:
@@ -43,14 +42,6 @@ MONO_OFFSETS_FILE - Name of the header file containing the offsets to be used.
 
 #ifndef USED_CROSS_COMPILER_OFFSETS
 
-DECL_ALIGN(gint8)
-DECL_ALIGN(gint16)
-DECL_ALIGN(gint32)
-DECL_ALIGN(gint64)
-DECL_ALIGN(float)
-DECL_ALIGN(double)
-DECL_ALIGN(gpointer)
-
 DECL_SIZE(gint8)
 DECL_SIZE(gint16)
 DECL_SIZE(gint32)
@@ -64,10 +55,8 @@ DECL_SIZE(gpointer)
 DECL_OFFSET(MonoObject, vtable)
 DECL_OFFSET(MonoObject, synchronisation)
 
-DECL_OFFSET(MonoObjectHandlePayload, __raw)
-
 DECL_OFFSET(MonoClass, interface_bitmap)
-DECL_OFFSET(MonoClass, byval_arg)
+DECL_OFFSET(MonoClass, _byval_arg)
 DECL_OFFSET(MonoClass, cast_class)
 DECL_OFFSET(MonoClass, element_class)
 DECL_OFFSET(MonoClass, idepth)
@@ -78,6 +67,7 @@ DECL_OFFSET(MonoClass, parent)
 DECL_OFFSET(MonoClass, rank)
 DECL_OFFSET(MonoClass, sizes)
 DECL_OFFSET(MonoClass, supertypes)
+DECL_OFFSET(MonoClass, class_kind)
 
 DECL_OFFSET(MonoVTable, klass)
 DECL_OFFSET(MonoVTable, max_interface_id)
@@ -85,6 +75,7 @@ DECL_OFFSET(MonoVTable, interface_bitmap)
 DECL_OFFSET(MonoVTable, vtable)
 DECL_OFFSET(MonoVTable, rank)
 DECL_OFFSET(MonoVTable, initialized)
+DECL_OFFSET(MonoVTable, flags)
 DECL_OFFSET(MonoVTable, type)
 DECL_OFFSET(MonoVTable, runtime_generic_context)
 
@@ -132,6 +123,7 @@ DECL_OFFSET(MonoString, length)
 DECL_OFFSET(MonoString, chars)
 
 DECL_OFFSET(MonoException, message)
+DECL_OFFSET(MonoException, caught_in_unmanaged)
 
 DECL_OFFSET(MonoTypedRef, type)
 DECL_OFFSET(MonoTypedRef, klass)
@@ -143,6 +135,7 @@ DECL_OFFSET(MonoThreadsSync, nest)
 
 DECL_OFFSET(MonoProfilerCallContext, method)
 DECL_OFFSET(MonoProfilerCallContext, return_value)
+DECL_OFFSET(MonoProfilerCallContext, args)
 
 #ifdef HAVE_SGEN_GC
 DECL_OFFSET(SgenClientThreadInfo, in_critical_region)
@@ -154,6 +147,12 @@ DECL_OFFSET(SgenThreadInfo, tlab_temp_end)
 
 // Offsets for structures defined in mini/
 #ifndef DISABLE_JIT_OFFSETS
+DECL_SIZE(MonoMethodRuntimeGenericContext)
+DECL_SIZE(MonoLMF)
+DECL_SIZE(MonoTypedRef)
+DECL_SIZE(CallContext)
+DECL_SIZE(MonoContext)
+
 DECL_OFFSET(MonoLMF, previous_lmf)
 
 DECL_OFFSET(MonoMethodRuntimeGenericContext, class_vtable)
@@ -161,17 +160,22 @@ DECL_OFFSET(MonoMethodRuntimeGenericContext, class_vtable)
 DECL_OFFSET(MonoJitTlsData, lmf)
 DECL_OFFSET(MonoJitTlsData, class_cast_from)
 DECL_OFFSET(MonoJitTlsData, class_cast_to)
-DECL_OFFSET(MonoJitTlsData, restore_stack_prot)
+#ifdef TARGET_WIN32
+DECL_OFFSET(MonoJitTlsData, stack_restore_ctx)
+#endif
 
 DECL_OFFSET(MonoGSharedVtMethodRuntimeInfo, locals_size)
 DECL_OFFSET(MonoGSharedVtMethodRuntimeInfo, entries) //XXX more to fix here
 
+#if !defined(ENABLE_NETCORE)
 DECL_OFFSET(MonoContinuation, stack_used_size)
 DECL_OFFSET(MonoContinuation, saved_stack)
 DECL_OFFSET(MonoContinuation, return_sp)
 DECL_OFFSET(MonoContinuation, lmf)
 DECL_OFFSET(MonoContinuation, return_ip)
+#endif
 
+DECL_OFFSET(MonoDelegateTrampInfo, method)
 DECL_OFFSET(MonoDelegateTrampInfo, invoke_impl)
 DECL_OFFSET(MonoDelegateTrampInfo, method_ptr)
 
@@ -184,8 +188,8 @@ DECL_OFFSET(MonoContext, wasm_bp)
 DECL_OFFSET(MonoContext, wasm_sp)
 DECL_OFFSET(MonoContext, llvm_exc_reg)
 
-DECL_OFFSET(MonoLMF, method)
 DECL_OFFSET(MonoLMF, lmf_addr)
+DECL_OFFSET(MonoLMF, method)
 
 #elif defined(TARGET_X86)
 DECL_OFFSET(MonoContext, eax)
@@ -214,6 +218,10 @@ DECL_OFFSET(MonoLMF, rsp)
 DECL_OFFSET(MonoLMF, rbp)
 
 DECL_OFFSET(DynCallArgs, res)
+DECL_OFFSET(DynCallArgs, fregs)
+DECL_OFFSET(DynCallArgs, has_fp)
+DECL_OFFSET(DynCallArgs, nstack_args)
+DECL_OFFSET(DynCallArgs, regs)
 
 DECL_OFFSET(MonoLMFTramp, ctx)
 DECL_OFFSET(MonoLMFTramp, lmf_addr)
@@ -236,6 +244,17 @@ DECL_OFFSET(DynCallArgs, fpregs)
 DECL_OFFSET(DynCallArgs, n_stackargs)
 DECL_OFFSET(DynCallArgs, n_fpargs)
 DECL_OFFSET(DynCallArgs, n_fpret)
+#elif defined(TARGET_S390X)
+DECL_OFFSET(MonoLMF, pregs)
+DECL_OFFSET(MonoLMF, lmf_addr)
+DECL_OFFSET(MonoLMF, method)
+DECL_OFFSET(MonoLMF, ebp)
+DECL_OFFSET(MonoLMF, eip)
+DECL_OFFSET(MonoLMF, gregs)
+DECL_OFFSET(MonoLMF, fregs)
+#elif defined(TARGET_RISCV)
+DECL_OFFSET(MonoContext, gregs)
+DECL_OFFSET(MonoContext, fregs)
 #endif
 
 // Shared architecture offfsets
@@ -248,8 +267,6 @@ DECL_OFFSET (MonoContext, fregs)
 
 DECL_OFFSET(MonoLMF, lmf_addr)
 
-DECL_OFFSET(SeqPointInfo, ss_trigger_page)
-
 DECL_OFFSET(DynCallArgs, res)
 DECL_OFFSET(DynCallArgs, res2)
 #endif
@@ -261,6 +278,8 @@ DECL_OFFSET(GSharedVtCallInfo, vret_arg_reg)
 DECL_OFFSET(GSharedVtCallInfo, ret_marshal)
 DECL_OFFSET(GSharedVtCallInfo, vret_slot)
 DECL_OFFSET(GSharedVtCallInfo, gsharedvt_in)
+
+DECL_OFFSET(SeqPointInfo, ss_trigger_page)
 #endif
 
 #if defined(TARGET_ARM64)
@@ -278,16 +297,39 @@ DECL_OFFSET(SeqPointInfo, ss_tramp_addr)
 
 #if defined(TARGET_AMD64) || defined(TARGET_ARM) || defined(TARGET_ARM64)
 DECL_OFFSET(SeqPointInfo, bp_addrs)
+
+DECL_OFFSET(CallContext, gregs)
+DECL_OFFSET(CallContext, fregs)
+DECL_OFFSET(CallContext, stack_size)
+DECL_OFFSET(CallContext, stack)
 #endif
 
-#ifndef DISABLE_INTERPRETER
-DECL_OFFSET(InterpMethodArguments, ilen)
-DECL_OFFSET(InterpMethodArguments, iargs)
-DECL_OFFSET(InterpMethodArguments, flen)
-DECL_OFFSET(InterpMethodArguments, fargs)
-DECL_OFFSET(InterpMethodArguments, retval)
-DECL_OFFSET(InterpMethodArguments, is_float_ret)
+#if defined(TARGET_X86)
+DECL_OFFSET(CallContext, eax)
+DECL_OFFSET(CallContext, edx)
+DECL_OFFSET(CallContext, fret)
+DECL_OFFSET(CallContext, stack_size)
+DECL_OFFSET(CallContext, stack)
 #endif
+
+#if defined(TARGET_X86)
+DECL_OFFSET(GSharedVtCallInfo, stack_usage)
+DECL_OFFSET(GSharedVtCallInfo, vret_slot)
+DECL_OFFSET(GSharedVtCallInfo, vret_arg_slot)
+DECL_OFFSET(GSharedVtCallInfo, ret_marshal)
+DECL_OFFSET(GSharedVtCallInfo, gsharedvt_in)
+#endif
+
+#if defined(TARGET_AMD64)
+DECL_OFFSET(GSharedVtCallInfo, ret_marshal)
+DECL_OFFSET(GSharedVtCallInfo, vret_arg_reg)
+DECL_OFFSET(GSharedVtCallInfo, vret_slot)
+DECL_OFFSET(GSharedVtCallInfo, stack_usage)
+DECL_OFFSET(GSharedVtCallInfo, gsharedvt_in)
+#endif
+
+DECL_OFFSET(MonoFtnDesc, arg)
+DECL_OFFSET(MonoFtnDesc, addr)
 
 #endif //DISABLE_JIT_OFFSETS
 
@@ -295,7 +337,6 @@ DECL_OFFSET(InterpMethodArguments, is_float_ret)
 
 #undef DECL_OFFSET
 #undef DECL_OFFSET2
-#undef DECL_ALIGN
 #undef DECL_ALIGN2
 #undef DECL_SIZE
 #undef DECL_SIZE2

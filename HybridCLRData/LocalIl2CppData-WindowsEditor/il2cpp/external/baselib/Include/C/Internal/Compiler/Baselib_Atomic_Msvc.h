@@ -136,7 +136,7 @@ static FORCE_INLINE void Baselib_atomic_##op##_##id##_##order##_v(void* obj, con
 #define detail_THREAD_FENCE(order, ...)                                                                                                                 \
 static COMPILER_FORCEINLINE void Baselib_atomic_thread_fence_##order()                                                                                  \
 {                                                                                                                                                       \
-    detail_acquire(order, __dmb(_ARM_BARRIER_ISH));                                                                                                     \
+    detail_acquire(order, __dmb(_ARM_BARRIER_LOAD));                                                                                                    \
     detail_release(order, __dmb(_ARM_BARRIER_ISH));                                                                                                     \
     detail_acq_rel(order, __dmb(_ARM_BARRIER_ISH));                                                                                                     \
     detail_seq_cst(order, __dmb(_ARM_BARRIER_ISH));                                                                                                     \
@@ -146,7 +146,7 @@ static COMPILER_FORCEINLINE void Baselib_atomic_thread_fence_##order()          
 static FORCE_INLINE void Baselib_atomic_##op##_##id##_##order##_v(const void* obj, void* result)                                                        \
 {                                                                                                                                                       \
     *(__int##bits*)result = __iso_volatile_load##bits((const __int##bits*)obj);                                                                         \
-    detail_acquire(order, __dmb(_ARM_BARRIER_ISH));                                                                                                     \
+    detail_acquire(order, __dmb(_ARM_BARRIER_LOAD));                                                                                                    \
     detail_seq_cst(order, __dmb(_ARM_BARRIER_ISH));                                                                                                     \
 }
 
@@ -154,7 +154,7 @@ static FORCE_INLINE void Baselib_atomic_##op##_##id##_##order##_v(const void* ob
 static FORCE_INLINE void Baselib_atomic_##op##_##id##_##order##_v(void* obj, void* result)                                                              \
 {                                                                                                                                                       \
     *(__int##bits*)result = __iso_volatile_load##bits((const __int##bits*)obj);                                                                         \
-    detail_acquire(order, __dmb(_ARM_BARRIER_ISH));                                                                                                     \
+    detail_acquire(order, __dmb(_ARM_BARRIER_LOAD));                                                                                                    \
     detail_seq_cst(order, __dmb(_ARM_BARRIER_ISH));                                                                                                     \
 }
 
@@ -181,15 +181,15 @@ static FORCE_INLINE void Baselib_atomic_##op##_##id##_##order##_v(void* obj, con
 #define detail_LOAD_STORE(op, order, id , bits, int_type, ...)                                                                                          \
 static FORCE_INLINE void Baselib_atomic_##op##_##id##_##order##_v(void* obj, const void* value, void* result)                                           \
 {                                                                                                                                                       \
-    *(__int##bits##*)result = PP_CONCAT(detail_intrinsic_##op, bits, detail_intrinsic_##order)((__int##bits##*)obj, *(const __int##bits##*)value);      \
+    *(__int##bits*)result = PP_CONCAT(detail_intrinsic_##op, bits, detail_intrinsic_##order)((__int##bits*)obj, *(const __int##bits*)value);            \
 }
 
 #define detail_CMP_XCHG(op, order1, order2, id , bits, int_type, ...)                                                                                   \
 static FORCE_INLINE bool Baselib_atomic_##op##_##id##_##order1##_##order2##_v(void* obj, void* expected, const void* value)                             \
 {                                                                                                                                                       \
-    __int##bits cmp =  *(__int##bits##*)expected;                                                                                                       \
-    __int##bits result = PP_CONCAT(_InterlockedCompareExchange, bits, detail_intrinsic_##order1)((__int##bits##*)obj, *(__int##bits##*)value, cmp);     \
-    return result == cmp ? true : (*(__int##bits##*)expected = result, false);                                                                          \
+    __int##bits cmp =  *(__int##bits*)expected;                                                                                                         \
+    __int##bits result = PP_CONCAT(_InterlockedCompareExchange, bits, detail_intrinsic_##order1)((__int##bits*)obj, *(__int##bits*)value, cmp);         \
+    return result == cmp ? true : (*(__int##bits*)expected = result, false);                                                                            \
 }
 
 #define detail_NOT_SUPPORTED(...)
@@ -356,3 +356,9 @@ Baselib_Atomic_FOR_EACH_ATOMIC_OP_AND_MEMORY_ORDER(
 #undef detail_release
 #undef detail_acq_rel
 #undef detail_seq_cst
+
+#undef detail_intrinsic_relaxed
+#undef detail_intrinsic_acquire
+#undef detail_intrinsic_release
+#undef detail_intrinsic_acq_rel
+#undef detail_intrinsic_seq_cst

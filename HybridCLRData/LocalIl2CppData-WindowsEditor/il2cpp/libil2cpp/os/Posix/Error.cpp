@@ -8,6 +8,7 @@
 #include <cassert>
 #include <errno.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 namespace il2cpp
 {
@@ -134,7 +135,6 @@ namespace os
 
         switch (code)
         {
-#if !RUNTIME_TINY
             case EACCES: case EPERM: case EROFS:
                 ret = kErrorCodeAccessDenied;
                 break;
@@ -208,7 +208,6 @@ namespace os
             case EPIPE:
                 ret = kErrorCodeWriteFault;
                 break;
-#endif
 
             default:
                 ret = kErrorCodeGenFailure;
@@ -223,15 +222,21 @@ namespace os
         if (code == ENOENT)
         {
             const std::string dirname(il2cpp::utils::PathUtils::DirectoryName(path));
-#if !IL2CPP_TARGET_PS4 && !IL2CPP_TARGET_PSP2  && !IL2CPP_HAS_NOACCESS
+#if !IL2CPP_HAS_NOACCESS
             if (access(dirname.c_str(), F_OK) == 0)
                 return kErrorCodeFileNotFound;
-            else
+#else
+            struct stat statInfo;
+            if (stat(dirname.c_str(), &statInfo) == 0 && S_ISDIR(statInfo.st_mode))
+                return kErrorCodeFileNotFound;
 #endif
-            return kErrorCodePathNotFound;
+            else
+                return kErrorCodePathNotFound;
         }
         else
+        {
             return FileErrnoToErrorCode(code);
+        }
     }
 }
 }

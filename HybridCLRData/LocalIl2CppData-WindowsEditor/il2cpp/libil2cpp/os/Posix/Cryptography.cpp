@@ -1,6 +1,6 @@
 #include "il2cpp-config.h"
 
-#if IL2CPP_TARGET_POSIX && !RUNTIME_TINY
+#if IL2CPP_TARGET_POSIX && !IL2CPP_USE_PLATFORM_SPECIFIC_CRYPTO
 
 #include "os/Cryptography.h"
 #include <errno.h>

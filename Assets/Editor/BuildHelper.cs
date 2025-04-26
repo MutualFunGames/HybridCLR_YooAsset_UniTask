@@ -14,6 +14,7 @@ using YooAsset.Editor;
 using YooAsset;
 using Newtonsoft.Json;
 using System.Xml;
+using HybridCLR.Editor.Settings;
 
 public class BuildHelper
 {
@@ -203,22 +204,22 @@ public class BuildHelper
     {
         //先生成AOT文件，再进行打包，以确保所有引用库都被引用
         PrebuildCommand.GenerateAll();
-
+    
         List<string> dllNames = new List<string>();
-
+    
         var setting = HybridCLRSettings.LoadOrCreate();
         SerializedObject _serializedObject;
         _serializedObject = new SerializedObject(setting);
         var patchAOTAssemblies = _serializedObject.FindProperty("patchAOTAssemblies");
-
+    
         foreach (SerializedProperty sp in patchAOTAssemblies)
         {
             dllNames.Add(sp.stringValue + ".dll");
         }
-
+    
         var json = JsonConvert.SerializeObject(dllNames);
         var path = "";
-
+    
         foreach (var package in AssetBundleCollectorSettingData.Setting.Packages)
         {
             foreach (var group in package.Groups)
@@ -232,11 +233,11 @@ public class BuildHelper
                 }
             }
         }
-
+    
         var dllExportPath = SettingsUtil.GetAssembliesPostIl2CppStripDir(EditorUserBuildSettings.activeBuildTarget);
-
+    
         Dictionary<string, byte[]> dllDatas = new Dictionary<string, byte[]>();
-
+    
         foreach (var dllName in dllNames)
         {
             var dllPath = dllExportPath + "/" + dllName;
@@ -248,13 +249,13 @@ public class BuildHelper
             var dllData = File.ReadAllBytes(dllPath);
             dllDatas.Add(dllName, dllData);
         }
-
+    
         foreach (var dllName in dllDatas.Keys)
         {
             var dllPath = path + "/" + dllName + ".bytes";
             File.WriteAllBytes(dllPath, dllDatas[dllName]);
         }
-
+    
         File.WriteAllText($"{path}/AOTDLLList.txt", json);
         AssetDatabase.Refresh();
         Debug.Log("AOT补充文件生成完毕");
@@ -268,8 +269,8 @@ public class BuildHelper
         _serializedObject = new SerializedObject(setting);
         var _hotUpdateAssemblyDefinitions = _serializedObject.FindProperty("hotUpdateAssemblyDefinitions");
         var _hotUpdateAssemblies = _serializedObject.FindProperty("hotUpdateAssemblies");
-
-
+    
+    
         foreach (SerializedProperty sp in _hotUpdateAssemblyDefinitions)
         {
             AssemblyDefinitionAsset ada = (AssemblyDefinitionAsset)sp.objectReferenceValue;
@@ -280,9 +281,9 @@ public class BuildHelper
             dllNames.Add(sp.stringValue + ".dll");
         }
         CompileDllCommand.CompileDllActiveBuildTarget();
-
+    
         var dllExportPath = SettingsUtil.GetHotUpdateDllsOutputDirByTarget(EditorUserBuildSettings.activeBuildTarget);
-
+    
         Dictionary<string, byte[]> dllDatas = new Dictionary<string, byte[]>();
         foreach (var dllName in dllNames)
         {
@@ -295,7 +296,7 @@ public class BuildHelper
             var dllData = File.ReadAllBytes(dllPath);
             dllDatas.Add(dllName, dllData);
         }
-
+    
         foreach (var package in AssetBundleCollectorSettingData.Setting.Packages)
         {
             foreach (var group in package.Groups)

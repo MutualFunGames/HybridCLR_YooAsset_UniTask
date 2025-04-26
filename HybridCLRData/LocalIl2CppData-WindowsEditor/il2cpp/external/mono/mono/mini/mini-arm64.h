@@ -13,12 +13,17 @@
 #define __MONO_MINI_ARM64_H__
 
 #include <mono/arch/arm64/arm64-codegen.h>
-//#include <mono/mini/mini-arm64-gsharedvt.h>
+#include <mono/mini/mini-arm64-gsharedvt.h>
 
 #define MONO_ARCH_CPU_SPEC mono_arm64_cpu_desc
 
 #define MONO_MAX_IREGS 32
 #define MONO_MAX_FREGS 32
+#define MONO_MAX_XREGS 32
+
+#if !defined(DISABLE_SIMD) && defined(ENABLE_NETCORE)
+#define MONO_ARCH_SIMD_INTRINSICS 1
+#endif
 
 #define MONO_CONTEXT_SET_LLVM_EXC_REG(ctx, exc) do { (ctx)->regs [0] = (gsize)exc; } while (0)
 
@@ -40,6 +45,10 @@
 #define MONO_ARCH_CALLEE_FREGS 0xfffc00ff
 /* v8..v15 */
 #define MONO_ARCH_CALLEE_SAVED_FREGS 0xff00
+
+#define MONO_ARCH_CALLEE_SAVED_XREGS 0
+
+#define MONO_ARCH_CALLEE_XREGS MONO_ARCH_CALLEE_FREGS
 
 #define MONO_ARCH_USE_FPSTACK FALSE
 
@@ -73,62 +82,80 @@ struct MonoLMF {
 	 */
 	gpointer    previous_lmf;
 	gpointer    lmf_addr;
-	mgreg_t    pc;
-	mgreg_t    gregs [MONO_ARCH_NUM_LMF_REGS];
+	host_mgreg_t pc;
+	host_mgreg_t gregs [MONO_ARCH_NUM_LMF_REGS];
 };
 
 /* Structure used by the sequence points in AOTed code */
-typedef struct {
-	gpointer ss_trigger_page;
-	gpointer bp_trigger_page;
+struct SeqPointInfo {
 	gpointer ss_tramp_addr;
 	guint8* bp_addrs [MONO_ZERO_LEN_ARRAY];
-} SeqPointInfo;
+};
 
 #define PARAM_REGS 8
 #define FP_PARAM_REGS 8
 
 typedef struct {
-	mgreg_t res, res2;
+	host_mgreg_t res, res2;
 	guint8 *ret;
 	double fpregs [FP_PARAM_REGS];
 	int n_fpargs, n_fpret, n_stackargs;
-	guint8 buffer [256];
 	/* This should come last as the structure is dynamically extended */
 	/* The +1 is for r8 */
-	mgreg_t regs [PARAM_REGS + 1];
+	host_mgreg_t regs [PARAM_REGS + 1];
 } DynCallArgs;
 
 typedef struct {
-	gpointer cinfo;
+	CallInfo *cinfo;
 	int saved_gregs_offset;
 	/* Points to arguments received on the stack */
 	int args_reg;
 	gboolean cond_branch_islands;
-	gpointer vret_addr_loc;
-	gpointer seq_point_info_var;
-	gpointer ss_tramp_var;
-	gpointer bp_tramp_var;
+	MonoInst *vret_addr_loc;
+	MonoInst *seq_point_info_var;
+	MonoInst *ss_tramp_var;
+	MonoInst *bp_tramp_var;
 	guint8 *thunks;
 	int thunks_size;
 } MonoCompileArch;
 
-#define MONO_ARCH_EMULATE_FREM 1
-#define MONO_ARCH_NO_EMULATE_LONG_MUL_OPTS 1
-#define MONO_ARCH_EMULATE_LONG_MUL_OVF_OPTS 1
+#define MONO_ARCH_EMULATE_FCONV_TO_U4 1
+#define MONO_ARCH_EMULATE_FCONV_TO_U8 1
+#ifdef MONO_ARCH_ILP32
+/* For the watch (starting with series 4), a new ABI is introduced: arm64_32.
+ * We can still use the older AOT compiler to produce bitcode, because it's
+ * "offset compatible". However, since it is targeting arm7k, it makes certain
+ * assumptions that we need to align here. */
+#define MONO_ARCH_EMULATE_FCONV_TO_I8 1
+#define MONO_ARCH_EMULATE_LCONV_TO_R8 1
+#define MONO_ARCH_EMULATE_LCONV_TO_R4 1
+#define MONO_ARCH_EMULATE_LCONV_TO_R8_UN 1
+#define MONO_ARCH_EMULATE_DIV 1
+#define MONO_ARCH_EMULATE_CONV_R8_UN 1
+#else
 #define MONO_ARCH_NO_EMULATE_LONG_SHIFT_OPS 1
+#define MONO_ARCH_NO_EMULATE_LONG_MUL_OPTS 1
+#endif
+
+#define MONO_ARCH_EMULATE_FREM 1
+#define MONO_ARCH_EMULATE_LONG_MUL_OVF_OPTS 1
 #define MONO_ARCH_NEED_DIV_CHECK 1
 #define MONO_ARCH_EMULATE_MUL_OVF 1
-#define MONO_ARCH_HAVE_OP_TAIL_CALL 1
+#define MONO_ARCH_HAVE_OP_TAILCALL_MEMBASE 1
+#define MONO_ARCH_HAVE_OP_TAILCALL_REG 1
 #define MONO_ARCH_RGCTX_REG ARMREG_R15
 #define MONO_ARCH_IMT_REG MONO_ARCH_RGCTX_REG
 #define MONO_ARCH_VTABLE_REG ARMREG_R0
 #define MONO_ARCH_HAVE_GENERALIZED_IMT_TRAMPOLINE 1
 #define MONO_ARCH_USE_SIGACTION 1
-#define MONO_ARCH_HAVE_SIGCTX_TO_MONOCTX 1
+#ifdef HOST_TVOS
+#define MONO_ARCH_HAS_NO_PROPER_MONOCTX 1
+#endif
 #define MONO_ARCH_HAVE_CONTEXT_SET_INT_REG 1
 #define MONO_ARCH_GSHARED_SUPPORTED 1
 #define MONO_ARCH_INTERPRETER_SUPPORTED 1
+#define MONO_ARCH_HAVE_INTERP_ENTRY_TRAMPOLINE 1
+#define MONO_ARCH_HAVE_INTERP_NATIVE_TO_MANAGED 1
 #define MONO_ARCH_AOT_SUPPORTED 1
 #define MONO_ARCH_LLVM_SUPPORTED 1
 #define MONO_ARCH_HAVE_FULL_AOT_TRAMPOLINES 1
@@ -147,10 +174,18 @@ typedef struct {
 #define MONO_ARCH_HAVE_OP_GENERIC_CLASS_INIT 1
 #define MONO_ARCH_HAVE_OPCODE_NEEDS_EMULATION 1
 #define MONO_ARCH_HAVE_DECOMPOSE_LONG_OPTS 1
-
+#define MONO_ARCH_FLOAT32_SUPPORTED 1
 #define MONO_ARCH_HAVE_INTERP_PINVOKE_TRAMP 1
+#define MONO_ARCH_LLVM_TARGET_LAYOUT "e-i64:64-i128:128-n32:64-S128"
+#ifdef TARGET_OSX
+#define MONO_ARCH_FORCE_FLOAT32 1
+#endif
 
-#ifdef TARGET_IOS
+// Does the ABI have a volatile non-parameter register, so tailcall
+// can pass context to generics or interfaces?
+#define MONO_ARCH_HAVE_VOLATILE_NON_PARAM_REGISTER 1
+
+#if defined(TARGET_IOS) || defined(TARGET_OSX)
 
 #define MONO_ARCH_REDZONE_SIZE 128
 
@@ -160,7 +195,7 @@ typedef struct {
 
 #endif
 
-#if defined(TARGET_APPLETVOS) || defined(TARGET_IOS)
+#if defined(TARGET_IOS) || defined(TARGET_WATCHOS) || defined(TARGET_OSX)
 #define MONO_ARCH_HAVE_UNWIND_BACKTRACE 1
 #endif
 
@@ -215,18 +250,18 @@ typedef struct {
 	gboolean hfa;
 } ArgInfo;
 
-typedef struct {
+struct CallInfo {
 	int nargs;
 	int gr, fr, stack_usage;
-	gboolean pinvoke;
+	gboolean pinvoke, vararg;
 	ArgInfo ret;
 	ArgInfo sig_cookie;
 	ArgInfo args [1];
-} CallInfo;
+};
 
 typedef struct {
 	/* General registers + ARMREG_R8 for indirect returns */
-	mgreg_t gregs [PARAM_REGS + 1];
+	host_mgreg_t gregs [PARAM_REGS + 1];
 	/* Floating registers */
 	double fregs [FP_PARAM_REGS];
 	/* Stack usage, used for passing params on stack */
@@ -249,15 +284,19 @@ guint8* mono_arm_emit_load_regarray (guint8 *code, guint64 regs, int basereg, in
 /* MonoJumpInfo **ji */
 guint8* mono_arm_emit_aotconst (gpointer ji, guint8 *code, guint8 *code_start, int dreg, guint32 patch_type, gconstpointer data);
 
+guint8* mono_arm_emit_brx (guint8 *code, int reg);
+
+guint8* mono_arm_emit_blrx (guint8 *code, int reg);
+
 void mono_arm_patch (guint8 *code, guint8 *target, int relocation);
 
-void mono_arm_throw_exception (gpointer arg, mgreg_t pc, mgreg_t *int_regs, gdouble *fp_regs, gboolean corlib, gboolean rethrow);
+void mono_arm_throw_exception (gpointer arg, host_mgreg_t pc, host_mgreg_t *int_regs, gdouble *fp_regs, gboolean corlib, gboolean rethrow, gboolean preserve_ips);
 
 void mono_arm_gsharedvt_init (void);
 
 GSList* mono_arm_get_exception_trampolines (gboolean aot);
 
-void mono_arm_resume_unwind (gpointer arg, mgreg_t pc, mgreg_t *int_regs, gdouble *fp_regs, gboolean corlib, gboolean rethrow);
+void mono_arm_resume_unwind (gpointer arg, host_mgreg_t pc, host_mgreg_t *int_regs, gdouble *fp_regs, gboolean corlib, gboolean rethrow);
 
 CallInfo* mono_arch_get_call_info (MonoMemPool *mp, MonoMethodSignature *sig);
 

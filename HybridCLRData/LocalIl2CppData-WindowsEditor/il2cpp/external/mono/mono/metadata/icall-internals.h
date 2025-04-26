@@ -25,7 +25,7 @@ const gchar *
 mono_icall_get_file_path_prefix (const gchar *path);
 
 gpointer
-mono_icall_module_get_hinstance (MonoReflectionModuleHandle module);
+mono_icall_module_get_hinstance (MonoImage *image);
 
 MonoStringHandle
 mono_icall_get_machine_name (MonoError *error);
@@ -39,7 +39,7 @@ mono_icall_get_new_line (MonoError *error);
 MonoBoolean
 mono_icall_is_64bit_os (void);
 
-MonoArray *
+MonoArrayHandle
 mono_icall_get_environment_variable_names (MonoError *error);
 
 void
@@ -48,25 +48,77 @@ mono_icall_set_environment_variable (MonoString *name, MonoString *value);
 MonoStringHandle
 mono_icall_get_windows_folder_path (int folder, MonoError *error);
 
-MonoBoolean
-mono_icall_broadcast_setting_change (MonoError *error);
-
 void
-mono_icall_write_windows_debug_string (MonoString *message);
+mono_icall_write_windows_debug_string (const gunichar2 *message);
 
 gint32
 mono_icall_wait_for_input_idle (gpointer handle, gint32 milliseconds);
 #endif  /* HOST_WIN32 */
 
-// On platforms not using classic WIN API support the  implementation of bellow methods are hosted in separate source file
-// icall-windows-*.c. On platforms using classic WIN API the implementation is still keept in icall.c and still declared
-// static and in some places even inlined.
-#if !G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT)
-MonoArray *
-mono_icall_get_logical_drives (void);
+gconstpointer
+mono_lookup_internal_call_full (MonoMethod *method, gboolean warn_on_missing, mono_bool *uses_handles, mono_bool *foreign);
 
-guint32
-mono_icall_drive_info_get_drive_type (MonoString *root_path_name);
-#endif  /* !G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT) */
+MONO_PAL_API void
+mono_add_internal_call_with_flags (const char *name, const void* method, gboolean cooperative);
+
+MONO_PROFILER_API void
+mono_add_internal_call_internal (const char *name, gconstpointer method);
+
+MonoAssembly*
+mono_runtime_get_caller_from_stack_mark (MonoStackCrawlMark *stack_mark);
+
+typedef enum {
+	MONO_ICALL_FLAGS_NONE = 0,
+	MONO_ICALL_FLAGS_FOREIGN = 1 << 1,
+	MONO_ICALL_FLAGS_USES_HANDLES = 1 << 2,
+	MONO_ICALL_FLAGS_COOPERATIVE = 1 << 3,
+	MONO_ICALL_FLAGS_NO_WRAPPER = 1 << 4
+} MonoInternalCallFlags;
+
+gconstpointer
+mono_lookup_internal_call_full_with_flags (MonoMethod *method, gboolean warn_on_missing, guint32 *flags);
+
+void
+mono_dangerous_add_internal_call_coop (const char *name, const void* method);
+
+void
+mono_dangerous_add_internal_call_no_wrapper (const char *name, const void* method);
+
+gboolean
+mono_is_missing_icall_addr (gconstpointer addr);
+
+#ifdef __cplusplus
+
+#if !HOST_ANDROID
+
+#include <type_traits>
+
+#endif
+
+template <typename T>
+#if HOST_ANDROID
+inline void
+#else
+inline typename std::enable_if<std::is_function<T>::value ||
+			       std::is_function<typename std::remove_pointer<T>::type>::value >::type
+#endif
+mono_add_internal_call_with_flags (const char *name, T method, gboolean cooperative)
+{
+	return mono_add_internal_call_with_flags (name, (const void*)method, cooperative);
+}
+
+template <typename T>
+#if HOST_ANDROID
+inline void
+#else
+inline typename std::enable_if<std::is_function<T>::value ||
+			       std::is_function<typename std::remove_pointer<T>::type>::value >::type
+#endif
+mono_add_internal_call_internal (const char *name, T method)
+{
+	return mono_add_internal_call_internal (name, (const void*)method);
+}
+
+#endif // __cplusplus
 
 #endif /* __MONO_METADATA_ICALL_INTERNALS_H__ */

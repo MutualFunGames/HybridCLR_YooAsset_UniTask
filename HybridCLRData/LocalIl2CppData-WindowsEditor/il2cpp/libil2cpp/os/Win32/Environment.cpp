@@ -2,7 +2,7 @@
 
 #if !IL2CPP_USE_GENERIC_ENVIRONMENT && IL2CPP_TARGET_WINDOWS
 #include "WindowsHelpers.h"
-#if !IL2CPP_TARGET_XBOXONE && !IL2CPP_TARGET_WINDOWS_GAMES
+#if !IL2CPP_TARGET_WINDOWS_GAMES
 #include <Shlobj.h>
 #endif
 // Windows.h defines GetEnvironmentVariable as GetEnvironmentVariableW for unicode and this will
@@ -247,29 +247,13 @@ namespace os
         return std::string();
     }
 
-    typedef BOOL(WINAPI *LPFN_ISWOW64PROCESS) (HANDLE, PBOOL);
-
     utils::Expected<bool> Environment::Is64BitOs()
     {
         BOOL isWow64Process = false;
-
-        // Supported on XP SP2 and higher
-
-        //IsWow64Process is not available on all supported versions of Windows.
-        //Use GetModuleHandle to get a handle to the DLL that contains the function
-        //and GetProcAddress to get a pointer to the function if available.
-
-        LPFN_ISWOW64PROCESS fnIsWow64Process = (LPFN_ISWOW64PROCESS)GetProcAddress(
-            GetModuleHandle(TEXT("kernel32")), "IsWow64Process");
-
-        if (NULL != fnIsWow64Process)
+        if (IsWow64Process(GetCurrentProcess(), &isWow64Process))
         {
-            if (fnIsWow64Process(GetCurrentProcess(), &isWow64Process))
-            {
-                return isWow64Process == TRUE;
-            }
+            return isWow64Process == TRUE;
         }
-
         return false;
     }
 

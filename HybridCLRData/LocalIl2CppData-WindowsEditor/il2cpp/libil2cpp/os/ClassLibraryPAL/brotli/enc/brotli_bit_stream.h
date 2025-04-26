@@ -18,7 +18,7 @@
 
 #include "../common/context.h"
 #include "../common/platform.h"
-#include "../include/brotli/types.h"
+#include <brotli/types.h>
 #include "./command.h"
 #include "./entropy_encode.h"
 #include "./memory.h"

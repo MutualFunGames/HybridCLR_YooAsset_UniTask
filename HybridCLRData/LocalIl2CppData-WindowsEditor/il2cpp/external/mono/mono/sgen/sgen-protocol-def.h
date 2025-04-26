@@ -30,7 +30,7 @@ IS_VTABLE_MATCH (FALSE)
 END_PROTOCOL_ENTRY_FLUSH
 
 BEGIN_PROTOCOL_ENTRY4 (binary_protocol_collection_end, TYPE_INT, index, TYPE_INT, generation, TYPE_LONGLONG, num_scanned_objects, TYPE_LONGLONG, num_unique_scanned_objects)
-CUSTOM_PRINT (printf ("%d generation %d scanned %lld unique %lld %0.2f%%", entry->index, entry->generation, entry->num_scanned_objects, entry->num_unique_scanned_objects, entry->num_unique_scanned_objects ? (100.0 * (double) entry->num_scanned_objects / (double) entry->num_unique_scanned_objects) : 0.0))
+CUSTOM_PRINT (printf ("%d generation %d scanned %" PRId64 " unique %" PRId64 " %0.2f%%", entry->index, entry->generation, entry->num_scanned_objects, entry->num_unique_scanned_objects, entry->num_unique_scanned_objects ? (100.0 * (double) entry->num_scanned_objects / (double) entry->num_unique_scanned_objects) : 0.0))
 IS_ALWAYS_MATCH (TRUE)
 MATCH_INDEX (BINARY_PROTOCOL_MATCH)
 IS_VTABLE_MATCH (FALSE)
@@ -79,14 +79,14 @@ IS_VTABLE_MATCH (FALSE)
 END_PROTOCOL_ENTRY
 
 BEGIN_PROTOCOL_ENTRY6 (binary_protocol_world_stopped, TYPE_INT, generation, TYPE_LONGLONG, timestamp, TYPE_LONGLONG, total_major_cards, TYPE_LONGLONG, marked_major_cards, TYPE_LONGLONG, total_los_cards, TYPE_LONGLONG, marked_los_cards)
-CUSTOM_PRINT (printf ("generation %d timestamp %lld total %lld marked %lld %0.2f%%", entry->generation, entry->timestamp, entry->total_major_cards + entry->total_los_cards, entry->marked_major_cards + entry->marked_los_cards, 100.0 * (double) (entry->marked_major_cards + entry->marked_los_cards) / (double) (entry->total_major_cards + entry->total_los_cards)))
+CUSTOM_PRINT (printf ("generation %d timestamp %" PRId64 " total %" PRId64 " marked %" PRId64 " %0.2f%%", entry->generation, entry->timestamp, entry->total_major_cards + entry->total_los_cards, entry->marked_major_cards + entry->marked_los_cards, 100.0 * (double) (entry->marked_major_cards + entry->marked_los_cards) / (double) (entry->total_major_cards + entry->total_los_cards)))
 IS_ALWAYS_MATCH (TRUE)
 MATCH_INDEX (BINARY_PROTOCOL_MATCH)
 IS_VTABLE_MATCH (FALSE)
 END_PROTOCOL_ENTRY
 
 BEGIN_PROTOCOL_ENTRY6 (binary_protocol_world_restarting, TYPE_INT, generation, TYPE_LONGLONG, timestamp, TYPE_LONGLONG, total_major_cards, TYPE_LONGLONG, marked_major_cards, TYPE_LONGLONG, total_los_cards, TYPE_LONGLONG, marked_los_cards)
-CUSTOM_PRINT (printf ("generation %d timestamp %lld total %lld marked %lld %0.2f%%", entry->generation, entry->timestamp, entry->total_major_cards + entry->total_los_cards, entry->marked_major_cards + entry->marked_los_cards, 100.0 * (double) (entry->marked_major_cards + entry->marked_los_cards) / (double) (entry->total_major_cards + entry->total_los_cards)))
+CUSTOM_PRINT (printf ("generation %d timestamp %" PRId64 " total %" PRId64 " marked %" PRId64 " %0.2f%%", entry->generation, entry->timestamp, entry->total_major_cards + entry->total_los_cards, entry->marked_major_cards + entry->marked_los_cards, 100.0 * (double) (entry->marked_major_cards + entry->marked_los_cards) / (double) (entry->total_major_cards + entry->total_los_cards)))
 IS_ALWAYS_MATCH (TRUE)
 MATCH_INDEX (BINARY_PROTOCOL_MATCH)
 IS_VTABLE_MATCH (FALSE)
@@ -332,7 +332,7 @@ IS_VTABLE_MATCH (FALSE)
 END_PROTOCOL_ENTRY_HEAVY
 
 BEGIN_PROTOCOL_ENTRY_HEAVY3 (binary_protocol_dislink_update, TYPE_POINTER, link, TYPE_POINTER, obj, TYPE_BOOL, track)
-CUSTOM_PRINT(entry->obj ? printf ("link 0x%"MWORD_FORMAT_SPEC_P" obj 0x%"MWORD_FORMAT_SPEC_P" track %d", entry->link, entry->obj, entry->track) : printf ("link 0x%"MWORD_FORMAT_SPEC_P" obj 0x%"MWORD_FORMAT_SPEC_P, entry->link, entry->obj))
+CUSTOM_PRINT(entry->obj ? printf ("link 0x%" MWORD_FORMAT_SPEC_P " obj 0x%" MWORD_FORMAT_SPEC_P " track %d", entry->link, entry->obj, entry->track) : printf ("link 0x%" MWORD_FORMAT_SPEC_P " obj 0x%" MWORD_FORMAT_SPEC_P, entry->link, entry->obj))
 IS_ALWAYS_MATCH (FALSE)
 MATCH_INDEX (ptr == entry->link ? 0 : ptr == entry->obj ? 1 : BINARY_PROTOCOL_NO_MATCH)
 IS_VTABLE_MATCH (FALSE)
@@ -470,6 +470,13 @@ IS_ALWAYS_MATCH (TRUE)
 MATCH_INDEX (BINARY_PROTOCOL_MATCH)
 IS_VTABLE_MATCH (FALSE)
 END_PROTOCOL_ENTRY
+
+BEGIN_PROTOCOL_ENTRY_HEAVY3 (binary_protocol_ephemeron_ref, TYPE_POINTER, list, TYPE_POINTER, key, TYPE_POINTER, value)
+DEFAULT_PRINT ()
+IS_ALWAYS_MATCH (FALSE)
+MATCH_INDEX (ptr == entry->list ? 0 : ptr == entry->key ? 1 : ptr == entry->value ? 2 : BINARY_PROTOCOL_NO_MATCH)
+IS_VTABLE_MATCH (FALSE)
+END_PROTOCOL_ENTRY_HEAVY
 
 #undef BEGIN_PROTOCOL_ENTRY0
 #undef BEGIN_PROTOCOL_ENTRY1

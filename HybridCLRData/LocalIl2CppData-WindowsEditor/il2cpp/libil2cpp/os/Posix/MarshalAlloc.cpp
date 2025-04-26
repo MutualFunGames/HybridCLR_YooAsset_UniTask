@@ -1,6 +1,6 @@
 #include "il2cpp-config.h"
 
-#if IL2CPP_TARGET_POSIX || IL2CPP_TARGET_SWITCH && !RUNTIME_TINY
+#if IL2CPP_TARGET_POSIX || IL2CPP_TARGET_SWITCH
 
 #include "os/MarshalAlloc.h"
 #include <stdlib.h>

@@ -43,7 +43,7 @@ namespace il2cpp
 {
 namespace vm
 {
-    typedef Il2CppHashMap<Il2CppIUnknown*, /* Weak GC Handle */ uint32_t, il2cpp::utils::PointerHash<Il2CppIUnknown> > RCWCache;
+    typedef Il2CppHashMap<Il2CppIUnknown*, /* Weak GC Handle */ Il2CppGCHandle, il2cpp::utils::PointerHash<Il2CppIUnknown> > RCWCache;
 
     static baselib::ReentrantLock s_RCWCacheMutex;
     static RCWCache s_RCWCache;

@@ -3,10 +3,8 @@
 
 #if IL2CPP_SUPPORT_THREADS
 
-#if IL2CPP_THREADS_WIN32
-#include "os/Win32/EventImpl.h"
-#elif IL2CPP_THREADS_PTHREAD
-#include "os/Posix/EventImpl.h"
+#if IL2CPP_THREADS_WIN32 || IL2CPP_THREADS_PTHREAD
+#include "os/Generic/EventImpl.h"
 #else
 #include "os/EventImpl.h"
 #endif

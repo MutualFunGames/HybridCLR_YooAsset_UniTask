@@ -11,17 +11,25 @@
 #include "mono-os-mutex.h"
 #include "mono-threads-api.h"
 
-G_BEGIN_DECLS
+#ifdef RUNTIME_IL2CPP
+#undef MONO_ENTER_GC_SAFE
+#define MONO_ENTER_GC_SAFE
+#undef MONO_EXIT_GC_SAFE
+#define MONO_EXIT_GC_SAFE
+#endif
 
 /* We put the OS sync primitives in struct, so the compiler will warn us if
  * we use mono_os_(mutex|cond|sem)_... on MonoCoop(Mutex|Cond|Sem) structures */
 
 typedef struct _MonoCoopMutex MonoCoopMutex;
+typedef struct _MonoCoopCond MonoCoopCond;
+
+#ifndef DISABLE_THREADS
+
 struct _MonoCoopMutex {
 	mono_mutex_t m;
 };
 
-typedef struct _MonoCoopCond MonoCoopCond;
 struct _MonoCoopCond {
 	mono_cond_t c;
 };
@@ -109,15 +117,101 @@ mono_coop_cond_timedwait (MonoCoopCond *cond, MonoCoopMutex *mutex, guint32 time
 static inline void
 mono_coop_cond_signal (MonoCoopCond *cond)
 {
+	/*
+	 * On glibc using NTPL (ie Linux with an underlying futex), signaling a
+	 * condition variable can block in the __condvar_quiesce_and_switch_g1
+	 * operation. So switch to GC Safe mode here.
+	 */
+	MONO_ENTER_GC_SAFE;
 	mono_os_cond_signal (&cond->c);
+	MONO_EXIT_GC_SAFE;
 }
 
 static inline void
 mono_coop_cond_broadcast (MonoCoopCond *cond)
 {
+	/*
+	 * On glibc using NTPL (ie Linux with an underlying futex), signaling a
+	 * condition variable can block in the __condvar_quiesce_and_switch_g1
+	 * operation. So switch to GC Safe mode here.
+	 */
+	MONO_ENTER_GC_SAFE;
 	mono_os_cond_broadcast (&cond->c);
+	MONO_EXIT_GC_SAFE;
 }
 
-G_END_DECLS
+#else /* DISABLE_THREADS */
+
+struct _MonoCoopMutex {
+	int dummy;
+};
+
+struct _MonoCoopCond {
+	int dummy;
+};
+
+static inline void
+mono_coop_mutex_init (MonoCoopMutex *mutex)
+{
+}
+
+static inline void
+mono_coop_mutex_init_recursive (MonoCoopMutex *mutex)
+{
+}
+
+static inline void
+mono_coop_mutex_destroy (MonoCoopMutex *mutex)
+{
+}
+
+static inline void
+mono_coop_mutex_lock (MonoCoopMutex *mutex)
+{
+}
+
+static inline gint
+mono_coop_mutex_trylock (MonoCoopMutex *mutex)
+{
+	return 0;
+}
+
+static inline void
+mono_coop_mutex_unlock (MonoCoopMutex *mutex)
+{
+}
+
+static inline void
+mono_coop_cond_init (MonoCoopCond *cond)
+{
+}
+
+static inline void
+mono_coop_cond_destroy (MonoCoopCond *cond)
+{
+}
+
+static inline void
+mono_coop_cond_wait (MonoCoopCond *cond, MonoCoopMutex *mutex)
+{
+}
+
+static inline gint
+mono_coop_cond_timedwait (MonoCoopCond *cond, MonoCoopMutex *mutex, guint32 timeout_ms)
+{
+	return 0;
+}
+
+static inline void
+mono_coop_cond_signal (MonoCoopCond *cond)
+{
+}
+
+static inline void
+mono_coop_cond_broadcast (MonoCoopCond *cond)
+{
+}
+
+#endif /* DISABLE_THREADS */
 
 #endif /* __MONO_COOP_MUTEX_H__ */

@@ -30,107 +30,67 @@ namespace interpreter
 		Il2CppMethodPointer method;
 	};
 
-	extern Managed2NativeMethodInfo g_managed2nativeStub[];
-	extern Native2ManagedMethodInfo g_native2managedStub[];
-	extern NativeAdjustThunkMethodInfo g_adjustThunkStub[];
-
-
-	template<int N>
-	struct WebGLSpeicalValueType
+	struct FullName2Signature
 	{
-		union
-		{
-			struct
-			{
-			};
-			uint8_t __padding[N];
-		};
+		const char* fullName;
+		const char* signature;
 	};
 
-	template<int N>
-	struct WebGLSpeicalValueTypeAlign2
+	extern const Managed2NativeMethodInfo g_managed2nativeStub[];
+	extern const Native2ManagedMethodInfo g_native2managedStub[];
+	extern const NativeAdjustThunkMethodInfo g_adjustThunkStub[];
+	extern const FullName2Signature g_fullName2SignatureStub[];
+
+
+	struct ReversePInvokeInfo
 	{
-		union
-		{
-			struct
-			{
-			};
-			uint16_t __padding[N/2];
-		};
+		int32_t index;
+		Il2CppMethodPointer methodPointer;
+		const MethodInfo* methodInfo;
 	};
 
-	template<int N>
-	struct WebGLSpeicalValueTypeAlign4
+	struct ReversePInvokeMethodData
 	{
-		union
-		{
-			struct
-			{
-			};
-			uint32_t __padding[N / 4];
-		};
+		const char* methodSig;
+		Il2CppMethodPointer methodPointer;
 	};
 
-	template<int N>
-	struct WebGLSpeicalValueTypeAlign8
+	extern const ReversePInvokeMethodData g_reversePInvokeMethodStub[];
+
+	typedef void (*PInvokeMethodPointer)(intptr_t method, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret);
+
+	struct PInvokeMethodData
 	{
-		union
-		{
-			struct
-			{
-			};
-			uint64_t __padding[N / 8];
-		};
+		const char* methodSig;
+		PInvokeMethodPointer methodPointer;
 	};
+	extern const PInvokeMethodData g_PInvokeMethodStub[];
 
-	template<int N>
-	struct ValueTypeSize
+
+	typedef void (*Managed2NativeFunctionPointerCallMethod)(const void* methodPointer, uint16_t* argVarIndexs, StackObject* localVarBase, void* ret);
+	struct Managed2NativeFunctionPointerCallData
 	{
-		uint8_t  __value[N];
+		const char* methodSig;
+		Managed2NativeFunctionPointerCallMethod methodPointer;
 	};
-
-	template<int N>
-	struct ValueTypeSizeAlign2
-	{
-		static_assert(N % 2 == 0, "need align 2");
-		uint16_t  __value[N/2];
-	};
-
-	template<int N>
-	struct ValueTypeSizeAlign4
-	{
-		static_assert(N % 4 == 0, "need align 4");
-		uint32_t  __value[N/4];
-	};
-
-	template<int N>
-	struct ValueTypeSizeAlign8
-	{
-		static_assert(N % 8 == 0, "need align 8");
-		uint64_t  __value[N/8];
-	};
-
-	struct ValueTypeSize16
-	{
-		uint64_t low;
-		uint64_t high;
-	};
-
-	void CopyArgs(StackObject* dstBase, StackObject* argBase, ArgDesc* args, uint32_t paramCount, uint32_t totalParamStackObjectSize);
-
-	bool IsPassArgAsValue(const Il2CppType* type, LocationDataType* locType = nullptr);
-	void ConvertInvokeArgs(StackObject* resultArgs, const MethodInfo* method, void** __args);
+	extern const Managed2NativeFunctionPointerCallData g_managed2NativeFunctionPointerCallStub[];
+	
+	void ConvertInvokeArgs(StackObject* resultArgs, const MethodInfo* method, MethodArgDesc* argDescs, void** args);
 
 	bool ComputeSignature(const MethodInfo* method, bool call, char* sigBuf, size_t bufferSize);
 	bool ComputeSignature(const Il2CppMethodDefinition* method, bool call, char* sigBuf, size_t bufferSize);
-	bool ComputeSignature(const Il2CppType* ret, const Il2CppType* params, uint32_t paramCount, bool instanceCall, char* sigBuf, size_t bufferSize);
-
-	struct HFATypeInfo
+	bool ComputeSignature(const Il2CppType* ret, const il2cpp::utils::dynamic_array<const Il2CppType*>& params, bool instanceCall, char* sigBuf, size_t bufferSize);
+	
+	template<typename T> uint64_t N2MAsUint64ValueOrAddress(T& value)
 	{
-		const Il2CppType* eleType;
-		int32_t count;
-	};
+		return sizeof(T) <= 8 ? *(uint64_t*)&value : (uint64_t)&value;
+	}
 
-	bool ComputeHFATypeInfo(Il2CppClass* klass, HFATypeInfo& typeInfo);
+	template<typename T> T& M2NFromValueOrAddress(void* value)
+	{
+		//return sizeof(T) <= 8 ? *(T*)value : **(T**)value;
+		return *(T*)value;
+	}
+	
 }
 }

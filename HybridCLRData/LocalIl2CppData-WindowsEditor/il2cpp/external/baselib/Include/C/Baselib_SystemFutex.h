@@ -30,7 +30,7 @@ BASELIB_C_INTERFACE
 //   additional contention as well as spurious wakeups compared to a native implementation.
 // * While the fallback implementation is not something that should be used in production it can still provide value
 //   when bringing up new platforms or to test features built on top of the futex api.
-BASELIB_INLINE_API bool Baselib_SystemFutex_NativeSupport(void) { return PLATFORM_FUTEX_NATIVE_SUPPORT == 1; }
+BASELIB_INLINE_API bool Baselib_SystemFutex_NativeSupport(void) { return PLATFORM_HAS_NATIVE_FUTEX == 1; }
 
 // Wait for notification.
 //

@@ -36,7 +36,7 @@
 #endif
 #include <errno.h>
 
-static gpointer error_quark = "FileError";
+static gpointer error_quark = (gpointer)"FileError";
 
 gpointer
 g_file_error_quark (void)
@@ -123,7 +123,7 @@ g_file_set_contents (const gchar *filename, const gchar *contents, gssize length
 	else
 		name++;
 	
-	path = g_strdup_printf (TMP_FILE_FORMAT, name - filename, filename, name);
+	path = g_strdup_printf (TMP_FILE_FORMAT, (int)(name - filename), filename, name);
 	if (!(fp = fopen (path, "wb"))) {
 		g_set_error (err, G_FILE_ERROR, g_file_error_from_errno (errno), "%s", g_strerror (errno));
 		g_free (path);

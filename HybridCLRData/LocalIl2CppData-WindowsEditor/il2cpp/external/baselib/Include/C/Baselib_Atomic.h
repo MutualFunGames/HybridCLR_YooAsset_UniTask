@@ -2,6 +2,11 @@
 
 // This API is not type safe. For a type safe version use Baselib_Atomic_TypeSafe.h (C) or Atomic.h (C++)
 //
+// ATTENTION: The caller must ensure that the address of obj is aligned to the size of its respective target. (e.g. 64bit values need to be aligned to 8 bytes)
+//            Failure to comply is undefined behavior (in practice depending on compiler & architecture either crash, non-atomicity or slow performance)
+//            In Cpp code, ALIGN_ATOMIC can be used to ensure this, but generally it is recommended to use the baselib::atomic struct instead!
+
+// ----------------------------------------------------------------------------------------------------------------------------------------
 // Atomics closely mimic C11/C++11 implementation, with the following differences:
 //
 //   *) C API: as Visual Studio C compiler doesn't support _Generic we can't have a single named function operating on different types, or
@@ -9,6 +14,8 @@
 //      This leads to having to explicitly specify type size and ordering in the function name, for example
 //      'Baselib_atomic_load_32_acquire' instead of 'Baselib_atomic_load' as one would have available in in C11 or equivalent in C++11.
 //
+//   *) Addition Baselib_atomic_ref_dec_* functions, for details see Baselib_Atomic_Extensions.h
+// ----------------------------------------------------------------------------------------------------------------------------------------
 
 // not type specific
 // ----------------------------------------------------------------------------------------------------------------------------------------
@@ -136,6 +143,8 @@ static FORCE_INLINE bool Baselib_atomic_compare_exchange_strong_16_seq_cst_relax
 static FORCE_INLINE bool Baselib_atomic_compare_exchange_strong_16_seq_cst_acquire_v(void* obj, void* expected, const void* value);
 static FORCE_INLINE bool Baselib_atomic_compare_exchange_strong_16_seq_cst_seq_cst_v(void* obj, void* expected, const void* value);
 
+static FORCE_INLINE bool Baselib_atomic_ref_dec_16_v(void* obj);
+
 // 32-bit declarations
 // ------------------------------------------------------------------------------------------------------------------------------
 static FORCE_INLINE void Baselib_atomic_load_32_relaxed_v(const void* obj, void* result);
@@ -196,6 +205,8 @@ static FORCE_INLINE bool Baselib_atomic_compare_exchange_strong_32_seq_cst_relax
 static FORCE_INLINE bool Baselib_atomic_compare_exchange_strong_32_seq_cst_acquire_v(void* obj, void* expected, const void* value);
 static FORCE_INLINE bool Baselib_atomic_compare_exchange_strong_32_seq_cst_seq_cst_v(void* obj, void* expected, const void* value);
 
+static FORCE_INLINE bool Baselib_atomic_ref_dec_32_v(void* obj);
+
 // 64-bit declarations
 // ------------------------------------------------------------------------------------------------------------------------------
 static FORCE_INLINE void Baselib_atomic_load_64_relaxed_v(const void* obj, void* result);
@@ -255,6 +266,8 @@ static FORCE_INLINE bool Baselib_atomic_compare_exchange_strong_64_acq_rel_acqui
 static FORCE_INLINE bool Baselib_atomic_compare_exchange_strong_64_seq_cst_relaxed_v(void* obj, void* expected, const void* value);
 static FORCE_INLINE bool Baselib_atomic_compare_exchange_strong_64_seq_cst_acquire_v(void* obj, void* expected, const void* value);
 static FORCE_INLINE bool Baselib_atomic_compare_exchange_strong_64_seq_cst_seq_cst_v(void* obj, void* expected, const void* value);
+
+static FORCE_INLINE bool Baselib_atomic_ref_dec_64_v(void* obj);
 
 // 128-bit declarations
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -400,12 +413,10 @@ static FORCE_INLINE bool Baselib_atomic_compare_exchange_strong_ptr2x_seq_cst_se
 // Compiler Specific Implementation
 // ----------------------------------------------------------------------------------------------------------------------------------------
 
-#if PLATFORM_CUSTOM_ATOMICS
-// Platform header does not know where macro header lives and likely needs it.
-    #include "../../Include/C/Baselib_Atomic_Macros.h"
-    #include "C/Baselib_Atomic_Platform.inl.h"
-#elif COMPILER_CLANG || COMPILER_GCC
+#if COMPILER_CLANG || COMPILER_GCC
     #include "Internal/Compiler/Baselib_Atomic_Gcc.h"
 #elif COMPILER_MSVC
     #include "Internal/Compiler/Baselib_Atomic_Msvc.h"
 #endif
+
+#include "Internal/Baselib_Atomic_Extensions.h"

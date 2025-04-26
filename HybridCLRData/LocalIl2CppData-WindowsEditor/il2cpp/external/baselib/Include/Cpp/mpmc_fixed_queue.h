@@ -207,7 +207,7 @@ namespace baselib
 
         private:
             static constexpr uint32_t MinTypeAlignment = alignof(value_type) > sizeof(void*) ? alignof(value_type) : sizeof(void*);
-            static constexpr uint32_t SlotAlignment = cacheline_aligned && PLATFORM_CACHE_LINE_SIZE > MinTypeAlignment ? PLATFORM_CACHE_LINE_SIZE : MinTypeAlignment;
+            static constexpr uint32_t SlotAlignment = cacheline_aligned && PLATFORM_PROPERTY_CACHE_LINE_SIZE > MinTypeAlignment ? PLATFORM_PROPERTY_CACHE_LINE_SIZE : MinTypeAlignment;
             static constexpr uint32_t ReadableBit = (uint32_t)1 << 31;
             static constexpr uint32_t WritableMask = ~ReadableBit;
             static constexpr uint32_t WriteableChecksum(uint32_t pos)       { return pos & WritableMask; }
@@ -231,8 +231,8 @@ namespace baselib
             const uint32_t m_NumberOfSlots;
             const size_t   m_Capacity;
 
-            alignas(PLATFORM_CACHE_LINE_SIZE) baselib::atomic<uint32_t> m_ReadPos;
-            alignas(PLATFORM_CACHE_LINE_SIZE) baselib::atomic<uint32_t> m_WritePos;
+            alignas(PLATFORM_PROPERTY_CACHE_LINE_SIZE) baselib::atomic<uint32_t> m_ReadPos;
+            alignas(PLATFORM_PROPERTY_CACHE_LINE_SIZE) baselib::atomic<uint32_t> m_WritePos;
         };
     }
 }

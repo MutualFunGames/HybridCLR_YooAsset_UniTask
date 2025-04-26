@@ -1,6 +1,6 @@
 #pragma once
 
-#if (IL2CPP_TARGET_POSIX || IL2CPP_SUPPORT_SOCKETS_POSIX_API) && !RUNTIME_TINY
+#if IL2CPP_TARGET_POSIX || IL2CPP_SUPPORT_SOCKETS_POSIX_API
 
 #include <string>
 #include <vector>

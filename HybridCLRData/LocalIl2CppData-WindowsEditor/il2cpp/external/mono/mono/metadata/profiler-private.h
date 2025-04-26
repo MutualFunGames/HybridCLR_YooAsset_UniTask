@@ -1,7 +1,6 @@
 /*
  * Licensed to the .NET Foundation under one or more agreements.
  * The .NET Foundation licenses this file to you under the MIT license.
- * See the LICENSE file in the project root for more information.
  */
 
 #ifndef __MONO_PROFILER_PRIVATE_H__
@@ -12,6 +11,7 @@
 #include <mono/utils/mono-context.h>
 #include <mono/utils/mono-os-mutex.h>
 #include <mono/utils/mono-os-semaphore.h>
+#include <mono/metadata/icalls.h>
 
 struct _MonoProfilerDesc {
 	MonoProfilerHandle next;
@@ -51,7 +51,7 @@ typedef struct {
 
 	gboolean code_coverage;
 	mono_mutex_t coverage_mutex;
-	GHashTable *coverage_hash;
+	MonoDomainCoverage* coverage_domains;
 
 	MonoProfilerHandle sampling_owner;
 	MonoSemType sampling_semaphore;
@@ -59,7 +59,8 @@ typedef struct {
 	guint32 sample_freq;
 
 	gboolean allocations;
-	gboolean fileio;
+
+	gboolean clauses;
 
 	gboolean call_contexts;
 	void (*context_enable) (void);
@@ -96,11 +97,13 @@ typedef struct {
 extern MonoProfilerState mono_profiler_state;
 
 typedef struct {
+	guchar *cil_code;
+	guint32 count;
+} MonoProfilerCoverageInfoEntry;
+
+typedef struct {
 	guint32 entries;
-	struct {
-		guchar *cil_code;
-		guint32 count;
-	} data [1];
+	MonoProfilerCoverageInfoEntry data [MONO_ZERO_LEN_ARRAY];
 } MonoProfilerCoverageInfo;
 
 void mono_profiler_started (void);
@@ -112,7 +115,19 @@ mono_profiler_installed (void)
 	return !!mono_profiler_state.profilers;
 }
 
-MonoProfilerCoverageInfo *mono_profiler_coverage_alloc (MonoMethod *method, guint32 entries);
+gboolean mono_profiler_coverage_instrumentation_enabled (MonoMethod *method);
+MonoProfilerCoverageInfo *mono_profiler_coverage_alloc (MonoDomain* domain, MonoMethod *method, guint32 entries);
+
+struct _MonoDomainCoverage
+{
+	MonoDomain* domain;
+	GHashTable* coverage_hash;
+	mono_mutex_t mutex;
+	MonoDomainCoverage* next;
+};
+
+void mono_profiler_coverage_domain_init (MonoDomain* domain);
+void mono_profiler_coverage_domain_free (MonoDomain* domain);
 
 struct _MonoProfilerCallContext {
 	/*
@@ -130,6 +145,10 @@ struct _MonoProfilerCallContext {
 	 * is set to NULL.
 	 */
 	gpointer return_value;
+	/*
+	 * Points to an array of addresses of stack slots holding the arguments.
+	 */
+	gpointer *args;
 };
 
 MonoProfilerCallInstrumentationFlags mono_profiler_get_call_instrumentation_flags (MonoMethod *method);
@@ -144,8 +163,14 @@ mono_profiler_allocations_enabled (void)
 	return mono_profiler_state.allocations;
 }
 
+static inline gboolean
+mono_profiler_clauses_enabled (void)
+{
+	return mono_profiler_state.clauses;
+}
+
 #define _MONO_PROFILER_EVENT(name, ...) \
-	ICALL_DECL_EXPORT void mono_profiler_raise_ ## name (__VA_ARGS__);
+	ICALL_EXPORT void mono_profiler_raise_ ## name (__VA_ARGS__);
 #define MONO_PROFILER_EVENT_0(name, type) \
 	_MONO_PROFILER_EVENT(name, void)
 #define MONO_PROFILER_EVENT_1(name, type, arg1_type, arg1_name) \

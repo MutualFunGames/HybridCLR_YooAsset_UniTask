@@ -8,8 +8,6 @@
 #include "vm/GlobalMetadata.h"
 #include "vm/MetadataCache.h"
 
-#include "hybridclr/metadata/MetadataUtil.h"
-
 // Custom attribute metadata format
 //
 // Custom attribute data is tightly packed and is not stored aligned
@@ -30,11 +28,11 @@
 // 1 Compressed uint32:         Count of field arguments
 //  n Blob data, variable sized:   Field argument data
 //     Each field data ends with a compressed int32 of the field index on the type,
-//     If the field index is nengative, a compressed uint32_t with the declaring type index follows
+//     If the field index is negative, a compressed uint32_t with the declaring type index follows
 // 1 Compressed uint32:         Count of property arguments
 //  n Blob data, variable sized:   Property argument data
 //     Each property data ends with a compressed int32 of the property index on the type
-//     If the property index is nengative, a compressed uint32_t with the declaring type index follows
+//     If the property index is negative, a compressed uint32_t with the declaring type index follows
 
 // An example format is:
 //
@@ -42,11 +40,13 @@
 // 0x0010023f   - Method definition index for ctor1
 // 0x02001fc1   - Method definition index for ctor2
 // 0x02         - Constructor argument count for ctor1 (compressed uint32_t)
+// 0x01         - Property count for ctor1 (compressed uint32_t)
 // 0x04 (2)     - argument 1 type code (compressed int32_t)
-// 0x00         - Field for ctor1 (compressed uint32_t)
-// 0x01         - Property count for ctor1 (comprrressed uint32_t)
 // ....         - argument 1 data
-// 0x55         - property type code (enum) (comprssed uint32_t)
+// 0x00         - Field for ctor1 (compressed uint32_t)
+// 0x01         - Property count for ctor1 (compressed uint32_t)
+// ....         - argument 1 data
+// 0x55         - property type code (enum) (compressed uint32_t)
 // 0x023F       - type index for enum type (compressed uint32_t))
 // ....         - property 1 data
 // 0x02         - Constructor argument count for ctor2 (compressed uint32_t)
@@ -74,7 +74,7 @@ static bool ReadAttributeDataValue(const Il2CppImage* image, const char** buffer
 {
     const Il2CppTypeEnum type = il2cpp::utils::BlobReader::ReadEncodedTypeEnum(image, buffer, &arg->klass);
 
-    if (!il2cpp::utils::BlobReader::GetConstantValueFromBlob(image, type, buffer, &arg->data, deserializedManagedObjects, hybridclr::metadata::IsInterpreterImage(image)))
+    if (!il2cpp::utils::BlobReader::GetConstantValueFromBlob(image, type, buffer, &arg->data, deserializedManagedObjects))
     {
         SetInvalidDataException(exc);
         return false;
@@ -93,8 +93,8 @@ namespace il2cpp
 {
 namespace metadata
 {
-    CustomAttributeDataReader::CustomAttributeDataReader(const void* buffer, const void* bufferEnd) :
-        bufferStart((const char*)buffer), bufferEnd((const char*)bufferEnd)
+    CustomAttributeDataReader::CustomAttributeDataReader(const Il2CppImage* image, const void* buffer, const void* bufferEnd) :
+        image(image), bufferStart((const char*)buffer), bufferEnd((const char*)bufferEnd)
     {
         if (bufferStart != NULL)
             count = utils::ReadCompressedUInt32(&bufferStart);
@@ -103,36 +103,55 @@ namespace metadata
     }
 
     // private, used by CustomAttributeDataReader::ReadCustomAttributeData(const MethodInfo* ctor, const void* dataStart, uint32_t dataLength, CustomAttributeData* data, Il2CppException** exc)
-    CustomAttributeDataReader::CustomAttributeDataReader(const char* dataStart, uint32_t dataLength) :
-        bufferStart(dataStart), bufferEnd(dataStart + dataLength), count(0)
+    CustomAttributeDataReader::CustomAttributeDataReader(const Il2CppImage* image, const char* dataStart, uint32_t dataLength) :
+        image(image), bufferStart(dataStart), bufferEnd(dataStart + dataLength), count(0)
     {
     }
 
-    uint32_t CustomAttributeDataReader::GetCount()
+    uint32_t CustomAttributeDataReader::GetCount(const CustomAttributeFilter& filter) const
     {
+        uint32_t count = 0;
+        const char* ctorBuffer = bufferStart;
+        const MethodInfo* ctor;
+        while (IterateAttributeCtorsImpl(&ctor, &ctorBuffer))
+        {
+            if (filter(ctor))
+                count++;
+        }
+
         return count;
     }
 
-    CustomAttributeCtorIterator CustomAttributeDataReader::GetCtorIterator()
+    CustomAttributeCtorIterator CustomAttributeDataReader::GetCtorIterator() const
     {
         return CustomAttributeCtorIterator(bufferStart);
     }
 
-    CustomAttributeDataIterator CustomAttributeDataReader::GetDataIterator()
+    CustomAttributeCtorIterator CustomAttributeDataReader::GetCtorIterator(const CustomAttributeFilter& filter) const
+    {
+        return CustomAttributeCtorIterator(bufferStart, filter);
+    }
+
+    CustomAttributeDataIterator CustomAttributeDataReader::GetDataIterator() const
     {
         return CustomAttributeDataIterator(bufferStart, GetDataBufferStart());
     }
 
-    const char* CustomAttributeDataReader::GetDataBufferStart()
+    CustomAttributeDataIterator CustomAttributeDataReader::GetDataIterator(const CustomAttributeFilter& filter) const
+    {
+        return CustomAttributeDataIterator(bufferStart, GetDataBufferStart(), filter);
+    }
+
+    const char* CustomAttributeDataReader::GetDataBufferStart() const
     {
         return (const char*)(((uint32_t*)bufferStart) + count);
     }
 
-    bool CustomAttributeDataReader::IterateAttributeCtors(const Il2CppImage* image, const MethodInfo** attributeCtor, CustomAttributeCtorIterator* iter)
+    bool CustomAttributeDataReader::IterateAttributeCtorsImpl(const MethodInfo** attributeCtor, const char** ctorBuffer) const
     {
-        if (iter->ctorBuffer < GetDataBufferStart())
+        if (*ctorBuffer < GetDataBufferStart())
         {
-            MethodIndex ctorIndex = utils::Read32(&iter->ctorBuffer);
+            MethodIndex ctorIndex = utils::Read32(ctorBuffer);
             *attributeCtor = il2cpp::vm::MetadataCache::GetMethodInfoFromMethodDefinitionIndex(image, ctorIndex);
             return true;
         }
@@ -141,15 +160,25 @@ namespace metadata
         return false;
     }
 
-    bool CustomAttributeDataReader::ReadLazyCustomAttributeData(const Il2CppImage* image, LazyCustomAttributeData* data, CustomAttributeDataIterator* iter, Il2CppException** exc)
+    bool CustomAttributeDataReader::IterateAttributeCtors(const MethodInfo** attributeCtor, CustomAttributeCtorIterator* iter) const
     {
-        if (!IterateAttributeCtors(image, &data->ctor, &iter->ctorIter))
+        while (IterateAttributeCtorsImpl(attributeCtor, &iter->ctorBuffer))
+        {
+            if (iter->filter(*attributeCtor))
+                return true;
+        }
+
+        return false;
+    }
+
+    bool CustomAttributeDataReader::ReadLazyCustomAttributeData(LazyCustomAttributeData* data, CustomAttributeDataIterator* iter, Il2CppException** exc) const
+    {
+        if (!IterateAttributeCtorsImpl(&data->ctor, &iter->ctorBuffer))
             return false;
 
         data->dataStart = (void*)iter->dataBuffer;
 
-        CustomAttributeReaderVisitor visitor;
-        if (!VisitCustomAttributeDataImpl(image, data->ctor, iter, &visitor, exc, false))
+        if (!ReadPastCustomAttribute(data->ctor, iter, exc))
             return false;
 
         data->dataLength = (uint32_t)((char*)iter->dataBuffer - (char*)data->dataStart);
@@ -159,19 +188,25 @@ namespace metadata
 
     bool CustomAttributeDataReader::VisitCustomAttributeData(const Il2CppImage* image, const MethodInfo* ctor, const void* dataStart, uint32_t dataLength, CustomAttributeReaderVisitor* visitor, Il2CppException** exc)
     {
-        CustomAttributeDataReader reader = CustomAttributeDataReader((const char*)dataStart, dataLength);
+        CustomAttributeDataReader reader = CustomAttributeDataReader(image, (const char*)dataStart, dataLength);
         CustomAttributeDataIterator iter = CustomAttributeDataIterator(NULL, reader.bufferStart);
-        return reader.VisitCustomAttributeDataImpl(image, ctor, &iter, visitor, exc, true);
+        return reader.ReadAndVisitCustomAttributeData(ctor, &iter, visitor, exc);
     }
 
-    bool CustomAttributeDataReader::VisitCustomAttributeData(const Il2CppImage* image, CustomAttributeDataIterator* iter, CustomAttributeReaderVisitor* visitor, Il2CppException** exc)
+    bool CustomAttributeDataReader::VisitCustomAttributeData(CustomAttributeDataIterator* iter, CustomAttributeReaderVisitor* visitor, Il2CppException** exc) const
     {
         const MethodInfo* ctor;
+        while (IterateAttributeCtorsImpl(&ctor, &iter->ctorBuffer))
+        {
+            bool shouldProcessThisAttr = iter->filter(ctor);
+            if (shouldProcessThisAttr)
+                return ReadAndVisitCustomAttributeData(ctor, iter, visitor, exc);
 
-        if (!IterateAttributeCtors(image, &ctor, &iter->ctorIter))
-            return false;
+            if (!ReadPastCustomAttribute(ctor, iter, exc))
+                return false;
+        }
 
-        return VisitCustomAttributeDataImpl(image, ctor, iter, visitor, exc, true);
+        return false;
     }
 
     static std::tuple<const Il2CppClass*, int32_t> ReadCustomAttributeNamedArgumentClassAndIndex(const char** dataBuffer, const Il2CppClass* attrClass)
@@ -190,11 +225,22 @@ namespace metadata
         return std::make_tuple(declaringClass, memberIndex);
     }
 
-    bool CustomAttributeDataReader::VisitCustomAttributeDataImpl(const Il2CppImage* image, const MethodInfo* ctor, CustomAttributeDataIterator* iter, CustomAttributeReaderVisitor* visitor, Il2CppException** exc, bool deserializedManagedObjects)
+    bool CustomAttributeDataReader::ReadPastCustomAttribute(const MethodInfo* ctor, CustomAttributeDataIterator* iter, Il2CppException** exc) const
+    {
+        CustomAttributeReaderVisitor nullVisitor;
+        return ReadAndVisitCustomAttributeImpl(ctor, iter, &nullVisitor, exc, false);
+    }
+
+    bool CustomAttributeDataReader::ReadAndVisitCustomAttributeData(const MethodInfo* ctor, CustomAttributeDataIterator* iter, CustomAttributeReaderVisitor* visitor, Il2CppException** exc) const
+    {
+        return ReadAndVisitCustomAttributeImpl(ctor, iter, visitor, exc, true);
+    }
+
+    bool CustomAttributeDataReader::ReadAndVisitCustomAttributeImpl(const MethodInfo* ctor, CustomAttributeDataIterator* iter, CustomAttributeReaderVisitor* visitor, Il2CppException** exc, bool deserializedManagedObjects) const
     {
         il2cpp::gc::WriteBarrier::GenericStoreNull(exc);
 
-        const Il2CppClass* attrClass = ctor->klass;
+        Il2CppClass* attrClass = ctor->klass;
 
         uint32_t argumentCount = utils::ReadCompressedUInt32(&iter->dataBuffer);
         IL2CPP_ASSERT(iter->dataBuffer <= bufferEnd);
@@ -210,6 +256,8 @@ namespace metadata
             SetInvalidDataException(exc);
             return false;
         }
+
+        visitor->MoveNext(ctor);
 
         visitor->VisitArgumentSizes(argumentCount, fieldCount, propertyCount);
 
@@ -228,6 +276,9 @@ namespace metadata
         }
 
         visitor->VisitCtor(ctor, args, argumentCount);
+
+        if (fieldCount > 0 || propertyCount > 0)
+            vm::Class::Init(attrClass);
 
         for (uint32_t i = 0; i < fieldCount; i++)
         {

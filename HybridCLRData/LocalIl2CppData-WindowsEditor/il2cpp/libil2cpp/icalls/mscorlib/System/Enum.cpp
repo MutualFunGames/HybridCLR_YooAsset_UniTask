@@ -104,6 +104,10 @@ namespace System
                 COMPARE_ENUM_VALUES(uint64_t);
             case IL2CPP_TYPE_I8:
                 COMPARE_ENUM_VALUES(int64_t);
+            case IL2CPP_TYPE_U:
+                COMPARE_ENUM_VALUES(uintptr_t);
+            case IL2CPP_TYPE_I:
+                COMPARE_ENUM_VALUES(intptr_t);
             default:
                 IL2CPP_ASSERT(false && "Implement type 0x%02x in Enum::InternalCompareTo");
                 return retInvalidEnumType;
@@ -147,17 +151,6 @@ namespace System
 
         return reinterpret_cast<Il2CppReflectionRuntimeType*>(il2cpp::vm::Reflection::GetTypeObject(etype));
     }
-
-#if IL2CPP_TINY
-    bool Enum::TinyEnumEquals(Il2CppObject* left, Il2CppObject* right)
-    {
-        if (left->klass != right->klass)
-            return false;
-
-        return InternalCompareTo(left, right) == 0;
-    }
-
-#endif
 } /* namespace System */
 } /* namespace mscorlib */
 } /* namespace icalls */

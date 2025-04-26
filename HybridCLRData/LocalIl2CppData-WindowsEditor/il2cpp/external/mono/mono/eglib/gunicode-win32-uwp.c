@@ -11,7 +11,7 @@
 #define CODESET 1
 #include <windows.h>
 
-extern const char *my_charset;
+const char *my_charset;
 static gboolean is_utf8;
 
 gboolean

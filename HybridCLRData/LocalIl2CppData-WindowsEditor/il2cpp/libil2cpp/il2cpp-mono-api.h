@@ -13,12 +13,13 @@
 typedef struct _MonoAppDomain MonoAppDomain;
 typedef struct _MonoArray MonoArray;
 typedef struct _MonoAssembly MonoAssembly;
+typedef struct _MonoAssemblyLoadContext MonoAssemblyLoadContext;
 typedef struct _MonoClass MonoClass;
 typedef struct _MonoClassField MonoClassField;
 typedef struct _MonoDebugLocalsInfo MonoDebugLocalsInfo;
 typedef struct _MonoDebugMethodJitInfo MonoDebugMethodJitInfo;
 typedef struct _MonoDomain MonoDomain;
-typedef struct _MonoError MonoError;
+typedef union _MonoError MonoError;
 typedef struct _MonoException MonoException;
 typedef struct _MonoGenericClass MonoGenericClass;
 typedef struct _MonoGenericContainer MonoGenericContainer;
@@ -41,8 +42,6 @@ typedef struct MonoVTable MonoVTable;
 typedef struct MonoTypeNameParse MonoTypeNameParse;
 typedef struct _GPtrArray GPtrArray;
 typedef void* MonoGCDescriptor;
-
-struct MonoThreadInfo;
 
 typedef void (*MonoDomainFunc) (MonoDomain *domain, void* user_data);
 typedef int32_t (*Il2CppMonoInternalStackWalk) (void /*MonoStackFrameInfo*/ *frame, void /*MonoContext*/ *ctx, void* data);
@@ -86,8 +85,19 @@ enum MonoTypeNameFormat;
 extern "C"
 {
 #endif // __cplusplus
-#define DO_MONO_API(r, n, p)             IL2CPP_EXPORT r n p;
-#define DO_MONO_API_NO_RETURN(r, n, p)   IL2CPP_EXPORT NORETURN r n p;
+
+// PS4 and PS4 define IL2CPP_EXPORT in their toolchains and
+// pass the value to the compiler. So we cannot easily override it.
+// The value conflicts with the Mono headers. Since we don't actually
+// need to export these symbols, just define this as empty on PS platforms.
+#if IL2CPP_TARGET_PS4 || IL2CPP_TARGET_PS5
+#define IL2CPP_MONO_EXPORT
+#else
+#define IL2CPP_MONO_EXPORT IL2CPP_EXPORT
+#endif
+
+#define DO_MONO_API(r, n, p)             IL2CPP_MONO_EXPORT r n p;
+#define DO_MONO_API_NO_RETURN(r, n, p)   IL2CPP_MONO_EXPORT NORETURN r n p;
 #define DO_MONO_API_NOT_EXPORTED(r, n, p) r n p;
 #include "il2cpp-mono-api-functions.h"
 #undef DO_MONO_API

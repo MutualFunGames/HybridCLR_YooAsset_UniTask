@@ -16,7 +16,7 @@
         </member>
         <member name="T:Analytics.Api.Output.BuildAnalyticsCollectionInfo">
             <summary>
-            Analytics data for the collection of analytics
+            Analytics data for the collection of player build analytics. This table records the performance and any errors encountered when running Analytics.exe after a Bee build.
             </summary>
         </member>
         <member name="P:Analytics.Api.Output.BuildAnalyticsCollectionInfo.build_guid">
@@ -123,6 +123,16 @@
         <member name="F:Analytics.Api.Output.BuildAnalyticsErrorCodes.SummaryCollectorProcessTimeout">
             <summary>
             The Build Analytics Build Summary process timed out.
+            </summary>
+        </member>
+        <member name="F:Analytics.Api.Output.BuildAnalyticsErrorCodes.JsonParseTableVersionNotInt">
+            <summary>
+            Table version number can not be parsed as an int..
+            </summary>
+        </member>
+        <member name="F:Analytics.Api.Output.BuildAnalyticsErrorCodes.SummaryCollectorNonZeroExit">
+            <summary>
+            The Build Analytics Build Summary failed with non-zero exit code.
             </summary>
         </member>
         <member name="P:Analytics.Api.Output.NodeTimingData.name">

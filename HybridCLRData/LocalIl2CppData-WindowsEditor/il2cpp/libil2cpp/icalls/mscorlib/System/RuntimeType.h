@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 struct Il2CppReflectionRuntimeType;
 struct mscorlib_System_Reflection_MethodInfo;
 
@@ -54,7 +56,7 @@ namespace System
         static intptr_t GetPropertiesByName_native(Il2CppReflectionRuntimeType* thisPtr, intptr_t name, int32_t bindingAttr, int32_t listType);
         static Il2CppObject* CreateInstanceInternal(Il2CppReflectionType* type);
         static Il2CppObject* GetCorrespondingInflatedConstructor(Il2CppReflectionRuntimeType* thisPtr, Il2CppObject* generic);
-        static Il2CppObject* get_DeclaringMethod(Il2CppReflectionRuntimeType* thisPtr);
+        static Il2CppReflectionMethod* get_DeclaringMethod(Il2CppReflectionRuntimeType* thisPtr);
         static Il2CppObject* GetCorrespondingInflatedMethod(Il2CppReflectionRuntimeType* thisPtr, Il2CppObject* generic);
         static Il2CppString* get_Name(Il2CppReflectionRuntimeType* thisPtr);
         static Il2CppString* get_Namespace(Il2CppReflectionRuntimeType* thisPtr);
@@ -70,6 +72,7 @@ namespace System
         static void GetInterfaceMapData(Il2CppReflectionType* type, Il2CppReflectionType* iface, Il2CppArray** targets, Il2CppArray** methods);
         static void GetPacking(Il2CppReflectionType* type, int32_t* packing, int32_t* size);
         static void GetGUID(Il2CppReflectionType* type, Il2CppArray* types);
+        static std::string getFullName2(Il2CppReflectionRuntimeType* thisPtr, bool full_name, bool assembly_qualified);
     };
 } // namespace System
 } // namespace mscorlib

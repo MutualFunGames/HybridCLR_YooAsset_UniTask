@@ -52,7 +52,7 @@ namespace baselib
             // Returns true if stack is empty.
             bool empty() const
             {
-                return m_Top.load(memory_order_relaxed).ptr == 0;
+                return atomic_load_explicit(m_Top.obj.ptr, memory_order_relaxed) == nullptr;
             }
 
             // Push a node to the top of the stack.
@@ -60,7 +60,7 @@ namespace baselib
             {
                 SequencedTopPtr newtop;
                 newtop.ptr = node;
-                if (PLATFORM_LLSC_NATIVE_SUPPORT)
+                if (PLATFORM_HAS_NATIVE_LLSC)
                 {
                     Baselib_atomic_llsc_ptr_acquire_release_v(&m_Top, &node->next.obj, &newtop, );
                 }
@@ -81,7 +81,7 @@ namespace baselib
             {
                 SequencedTopPtr newtop;
                 newtop.ptr = first_node;
-                if (PLATFORM_LLSC_NATIVE_SUPPORT)
+                if (PLATFORM_HAS_NATIVE_LLSC)
                 {
                     Baselib_atomic_llsc_ptr_acquire_release_v(&m_Top, &last_node->next.obj, &newtop, );
                 }
@@ -109,7 +109,7 @@ namespace baselib
                     return 0;
                 T* node;
                 SequencedTopPtr newtop;
-                if (PLATFORM_LLSC_NATIVE_SUPPORT)
+                if (PLATFORM_HAS_NATIVE_LLSC)
                 {
                     Baselib_atomic_llsc_ptr_acquire_release_v(&m_Top, &node, &newtop,
                     {
@@ -151,7 +151,7 @@ namespace baselib
                 T* node;
                 SequencedTopPtr newtop;
                 newtop.ptr = 0;
-                if (PLATFORM_LLSC_NATIVE_SUPPORT)
+                if (PLATFORM_HAS_NATIVE_LLSC)
                 {
                     Baselib_atomic_llsc_ptr_acquire_release_v(&m_Top, &node, &newtop,
                     {
@@ -186,11 +186,11 @@ namespace baselib
             } SequencedTopPtr;
 
             // Space out atomic members to individual cache lines. Required for native LLSC operations on some architectures, others to avoid false sharing
-            char _cachelineSpacer0[PLATFORM_CACHE_LINE_SIZE];
+            char _cachelineSpacer0[PLATFORM_PROPERTY_CACHE_LINE_SIZE];
             atomic<SequencedTopPtr> m_Top;
-            char _cachelineSpacer1[PLATFORM_CACHE_LINE_SIZE - sizeof(SequencedTopPtr)];
+            char _cachelineSpacer1[PLATFORM_PROPERTY_CACHE_LINE_SIZE - sizeof(SequencedTopPtr)];
             atomic<bool> m_ConsumerLock;
-            char _cachelineSpacer2[PLATFORM_CACHE_LINE_SIZE - sizeof(bool)];
+            char _cachelineSpacer2[PLATFORM_PROPERTY_CACHE_LINE_SIZE - sizeof(bool)];
 
             // Verify mpsc_node is base of T
             static_assert(std::is_base_of<baselib::mpsc_node, T>::value, "Node class/struct used with baselib::mpsc_node_stack must derive from baselib::mpsc_node.");

@@ -1,6 +1,6 @@
 #include "il2cpp-config.h"
 
-#if IL2CPP_TARGET_POSIX
+#if IL2CPP_TARGET_POSIX && !IL2CPP_USE_PLATFORM_SPECIFIC_LOCALE
 
 #include <clocale>
 #include <locale.h>
@@ -115,7 +115,14 @@ namespace os
             posix_locale = getenv("LANG");
             if (posix_locale == 0)
             {
+#ifdef IL2CPP_TARGET_QNX
+                // QNX version of setlocale has limited functionality (compared to Linux) and doesn't accept NULL as an argument:
+                // https://www.qnx.com/developers/docs/7.1/#com.qnx.doc.neutrino.lib_ref/topic/s/setlocale.html
+                // https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.lib_ref/topic/s/setlocale.html
+                posix_locale = setlocale(LC_ALL, "C");
+#else
                 posix_locale = setlocale(LC_ALL, NULL);
+#endif
             }
         }
 

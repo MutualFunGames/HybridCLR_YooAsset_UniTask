@@ -1,6 +1,6 @@
 #include "./context.h"
 
-#include "../include/brotli/types.h"
+#include <brotli/types.h>
 
 /* Common context lookup table for all context modes. */
 const uint8_t _kBrotliContextLookupTable[2048] = {

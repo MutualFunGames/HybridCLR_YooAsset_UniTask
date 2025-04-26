@@ -22,13 +22,11 @@ void il2cpp::os::Initialize()
 #endif
 
     // This is needed so we could extract exception text from bad hresults
-#if !RUNTIME_TINY
     os::WindowsRuntime::EnableErrorReporting();
     os::InitializeDllMain();
-#endif
 }
 
-#if !IL2CPP_TARGET_WINRT && !IL2CPP_TARGET_XBOXONE
+#if !IL2CPP_TARGET_WINRT
 void il2cpp::os::Uninitialize()
 {
 }

@@ -71,6 +71,14 @@ namespace os
         return defaultError;
     }
 
+    void MemoryMappedFile::AllocateStaticData()
+    {
+    }
+
+    void MemoryMappedFile::FreeStaticData()
+    {
+    }
+
     FileHandle* MemoryMappedFile::Create(FileHandle* file, const char* mapName, int32_t mode, int64_t *capacity, MemoryMappedFileAccess access, int32_t options, MemoryMappedFileError* error)
     {
         HANDLE result = NULL;

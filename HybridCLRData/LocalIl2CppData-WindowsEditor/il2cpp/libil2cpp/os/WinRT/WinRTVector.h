@@ -125,7 +125,9 @@ namespace winrt
             if (startIndex > m_Vector.size())
                 return E_BOUNDS;
 
-            uint32_t count = std::min(capacity, static_cast<uint32_t>(m_Vector.size()) - startIndex);
+            uint32_t count = static_cast<uint32_t>(m_Vector.size()) - startIndex;
+            if (count > capacity)
+                count = capacity;
 
             for (uint32_t i = 0; i < count; i++)
             {

@@ -1,6 +1,6 @@
 #include "il2cpp-config.h"
 
-#if IL2CPP_TARGET_POSIX
+#if IL2CPP_TARGET_POSIX && !IL2CPP_USE_PLATFORM_SPECIFIC_TIME
 
 #include "os/Time.h"
 #include <stdlib.h>
@@ -15,7 +15,7 @@
 
 #include <time.h>
 
-#if IL2CPP_TARGET_LINUX
+#if IL2CPP_TARGET_LINUX || IL2CPP_TARGET_QNX
 #include <sys/time.h>
 #endif
 

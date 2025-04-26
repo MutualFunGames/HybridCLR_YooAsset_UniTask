@@ -16,6 +16,9 @@ namespace os
     class ThreadImpl : public il2cpp::utils::NonCopyable
     {
     public:
+        static void AllocateStaticData() {}
+        static void FreeStaticData() {}
+
         ThreadImpl();
         ~ThreadImpl();
         uint64_t Id();

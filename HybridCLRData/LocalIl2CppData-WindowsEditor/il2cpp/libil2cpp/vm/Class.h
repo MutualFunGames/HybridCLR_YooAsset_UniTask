@@ -48,6 +48,8 @@ namespace vm
     class LIBIL2CPP_CODEGEN_API Class
     {
     public:
+        static void AllocateStaticData();
+        static void FreeStaticData();
         static Il2CppClass* FromIl2CppType(const Il2CppType* type, bool throwOnError = true);
         static Il2CppClass* FromIl2CppTypeEnum(Il2CppTypeEnum type);
         static Il2CppClass* FromName(const Il2CppImage* image, const char* namespaze, const char *name);
@@ -84,20 +86,68 @@ namespace vm
         static bool IsInflated(const Il2CppClass *klass);
         static bool IsGenericTypeDefinition(const Il2CppClass *klass);
         static bool IsSubclassOf(Il2CppClass *klass, Il2CppClass *klassc, bool check_interfaces);
-        static bool IsValuetype(const Il2CppClass *klass);
-        static bool IsBlittable(const Il2CppClass *klass);
+
+        inline static bool IsValuetype(const Il2CppClass* klass)
+        {
+            return klass->byval_arg.valuetype;
+        }
+
+        inline static bool IsBlittable(const Il2CppClass *klass)
+        {
+            return klass->is_blittable;
+        }
+
         static bool HasDefaultConstructor(Il2CppClass* klass);
-        static int GetFlags(const Il2CppClass *klass);
-        static bool IsAbstract(const Il2CppClass *klass);
-        static bool IsInterface(const Il2CppClass *klass);
-        static bool IsNullable(const Il2CppClass *klass);
-        static Il2CppClass* GetNullableArgument(const Il2CppClass* klass);
+
+        inline static int GetFlags(const Il2CppClass* klass)
+        {
+            return klass->flags;
+        }
+
+        inline static bool IsAbstract(const Il2CppClass* klass)
+        {
+            return (klass->flags & TYPE_ATTRIBUTE_ABSTRACT) != 0;
+        }
+
+        inline static bool IsInterface(const Il2CppClass* klass)
+        {
+            return (klass->flags & TYPE_ATTRIBUTE_INTERFACE) || (klass->byval_arg.type == IL2CPP_TYPE_VAR) || (klass->byval_arg.type == IL2CPP_TYPE_MVAR);
+        }
+
+        inline static bool IsNullable(const Il2CppClass* klass)
+        {
+            // Based on benchmarking doing the check on `klass->generic_class != NULL` makes this check faster
+            // Likely since nullabletype is a bitfield and requires some manipulation to check
+            return klass->generic_class != NULL && klass->nullabletype;
+        }
+
+        inline static Il2CppClass* GetNullableArgument(const Il2CppClass* klass)
+        {
+            IL2CPP_ASSERT(IsNullable(klass));
+            return klass->element_class;
+        }
+
         static int GetArrayElementSize(const Il2CppClass *klass);
-        static const Il2CppType* GetByrefType(Il2CppClass *klass);
-        static const Il2CppType* GetType(Il2CppClass *klass);
+
+        inline static const Il2CppType* GetByrefType(Il2CppClass* klass)
+        {
+            return &klass->this_arg;
+        }
+
+        inline static const Il2CppType* GetType(Il2CppClass* klass)
+        {
+            return &klass->byval_arg;
+        }
+
         static const Il2CppType* GetType(Il2CppClass *klass, const TypeNameParseInfo &info);
+
         static bool HasAttribute(Il2CppClass *klass, Il2CppClass *attr_class);
-        static bool IsEnum(const Il2CppClass *klass);
+
+        inline static bool IsEnum(const Il2CppClass* klass)
+        {
+            return klass->enumtype;
+        }
+
         static const Il2CppImage* GetImage(Il2CppClass* klass);
         static const char *GetAssemblyName(const Il2CppClass *klass);
         static const char *GetAssemblyNameNoExtension(const Il2CppClass *klass);
@@ -109,6 +159,7 @@ namespace vm
 
         static void Init(Il2CppClass *klass);
         static bool InitLocked(Il2CppClass* klass, const il2cpp::os::FastAutoLock& lock);
+        static bool InitSizeAndFieldLayoutLocked(Il2CppClass* klass, const il2cpp::os::FastAutoLock& lock);
 
         static Il2CppClass* GetArrayClass(Il2CppClass *element_class, uint32_t rank);
         static Il2CppClass* GetBoundedArrayClass(Il2CppClass *element_class, uint32_t rank, bool bounded);
@@ -133,6 +184,7 @@ namespace vm
         static void SetupTypeHierarchy(Il2CppClass *klass);
         static void SetupInterfaces(Il2CppClass *klass);
 
+        // Must be called with the GC lock held!
         static const il2cpp::utils::dynamic_array<Il2CppClass*>& GetStaticFieldData();
 
         static size_t GetBitmapSize(const Il2CppClass* klass);
@@ -144,7 +196,7 @@ namespace vm
         static const MethodInfo* GetVirtualMethod(Il2CppClass* klass, const MethodInfo* virtualMethod);
 
         static void SetClassInitializationError(Il2CppClass* klass, Il2CppException* error);
-        static void UpdateInitializedAndNoError(Il2CppClass *klass);
+        static void PublishInitialized(Il2CppClass* klass);
 
         static IL2CPP_FORCE_INLINE bool IsGenericClassAssignableFrom(const Il2CppClass* klass, const Il2CppClass* oklass, const Il2CppClass* implementingClass = il2cpp_defaults.missing_class)
         {

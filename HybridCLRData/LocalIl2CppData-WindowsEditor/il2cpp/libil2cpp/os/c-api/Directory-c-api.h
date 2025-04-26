@@ -19,18 +19,12 @@ extern "C"
 #endif
 
 const char* UnityPalDirectoryGetCurrent(int* error);
-int32_t UnityPalDirectorySetCurrent(const char* path, int* error);
-int32_t UnityPalDirectoryCreate(const char* path, int *error);
-int32_t UnityPalDirectoryRemove(const char* path, int *error);
-
-void UnityPalDirectoryGetFileSystemEntries(const char* path, const char* pathWithPattern, int32_t attrs, int32_t mask, int* error, char*** entries, int32_t* numEntries);
 
 
 UnityPalFindHandle* UnityPalDirectoryFindHandleNew(const char* searchPathWithPattern);
 void UnityPalDirectoryFindHandleDelete(UnityPalFindHandle* object);
 
 int32_t UnityPalDirectoryCloseOSHandle(UnityPalFindHandle* object);
-void* UnityPalDirectoryGetOSHandle(UnityPalFindHandle* object);
 
 UnityPalErrorCode UnityPalDirectoryFindFirstFile(UnityPalFindHandle* findHandle, const char* searchPathWithPattern, char** resultFileName, int32_t* resultAttributes);
 UnityPalErrorCode UnityPalDirectoryFindNextFile(UnityPalFindHandle*  findHandle, char** resultFileName, int32_t* resultAttributes);

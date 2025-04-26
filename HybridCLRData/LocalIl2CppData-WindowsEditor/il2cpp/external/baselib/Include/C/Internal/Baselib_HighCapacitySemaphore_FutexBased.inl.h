@@ -1,11 +1,12 @@
 #pragma once
 
-#include "../Baselib_CountdownTimer.h"
 #include "../Baselib_Atomic_TypeSafe.h"
+#include "../Baselib_CountdownTimer.h"
 #include "../Baselib_SystemFutex.h"
 #include "../Baselib_Thread.h"
+#include "Baselib_SpinLoop.h"
 
-#if !PLATFORM_FUTEX_NATIVE_SUPPORT
+#if !PLATFORM_HAS_NATIVE_FUTEX
     #error "Only use this implementation on top of a proper futex, in all other situations us Baselib_HighCapacitySemaphore_SemaphoreBased.inl.h"
 #endif
 
@@ -16,14 +17,21 @@
 typedef struct Baselib_HighCapacitySemaphore
 {
     int32_t wakeups;
-    char _cachelineSpacer0[PLATFORM_CACHE_LINE_SIZE - sizeof(int64_t)];
+    char _cachelineSpacer0[PLATFORM_PROPERTY_CACHE_LINE_SIZE - sizeof(int64_t)];
     int64_t count;
-    char _cachelineSpacer2[PLATFORM_CACHE_LINE_SIZE - sizeof(int64_t)];
+    char _cachelineSpacer2[PLATFORM_PROPERTY_CACHE_LINE_SIZE - sizeof(int64_t)];
 } Baselib_HighCapacitySemaphore;
+
+BASELIB_INLINE_API void Baselib_HighCapacitySemaphore_CreateInplace(Baselib_HighCapacitySemaphore* semaphoreData)
+{
+    semaphoreData->wakeups = 0;
+    semaphoreData->count = 0;
+}
 
 BASELIB_INLINE_API Baselib_HighCapacitySemaphore Baselib_HighCapacitySemaphore_Create(void)
 {
-    Baselib_HighCapacitySemaphore semaphore = {0, {0}, 0, {0}};
+    Baselib_HighCapacitySemaphore semaphore;
+    Baselib_HighCapacitySemaphore_CreateInplace(&semaphore);
     return semaphore;
 }
 
@@ -32,21 +40,26 @@ BASELIB_INLINE_API bool Detail_Baselib_HighCapacitySemaphore_ConsumeWakeup(Basel
     int32_t previousCount = Baselib_atomic_load_32_relaxed(&semaphore->wakeups);
     while (previousCount > 0)
     {
-        if (Baselib_atomic_compare_exchange_weak_32_relaxed_relaxed(&semaphore->wakeups, &previousCount, previousCount - 1))
+        if (Baselib_atomic_compare_exchange_weak_32_acquire_relaxed(&semaphore->wakeups, &previousCount, previousCount - 1))
             return true;
     }
     return false;
 }
 
-BASELIB_INLINE_API bool Baselib_HighCapacitySemaphore_TryAcquire(Baselib_HighCapacitySemaphore* semaphore)
+COMPILER_WARN_UNUSED_RESULT
+BASELIB_INLINE_API bool Baselib_HighCapacitySemaphore_TrySpinAcquire(Baselib_HighCapacitySemaphore* semaphore, uint32_t maxSpinCount)
 {
     int64_t previousCount = Baselib_atomic_load_64_relaxed(&semaphore->count);
-    while (previousCount > 0)
+    while (true)
     {
-        if (Baselib_atomic_compare_exchange_weak_64_acquire_relaxed(&semaphore->count, &previousCount, previousCount - 1))
-            return true;
+        while (previousCount > 0)
+        {
+            if (Baselib_atomic_compare_exchange_weak_64_acquire_relaxed(&semaphore->count, &previousCount, previousCount - 1))
+                return true;
+        }
+        if (!Detail_Baselib_SpinLoop64(&semaphore->count, &previousCount, &maxSpinCount))
+            return false;
     }
-    return false;
 }
 
 BASELIB_INLINE_API void Baselib_HighCapacitySemaphore_Acquire(Baselib_HighCapacitySemaphore* semaphore)
@@ -61,6 +74,7 @@ BASELIB_INLINE_API void Baselib_HighCapacitySemaphore_Acquire(Baselib_HighCapaci
     }
 }
 
+COMPILER_WARN_UNUSED_RESULT
 BASELIB_INLINE_API bool Baselib_HighCapacitySemaphore_TryTimedAcquire(Baselib_HighCapacitySemaphore* semaphore, const uint32_t timeoutInMilliseconds)
 {
     const int64_t previousCount = Baselib_atomic_fetch_add_64_acquire(&semaphore->count, -1);
@@ -92,7 +106,7 @@ BASELIB_INLINE_API bool Baselib_HighCapacitySemaphore_TryTimedAcquire(Baselib_Hi
                 return false;
         }
         // Likely a race, yield to give the release operation room to complete.
-        // This includes a fully memory barrier which ensures that there is no reordering between changing/reading count and wakeup consumption.
+        // This includes a full memory barrier which ensures that there is no reordering between changing/reading count and wakeup consumption.
         Baselib_Thread_YieldExecution();
     }
     while (!Detail_Baselib_HighCapacitySemaphore_ConsumeWakeup(semaphore));
@@ -108,16 +122,19 @@ BASELIB_INLINE_API void Baselib_HighCapacitySemaphore_Release(Baselib_HighCapaci
     // See overflow protection below.
     BaselibAssert(previousCount <= (previousCount + count), "Semaphore count overflow (current: %d, added: %d).", (int32_t)previousCount, (int32_t)count);
 
-    if (OPTIMIZER_UNLIKELY(previousCount < 0))
+    if (previousCount < 1)
     {
-        const int64_t waitingThreads = -previousCount;
-        const int64_t threadsToWakeup = count < waitingThreads ? count : waitingThreads;
-        BaselibAssert(threadsToWakeup <= INT32_MAX);
-        Baselib_atomic_fetch_add_32_relaxed(&semaphore->wakeups, (int32_t)threadsToWakeup);
-        Baselib_SystemFutex_Notify(&semaphore->wakeups, (int32_t)threadsToWakeup, Baselib_WakeupFallbackStrategy_OneByOne);
-        return;
+        Baselib_Cpu_Hint_MonitorRelease();
+        if (OPTIMIZER_UNLIKELY(previousCount < 0))
+        {
+            const int64_t waitingThreads = -previousCount;
+            const int64_t threadsToWakeup = count < waitingThreads ? count : waitingThreads;
+            BaselibAssert(threadsToWakeup <= INT32_MAX);
+            Baselib_atomic_fetch_add_32_relaxed(&semaphore->wakeups, (int32_t)threadsToWakeup);
+            Baselib_SystemFutex_Notify(&semaphore->wakeups, (int32_t)threadsToWakeup, Baselib_WakeupFallbackStrategy_OneByOne);
+            return;
+        }
     }
-
     // overflow protection
     // we clamp count to MaxGuaranteedCount when count exceed MaxGuaranteedCount * 2
     // this way we won't have to do clamping on every iteration
@@ -147,4 +164,9 @@ BASELIB_INLINE_API void Baselib_HighCapacitySemaphore_Free(Baselib_HighCapacityS
         return;
     const int64_t count = Baselib_atomic_load_64_seq_cst(&semaphore->count);
     BaselibAssert(count >= 0, "Destruction is not allowed when there are still threads waiting on the semaphore.");
+}
+
+BASELIB_INLINE_API void Baselib_HighCapacitySemaphore_FreeInplace(Baselib_HighCapacitySemaphore* semaphore)
+{
+    Baselib_HighCapacitySemaphore_Free(semaphore);
 }

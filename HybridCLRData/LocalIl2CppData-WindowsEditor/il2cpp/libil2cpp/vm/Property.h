@@ -21,6 +21,7 @@ namespace vm
         static const char* GetName(const PropertyInfo* prop);
         static Il2CppClass* GetParent(const PropertyInfo* prop);
         static uint32_t GetToken(const PropertyInfo* prop);
+        static const Il2CppType* GetType(const PropertyInfo* prop);
     };
 } /* namespace vm */
 } /* namespace il2cpp */

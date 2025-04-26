@@ -15,11 +15,6 @@
     #define PLATFORM_ARCH_32 (PLATFORM_ARCH_64 ? 0 : 1)
 #endif
 
-// Cache line size in bytes
-#ifndef PLATFORM_CACHE_LINE_SIZE
-    #define PLATFORM_CACHE_LINE_SIZE 64
-#endif
-
 // Detect endianess if not user defined.
 #if !defined(PLATFORM_ARCH_BIG_ENDIAN) && !defined(PLATFORM_ARCH_LITTLE_ENDIAN)
     #if defined(__BIG_ENDIAN__)

@@ -12,7 +12,8 @@ namespace baselib
         // Usage example:
         // auto watch = Stopwatch::StartNew();
         // HeavyOperation();
-        // printf("Time passed: %fs", watch.GetElapsedTime().ToSeconds());
+        // using fsec = std::chrono::duration<double>;
+        // printf("Time passed: %fs", std::chrono::duration_cast<fsec>(watch.GetElapsedTime()).count());
         class Stopwatch
         {
         public:

@@ -8,25 +8,45 @@
 #include "il2cpp-mono-api.h"
 #include "il2cpp-api-debugger.h"
 
+#include "gc/GarbageCollector.h"
+#include "gc/WriteBarrier.h"
+#include "metadata/CustomAttributeDataReader.h"
 #include "metadata/FieldLayout.h"
 #include "metadata/GenericMetadata.h"
+#include "vm/Array.h"
 #include "vm/Assembly.h"
 #include "vm/AssemblyName.h"
+#include "vm/Class.h"
 #include "vm/ClassInlines.h"
+#include "vm/Field.h"
 #include "vm/GenericClass.h"
 #include "vm/GenericContainer.h"
+#include "vm/GlobalMetadata.h"
 #include "vm/Image.h"
 #include "vm/MetadataCache.h"
+#include "vm/Object.h"
+#include "vm/Property.h"
 #include "vm/Reflection.h"
 #include "vm-utils/Debugger.h"
 
-#if IL2CPP_TARGET_XBOXONE
-#define strdup _strdup
-#endif
+#include <algorithm>
+
+struct Il2CppMonoError
+{
+    unsigned short error_code;
+    unsigned short flags;
+
+    void *hidden_1[12];
+};
+
+static void error_init(MonoError* error)
+{
+    auto il2CppError = (Il2CppMonoError*)error;
+    il2CppError->error_code = 0;
+    il2CppError->flags = 0;
+}
 
 extern "C" {
-    Il2CppDefaults il2cpp_mono_defaults;
-
     void* il2cpp_domain_get_agent_info(MonoAppDomain* domain)
     {
         return ((Il2CppDomain*)domain)->agent_info;
@@ -34,7 +54,7 @@ extern "C" {
 
     void il2cpp_domain_set_agent_info(MonoAppDomain* domain, void* agentInfo)
     {
-        ((Il2CppDomain*)domain)->agent_info = agentInfo;
+        il2cpp::gc::WriteBarrier::GenericStore(&((Il2CppDomain*)domain)->agent_info, agentInfo);
     }
 
     const char* il2cpp_domain_get_friendly_name(MonoAppDomain* domain)
@@ -124,6 +144,11 @@ extern "C" {
     MonoImage* il2cpp_defaults_corlib_image()
     {
         return (MonoImage*)il2cpp_defaults.corlib;
+    }
+
+    MonoClass* il2cpp_defaults_runtimetype_class()
+    {
+        return (MonoClass*)il2cpp_defaults.runtimetype_class;
     }
 
     bool il2cpp_method_is_string_ctor(const MonoMethod * method)
@@ -239,7 +264,7 @@ extern "C" {
     char* il2cpp_assembly_get_full_name(MonoAssembly *assembly)
     {
         std::string s = il2cpp::vm::AssemblyName::AssemblyNameToString(((Il2CppAssembly*)assembly)->aname);
-        return strdup(s.c_str());
+        return il2cpp::utils::StringUtils::StringDuplicate(s.c_str());
     }
 
     const MonoMethod* il2cpp_get_seq_point_method(Il2CppSequencePoint *seqPoint)
@@ -285,11 +310,6 @@ extern "C" {
         return ((Il2CppImage*)image)->codeGenModule->debuggerMetadata->sequencePointSourceFiles + index;
     }
 
-    size_t il2cpp_type_size(MonoType *t)
-    {
-        return il2cpp::metadata::FieldLayout::GetTypeSizeAndAlignment((Il2CppType*)t).size;
-    }
-
     MonoMethod* il2cpp_get_generic_method_definition(MonoMethod* method)
     {
         return (MonoMethod*)((MethodInfo*)method)->genericMethod->methodDefinition;
@@ -297,7 +317,7 @@ extern "C" {
 
     bool il2cpp_class_is_initialized(MonoClass* klass)
     {
-        return ((Il2CppClass*)klass)->initialized;
+        return ((Il2CppClass*)klass)->initialized_and_no_error;
     }
 
     int il2cpp_generic_inst_get_argc(MonoGenericInst* inst)
@@ -329,5 +349,194 @@ extern "C" {
     {
         return (MonoGenericParam*)il2cpp::vm::GenericContainer::GetGenericParameter((Il2CppMetadataGenericContainerHandle)gc, i);
     }
+
+    void il2cpp_field_static_get_value_checked(MonoVTable* vt, MonoClassField* field, void* value, MonoError* error)
+    {
+        error_init(error);
+        il2cpp::vm::Field::StaticGetValue((FieldInfo*)field, value);
+    }
+
+    void il2cpp_field_static_get_value_for_thread(MonoInternalThread* thread, MonoVTable* vt, MonoClassField* field, void* value, MonoError* error)
+    {
+        error_init(error);
+        il2cpp::vm::Field::StaticGetValueForThread((FieldInfo*)field, value, (Il2CppInternalThread*)thread);
+    }
+
+    static bool IsFixedBufferAttribute(const MethodInfo* ctor)
+    {
+        const Il2CppClass* klass = ctor->klass;
+
+        return strcmp(klass->name, "FixedBufferAttribute") == 0 &&
+            strcmp(klass->namespaze, "System.Runtime.CompilerServices") == 0;
+    }
+
+    static bool IsInt32Type(Il2CppClass* klass)
+    {
+        return klass == il2cpp_defaults.int32_class;
+    }
+
+    struct FixedBufferAttributeConstructorVisitor : public il2cpp::metadata::CustomAttributeReaderVisitor
+    {
+        FixedBufferAttributeConstructorVisitor() : FixedArraySize(1) {}
+
+        int32_t FixedArraySize;
+        virtual void VisitCtor(const MethodInfo* ctor, il2cpp::metadata::CustomAttributeArgument args[], uint32_t argumentCount)
+        {
+            if (argumentCount == 2 && IsInt32Type(args[1].klass))
+                FixedArraySize = *(int32_t*)&args[1].data;
+        }
+    };
+
+    int32_t il2cpp_field_get_fixed_array_size(MonoClassField* field)
+    {
+        FieldInfo* il2cppField = (FieldInfo*)field;
+
+        Il2CppMetadataCustomAttributeHandle attributeHandle = il2cpp::vm::MetadataCache::GetCustomAttributeTypeToken(il2cppField->parent->image, il2cppField->token);
+        if (attributeHandle == NULL)
+            return 1;
+
+        auto reader = il2cpp::vm::GlobalMetadata::GetCustomAttributeDataReader(attributeHandle);
+
+        Il2CppException* exc = NULL;
+        il2cpp::metadata::CustomAttributeDataIterator iter = reader.GetDataIterator(IsFixedBufferAttribute);
+        FixedBufferAttributeConstructorVisitor visitor;
+        // Assume there is only one fixed buffer attribute - we will use the first one.
+        if (reader.VisitCustomAttributeData(&iter, &visitor, &exc))
+        {
+            if (exc == NULL)
+                return visitor.FixedArraySize;
+        }
+
+        return 1;
+    }
+
+    class DebuggerCustomAttributeVisitor : public il2cpp::metadata::CustomAttributeReaderVisitor
+    {
+    public:
+        DebuggerCustomAttributeVisitor(Il2CppCustomAttributeDataList* attrs) : m_propertyIndexOffset(0), m_currentAttributeIndex(-1), m_attrs(attrs) {}
+
+        virtual void MoveNext(const MethodInfo* ctor)
+        {
+            ++m_currentAttributeIndex;
+            m_propertyIndexOffset = 0;
+            IL2CPP_ASSERT(m_currentAttributeIndex < m_attrs->numberOfAttributes);
+            m_attributeData = m_attrs->attributeData + m_currentAttributeIndex;
+        }
+
+        virtual void VisitArgumentSizes(uint32_t argumentCount, uint32_t fieldCount, uint32_t propertyCount)
+        {
+            m_attributeData->typedArgs = argumentCount == 0 ? nullptr : il2cpp::vm::Array::New(il2cpp_defaults.object_class, argumentCount);
+            il2cpp::gc::GarbageCollector::SetWriteBarrier((void**)&m_attributeData->typedArgs);
+
+            int32_t numberOfNamedArguments = fieldCount + propertyCount;
+            m_attributeData->namedArgs = numberOfNamedArguments == 0 ? nullptr : il2cpp::vm::Array::New(il2cpp_defaults.object_class, numberOfNamedArguments);
+            il2cpp::gc::GarbageCollector::SetWriteBarrier((void**)&m_attributeData->namedArgs);
+
+            m_propertyIndexOffset = fieldCount;
+            m_attributeData->argInfo = numberOfNamedArguments == 0 ? nullptr : (Il2CppCattrNamedArg*)IL2CPP_CALLOC(numberOfNamedArguments, sizeof(Il2CppCattrNamedArg));
+        }
+
+        virtual void VisitArgument(const il2cpp::metadata::CustomAttributeArgument& argument, uint32_t index)
+        {
+            AddArgumentValueToArray(m_attributeData->typedArgs, argument, index);
+        }
+
+        virtual void VisitCtor(const MethodInfo* ctor, il2cpp::metadata::CustomAttributeArgument args[], uint32_t argumentCount)
+        {
+            m_attributeData->ctor = ctor;
+        }
+
+        virtual void VisitField(const il2cpp::metadata::CustomAttributeFieldArgument& field, uint32_t index)
+        {
+            AddArgumentValueToArray(m_attributeData->namedArgs, field.arg, index);
+            m_attributeData->argInfo[index].type = field.field->type;
+            m_attributeData->argInfo[index].field = field.field;
+        }
+
+        virtual void VisitProperty(const il2cpp::metadata::CustomAttributePropertyArgument& prop, uint32_t index)
+        {
+            AddArgumentValueToArray(m_attributeData->namedArgs, prop.arg, index + m_propertyIndexOffset);
+            m_attributeData->argInfo[index + m_propertyIndexOffset].type = il2cpp::vm::Property::GetType(prop.prop);
+            m_attributeData->argInfo[index + m_propertyIndexOffset].prop = prop.prop;
+        }
+
+    private:
+        int32_t m_propertyIndexOffset;
+        int32_t m_currentAttributeIndex;
+        Il2CppCustomAttributeData* m_attributeData;
+        Il2CppCustomAttributeDataList* m_attrs;
+
+        static void AddArgumentValueToArray(Il2CppArray* array, const il2cpp::metadata::CustomAttributeArgument arg, uint32_t index)
+        {
+            Il2CppObject* argumentValue = il2cpp::vm::Class::IsValuetype(arg.klass) ? il2cpp::vm::Object::Box(arg.klass, (void*)&arg.data) : reinterpret_cast<Il2CppObject*>(arg.data.obj);
+            il2cpp_array_setref(array, index, argumentValue);
+        }
+    };
+
+    static void free_custom_attribute_data(Il2CppCustomAttributeData* attr)
+    {
+        if (attr->argInfo != NULL)
+            IL2CPP_FREE(attr->argInfo);
+    }
+
+    static Il2CppCustomAttributeDataList EmptyDataList = { 0 };
+
+    void il2cpp_free_custom_attribute_data_list(Il2CppCustomAttributeDataList* attrs)
+    {
+        if (attrs == &EmptyDataList)
+            return;
+
+        for (int32_t i = 0; i < attrs->numberOfAttributes; ++i)
+            free_custom_attribute_data(attrs->attributeData + i);
+
+        il2cpp::gc::GarbageCollector::FreeFixed(attrs);
+    }
+
+    const Il2CppCustomAttributeDataList* il2cpp_get_custom_attribute_data_list(MonoClass* attr_klass, MonoCustomAttrInfo* cinfo, MonoImage* image)
+    {
+        // Get a reader to access the attribute data.
+        auto reader = il2cpp::vm::GlobalMetadata::GetCustomAttributeDataReader((Il2CppMetadataCustomAttributeHandle)cinfo);
+
+        auto filter = [attr_klass](const MethodInfo* ctor)
+            {
+                return attr_klass == NULL || il2cpp::vm::Class::HasParent(ctor->klass, (Il2CppClass*)attr_klass);
+            };
+
+        uint32_t count = reader.GetCount(filter);
+
+        if (count == 0)
+            return &EmptyDataList;
+
+        // Allocate a structure to hold the data for all attributes.
+        Il2CppCustomAttributeDataList* attrs = (Il2CppCustomAttributeDataList*)il2cpp::gc::GarbageCollector::AllocateFixed(sizeof(Il2CppCustomAttributeDataList) + (count * sizeof(Il2CppCustomAttributeData)), NULL);
+        attrs->numberOfAttributes = count;
+
+        uint32_t createdAttributes = 0;
+        il2cpp::metadata::CustomAttributeDataIterator iter = reader.GetDataIterator(filter);
+        Il2CppException* exc = NULL;
+        DebuggerCustomAttributeVisitor visitor(attrs);
+        while (reader.VisitCustomAttributeData(&iter, &visitor, &exc))
+        {
+            createdAttributes++;
+        }
+
+        // If an error occurred, we don't have a great way to communicate what it is. Just return NULL and let the client handle
+        // it in a general way.
+        if (exc != NULL)
+        {
+            // Reset the number of created attributes, so we only free that many
+            attrs->numberOfAttributes = createdAttributes;
+            il2cpp_free_custom_attribute_data_list(attrs);
+            return NULL;
+        }
+
+        return attrs;
+    }
+
+    MonoType* il2cpp_class_get_byval_arg(MonoClass* klass)
+    {
+        return (MonoType*)&((Il2CppClass*)klass)->byval_arg;
+    }
 }
+
 #endif // RUNTIME_IL2CPP

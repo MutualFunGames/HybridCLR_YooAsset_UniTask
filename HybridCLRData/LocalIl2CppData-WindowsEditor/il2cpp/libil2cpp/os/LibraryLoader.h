@@ -8,11 +8,9 @@
 #include "Baselib.h"
 #include "Cpp/Baselib_DynamicLibrary.h"
 
-#if !RUNTIME_TINY
 #include "Cpp/ReentrantLock.h"
 #include <vector>
 #include <string>
-#endif
 
 namespace il2cpp
 {

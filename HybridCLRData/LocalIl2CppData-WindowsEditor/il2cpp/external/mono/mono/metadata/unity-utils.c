@@ -19,6 +19,7 @@
 #include <mono/metadata/metadata.h>
 #include <mono/metadata/tabledefs.h>
 #include <mono/metadata/class-internals.h>
+#include <mono/metadata/class-init.h>
 #include <mono/metadata/object-internals.h>
 #include <mono/metadata/marshal.h>
 #include <mono/metadata/metadata-internals.h>
@@ -30,8 +31,9 @@
 #include <mono/metadata/tokentype.h>
 #include <mono/utils/mono-string.h>
 
-#if HAVE_BDWGC_GC
+#if HAVE_BOEHM_GC
 #include <mono/utils/gc_wrapper.h>
+#include <mono/metadata/gc-internals.h>
 #endif
 
 #include <glib.h>
@@ -155,7 +157,7 @@ mono_custom_attrs_get_attrs (MonoCustomAttrInfo *ainfo, gpointer *iter)
 		return NULL;
 	if (!*iter)
 	{
-		*iter = 1;
+		*iter = GINT_TO_POINTER (1);
 		return ainfo->attrs[0].ctor->klass;
 	}
 
@@ -164,6 +166,14 @@ mono_custom_attrs_get_attrs (MonoCustomAttrInfo *ainfo, gpointer *iter)
 		return NULL;
 	*iter = GINT_TO_POINTER (index + 1);
 	return ainfo->attrs[index].ctor->klass;
+}
+
+MONO_API MonoArray*
+mono_unity_custom_attrs_construct (MonoCustomAttrInfo *cinfo, MonoError *error)
+{
+	HANDLE_FUNCTION_ENTER ();
+	MonoArrayHandle result = mono_custom_attrs_construct_by_type (cinfo, NULL, error);
+	HANDLE_FUNCTION_RETURN_OBJ (result);
 }
 
 MONO_API gboolean
@@ -252,15 +262,15 @@ MonoClass* mono_unity_object_get_class(MonoObject *obj)
 	return obj->vtable->klass;
 }
 
-MonoObject* mono_unity_object_compare_exchange(MonoObject **location, MonoObject *value, MonoObject *comparand)
-{
-	return ves_icall_System_Threading_Interlocked_CompareExchange_T(location, value, comparand);
-}
+// MonoObject* mono_unity_object_compare_exchange(MonoObject **location, MonoObject *value, MonoObject *comparand)
+// {
+// 	return ves_icall_System_Threading_Interlocked_CompareExchange_T(location, value, comparand);
+// }
 
-MonoObject* mono_unity_object_exchange(MonoObject **location, MonoObject *value)
-{
-	return ves_icall_System_Threading_Interlocked_Exchange_T(location, value);
-}
+// MonoObject* mono_unity_object_exchange(MonoObject **location, MonoObject *value)
+// {
+// 	return ves_icall_System_Threading_Interlocked_Exchange_T(location, value);
+// }
 
 gboolean mono_unity_object_check_box_cast(MonoObject *obj, MonoClass *klass)
 {
@@ -286,7 +296,10 @@ MonoClass* mono_unity_class_get_generic_definition(MonoClass* klass)
 MonoClass* mono_unity_class_inflate_generic_class(MonoClass *gklass, MonoGenericContext *context)
 {
 	MonoError error;
-	return mono_class_inflate_generic_class_checked(gklass, context, &error);
+	MonoClass* klass;
+	klass = mono_class_inflate_generic_class_checked(gklass, context, &error);
+	mono_error_cleanup (&error);
+	return klass;
 }
 
 gboolean mono_unity_class_has_parent_unsafe(MonoClass *klass, MonoClass *parent)
@@ -509,8 +522,8 @@ static void get_type_hashes(MonoType *type, GList *hashes, gboolean inflate)
 		case MONO_TYPE_ARRAY:
 		{
 			MonoArrayType *atype = type->data.array;
-			g_list_append(hashes, MONO_TOKEN_TYPE_SPEC);
-			g_list_append(hashes, get_array_structure_hash(atype));
+			g_list_append(hashes, GUINT_TO_POINTER(MONO_TOKEN_TYPE_SPEC));
+			g_list_append(hashes, GUINT_TO_POINTER(get_array_structure_hash(atype)));
 			get_type_hashes(&(atype->eklass->this_arg), hashes, inflate);
 			break;
 		}
@@ -570,16 +583,16 @@ static void get_type_hashes(MonoType *type, GList *hashes, gboolean inflate)
 
 		if (klass)
 		{
-			g_list_append(hashes, klass->type_token);
-			g_list_append(hashes, hash_string_djb2(klass->image->module_name));
+			g_list_append(hashes, GUINT_TO_POINTER(klass->type_token));
+			g_list_append(hashes, GUINT_TO_POINTER(hash_string_djb2(klass->image->module_name)));
 		}
 
 		return;
 	}
 	else
 	{
-		g_list_append(hashes, type->data.generic_class->container_class->type_token);
-		g_list_append(hashes, hash_string_djb2(type->data.generic_class->container_class->image->module_name));
+		g_list_append(hashes, GUINT_TO_POINTER(type->data.generic_class->container_class->type_token));
+		g_list_append(hashes, GUINT_TO_POINTER(hash_string_djb2(type->data.generic_class->container_class->image->module_name)));
 
         if (inflate)
 		    get_type_hashes_generic_inst(type->data.generic_class->context.class_inst, hashes, inflate);
@@ -591,12 +604,12 @@ static GList* get_type_hashes_method(MonoMethod *method, gboolean inflate)
 {
 	GList *hashes = monoeg_g_list_alloc();
 
-	hashes->data = method->token;
-	g_list_append(hashes, hash_string_djb2(method->klass->image->module_name));
+	hashes->data = GUINT_TO_POINTER(method->token);
+	g_list_append(hashes, GUINT_TO_POINTER(hash_string_djb2(method->klass->image->module_name)));
 
 	if (inflate && method->klass->class_kind == MONO_CLASS_GINST)
 	{
-		g_list_append(hashes, method->klass->type_token);
+		g_list_append(hashes, GUINT_TO_POINTER(method->klass->type_token));
 		get_type_hashes_generic_inst(mono_class_get_generic_class (method->klass)->context.class_inst, hashes, inflate);
 	}
 
@@ -687,10 +700,10 @@ MonoMethod* mono_unity_method_get_aot_array_helper_from_wrapper(MonoMethod *meth
 	if (m->is_generic) {
 		MonoError error;
 		memset(&ctx, 0, sizeof(ctx));
-		args[0] = &method->klass->element_class->byval_arg;
+		args[0] = &method->klass->element_class->_byval_arg;
 		ctx.method_inst = mono_metadata_get_generic_inst(1, args);
 		m = mono_class_inflate_generic_method_checked(m, &ctx, &error);
-		g_assert(mono_error_ok(&error)); /* FIXME don't swallow the error */
+		g_assert(is_ok(&error)); /* FIXME don't swallow the error */
 	}
 
 	return m;
@@ -869,6 +882,11 @@ MonoException* mono_unity_exception_get_marshal_directive(const char* msg)
 	return mono_exception_from_name_msg(mono_get_corlib(), "System.Runtime.InteropServices", "MarshalDirectiveException", msg);
 }
 
+MonoException* mono_unity_error_convert_to_exception (MonoError *error)
+{
+	return mono_error_convert_to_exception (error);
+}
+
 //defaults
 
 MonoClass* mono_unity_defaults_get_int_class()
@@ -912,32 +930,79 @@ mono_unity_get_unitytls_interface()
 }
 
 // gc
+MONO_API void mono_unity_gc_set_mode(MonoGCMode mode)
+{
+	switch (mode)
+	{
+#if HAVE_BOEHM_GC
+		case MONO_GC_MODE_ENABLED:
+			if (GC_is_disabled())
+				GC_enable();
+			GC_set_disable_automatic_collection(FALSE);
+			break;
+
+		case MONO_GC_MODE_DISABLED:
+			if (!GC_is_disabled())
+				GC_disable();
+			break;
+
+		case MONO_GC_MODE_MANUAL:
+			if (GC_is_disabled())
+				GC_enable();
+			GC_set_disable_automatic_collection(TRUE);
+			break;
+#else
+		g_assert_not_reached();
+#endif
+	}
+}
+
+// Deprecated. Remove when Unity has switched to mono_unity_gc_set_mode
 MONO_API void mono_unity_gc_enable()
 {
-#if HAVE_BDWGC_GC
+#if HAVE_BOEHM_GC
 	GC_enable();
 #else
 	g_assert_not_reached ();
 #endif
 }
 
+// Deprecated. Remove when Unity has switched to mono_unity_gc_set_mode
 MONO_API void mono_unity_gc_disable()
 {
-#if HAVE_BDWGC_GC
+#if HAVE_BOEHM_GC
 	GC_disable();
 #else
 	g_assert_not_reached ();
 #endif
 }
 
+// Deprecated. Remove when Unity has switched to mono_unity_gc_set_mode
 MONO_API int mono_unity_gc_is_disabled()
 {
-#if HAVE_BDWGC_GC
+#if HAVE_BOEHM_GC
 	return GC_is_disabled ();
 #else
 	g_assert_not_reached ();
 	return 0;
 #endif	
+}
+
+// Logging
+static UnityLogErrorCallback editorLoggingCallback;
+MONO_API void mono_unity_set_editor_logging_callback(UnityLogErrorCallback callback)
+{
+	editorLoggingCallback = callback;
+}
+
+gboolean mono_unity_log_error_to_editor(const char *message)
+{
+	if (editorLoggingCallback)
+	{
+		editorLoggingCallback(message);
+		return TRUE;
+	}
+	return FALSE;
 }
 
 MONO_API void 
@@ -961,10 +1026,10 @@ MonoImage* mono_unity_image_get_mscorlib()
 MonoClass* mono_unity_generic_container_get_parameter_class(MonoGenericContainer* generic_container, gint index)
 {
 	MonoGenericParam *param = mono_generic_container_get_param(generic_container, index);
-	return mono_class_from_generic_parameter_internal(param);
+	return mono_class_create_generic_parameter(param);
 }
 
-MonoString* mono_unity_string_append_assembly_name_if_necessary(MonoString* typeName, MonoMethod* callingMethod)
+MonoString* mono_unity_string_append_assembly_name_if_necessary(MonoString* typeName, const char* assemblyName)
 {
 	if (typeName != NULL)
 	{
@@ -979,7 +1044,7 @@ MonoString* mono_unity_string_append_assembly_name_if_necessary(MonoString* type
 			{
 				GString* assemblyQualifiedName = g_string_new(0);
 				char* name = mono_string_to_utf8_checked(typeName, &unused);
-				g_string_append_printf(assemblyQualifiedName, "%s, %s", name, callingMethod->klass->image->name);
+				g_string_append_printf(assemblyQualifiedName, "%s, %s", name, assemblyName);
 
 				typeName = mono_string_new(mono_domain_get(), assemblyQualifiedName->str);
 
@@ -1035,6 +1100,11 @@ void* mono_unity_get_field_address(MonoObject *obj, MonoVTable *vt, MonoClassFie
 	}
 
 	return src;
+}
+
+MONO_API MonoClassField* mono_unity_field_from_token_checked(MonoImage *image, guint32 token, MonoClass **retklass, MonoGenericContext *context, MonoError *error)
+{
+	return mono_field_from_token_checked(image, token, retklass, context, error);
 }
 
 gboolean mono_unity_thread_state_init_from_handle(MonoThreadUnwindState *tctx, MonoThreadInfo *info, void* fixme)
@@ -1124,7 +1194,7 @@ mono_unity_set_data_dir(const char* dir)
     if (data_dir)
         g_free(data_dir);
 
-    data_dir = g_new(char*, strlen(dir) + 1);
+    data_dir = g_new(char, strlen(dir) + 1);
     strcpy(data_dir, dir);
 }
 
@@ -1148,7 +1218,7 @@ mono_unity_class_get_generic_parameter_at (MonoClass* klass, guint32 index)
 	if (!generic_container || index >= generic_container->type_argc)
 		return NULL;
 
-	return mono_class_from_generic_parameter_internal (mono_generic_container_get_param (generic_container, index));
+	return mono_class_create_generic_parameter (mono_generic_container_get_param (generic_container, index));
 }
 
 MONO_API guint32
@@ -1180,7 +1250,7 @@ MONO_API guint32
 mono_unity_class_get_generic_argument_count (MonoClass* klass)
 {
 	if (!mono_class_is_ginst (klass))
-		return NULL;
+		return 0;
 
 	MonoGenericClass* generic_class = mono_class_get_generic_class (klass);
 
@@ -1378,4 +1448,531 @@ mono_bool
 mono_unity_get_enable_handler_block_guards (void)
 {
 	return enable_handler_block_guards;
+}
+
+//helper structures for VM information extraction functions
+typedef struct {
+	GFunc callback;
+	gpointer user_data;
+} execution_ctx;
+
+typedef struct
+{
+	gpointer start;
+	size_t size;
+} mono_heap_chunk;
+
+// class metadata memory
+static void
+handle_mem_pool_chunk(gpointer chunkStart, gpointer chunkEnd, gpointer userData)
+{
+	mono_heap_chunk chunk;
+	chunk.start = chunkStart;
+	chunk.size = (uint8_t *)chunkEnd - (uint8_t *)chunkStart;
+
+	execution_ctx *ctx = (execution_ctx *)userData;
+	ctx->callback(&chunk, ctx->user_data);
+}
+
+static void
+handle_image_set_mem_pool(MonoImageSet *imageSet, gpointer user_data)
+{
+	mono_mempool_foreach_block(imageSet->mempool, handle_mem_pool_chunk, user_data);
+}
+
+MONO_API void
+mono_unity_image_set_mempool_chunk_foreach(GFunc callback, gpointer user_data)
+{
+	execution_ctx ctx;
+	ctx.callback = callback;
+	ctx.user_data = user_data;
+
+	mono_metadata_image_set_foreach(handle_image_set_mem_pool, &ctx);
+}
+
+MONO_API void
+mono_unity_domain_mempool_chunk_foreach(MonoDomain *domain, GFunc callback, gpointer user_data)
+{
+	MonoMemoryManager* memory_manager = mono_domain_ambient_memory_manager(domain);
+
+	mono_mem_manager_lock(memory_manager);
+	execution_ctx ctx;
+	ctx.callback = callback;
+	ctx.user_data = user_data;
+	mono_mempool_foreach_block(memory_manager->mp, handle_mem_pool_chunk, &ctx);
+
+	mono_mem_manager_unlock(memory_manager);
+}
+
+MONO_API void
+mono_unity_root_domain_mempool_chunk_foreach(GFunc callback, gpointer user_data)
+{
+	MonoMemoryManager* memory_manager = mono_domain_ambient_memory_manager(mono_get_root_domain());
+	mono_mem_manager_lock(memory_manager);
+
+	execution_ctx ctx;
+	ctx.callback = callback;
+	ctx.user_data = user_data;
+	mono_mempool_foreach_block(memory_manager->mp, handle_mem_pool_chunk, &ctx);
+
+	mono_mem_manager_unlock(memory_manager);
+}
+
+MONO_API void
+mono_unity_assembly_mempool_chunk_foreach(MonoAssembly *assembly, GFunc callback, gpointer user_data)
+{
+	MonoImage *image = assembly->image;
+	mono_image_lock(image);
+
+	execution_ctx ctx;
+	ctx.callback = callback;
+	ctx.user_data = user_data;
+	mono_mempool_foreach_block(image->mempool, handle_mem_pool_chunk, &ctx);
+
+	if (image->module_count > 0) {
+		guint32 i;
+
+		for (i = 0; i < image->module_count; ++i) {
+			MonoImage *moduleImage = image->modules[i];
+
+			if (moduleImage) {
+				mono_mempool_foreach_block(moduleImage->mempool, handle_mem_pool_chunk, &ctx);
+			}
+		}
+	}
+	mono_image_unlock(image);
+}
+
+// class metadata
+
+static char *
+mono_identifier_escape_type_append(char *bufferPtr, const char *identifier)
+{
+	for (const char *s = identifier; *s != 0; ++s) {
+		switch (*s) {
+		case ',':
+		case '+':
+		case '&':
+		case '*':
+		case '[':
+		case ']':
+		case '\\':
+			*bufferPtr++ = '\\';
+			*bufferPtr++ = *s;
+
+			return bufferPtr;
+		default:
+			*bufferPtr++ = *s;
+
+			return bufferPtr;
+		}
+	}
+
+	return bufferPtr;
+}
+
+enum {
+	//max digits on uint16 is 5(used to convert the number of generic args) + max 3 other slots taken;
+	kNameChunkBufferSize = 8
+};
+
+static inline char *
+flush_name_buffer(char *buffer, GFunc callback, void *userData)
+{
+	callback(buffer, userData);
+	memset(buffer, 0x00, kNameChunkBufferSize);
+
+	return buffer;
+}
+
+static void
+mono_unity_type_get_name_foreach_name_chunk_recurse(MonoType *type, gboolean is_recursed, MonoTypeNameFormat format, GFunc nameChunkReport, void *userData)
+{
+	MonoClass *klass = NULL;
+	char buffer[kNameChunkBufferSize + 1]; //null terminate the buffer
+	memset(buffer, 0x00, kNameChunkBufferSize + 1);
+	char *bufferPtr = buffer;
+	char *bufferIter = buffer;
+
+	switch (type->type) {
+	case MONO_TYPE_ARRAY: {
+		int i, rank = type->data.array->rank;
+		MonoTypeNameFormat nested_format;
+
+		nested_format = format == MONO_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED ? MONO_TYPE_NAME_FORMAT_FULL_NAME : format;
+
+		mono_unity_type_get_name_foreach_name_chunk_recurse(
+			&type->data.array->eklass->_byval_arg, FALSE, nested_format, nameChunkReport, userData);
+
+		*bufferIter++ = '[';
+
+		if (rank == 1) {
+			*bufferIter++ = '*';
+		}
+
+		for (i = 1; i < rank; i++) {
+
+			*bufferIter++ = ',';
+
+			if (kNameChunkBufferSize - (bufferIter - bufferPtr) < 2) {
+				bufferIter = flush_name_buffer(bufferPtr, nameChunkReport, userData);
+			}
+		}
+
+		*bufferIter++ = ']';
+
+		if (type->byref) {
+			*bufferIter++ = '&';
+		}
+
+		nameChunkReport(bufferPtr, userData);
+
+		if (format == MONO_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED) {
+			MonoClass *klass = mono_class_from_mono_type(type);
+			MonoImage *klassImg = mono_class_get_image(klass);
+			char *imgName = mono_image_get_name(klassImg);
+			nameChunkReport(imgName, userData);
+		}
+		break;
+	}
+	case MONO_TYPE_SZARRAY: {
+		MonoTypeNameFormat nested_format;
+
+		nested_format = format == MONO_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED ? MONO_TYPE_NAME_FORMAT_FULL_NAME : format;
+
+		mono_unity_type_get_name_foreach_name_chunk_recurse(&type->data.klass->_byval_arg, FALSE, nested_format, nameChunkReport, userData);
+
+		*bufferIter++ = '[';
+		*bufferIter++ = ']';
+
+		if (type->byref)
+			*bufferIter++ = '&';
+
+		nameChunkReport(bufferPtr, userData);
+
+		if (format == MONO_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED) {
+			MonoClass *klass = mono_class_from_mono_type(type);
+			MonoImage *klassImg = mono_class_get_image(klass);
+			char *imgName = mono_image_get_name(klassImg);
+			nameChunkReport(imgName, userData);
+		}
+		break;
+	}
+	case MONO_TYPE_PTR: {
+		MonoTypeNameFormat nested_format;
+
+		nested_format = format == MONO_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED ? MONO_TYPE_NAME_FORMAT_FULL_NAME : format;
+
+		mono_unity_type_get_name_foreach_name_chunk_recurse(type->data.type, FALSE, nested_format, nameChunkReport, userData);
+		*bufferIter++ = '*';
+
+		if (type->byref)
+			*bufferIter++ = '&';
+
+		nameChunkReport(bufferPtr, userData);
+
+		if (format == MONO_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED) {
+			MonoClass *klass = mono_class_from_mono_type(type);
+			MonoImage *klassImg = mono_class_get_image(klass);
+			char *imgName = mono_image_get_name(klassImg);
+			nameChunkReport(imgName, userData);
+		}
+		break;
+	}
+	case MONO_TYPE_VAR:
+	case MONO_TYPE_MVAR:
+		if (!mono_generic_param_name(type->data.generic_param)) {
+
+			if (type->type == MONO_TYPE_VAR) {
+				*bufferIter++ = '!';
+			}
+			else {
+				*bufferIter++ = '!';
+				*bufferIter++ = '!';
+			}
+			sprintf(bufferIter, "%d", type->data.generic_param->num);
+		}
+		else
+			nameChunkReport(mono_generic_param_name(type->data.generic_param), userData);
+
+		if (type->byref)
+			*bufferIter++ = '&';
+
+		nameChunkReport(bufferPtr, userData);
+		break;
+	default:
+		klass = mono_class_from_mono_type(type);
+		if (klass->nested_in) {
+			mono_unity_type_get_name_foreach_name_chunk_recurse(&klass->nested_in->_byval_arg, TRUE, format, nameChunkReport, userData);
+			if (format == MONO_TYPE_NAME_FORMAT_IL)
+				*bufferIter++ = '.';
+			else
+				*bufferIter++ = '+';
+		}
+		else if (*klass->name_space) {
+			if (format == MONO_TYPE_NAME_FORMAT_IL)
+				nameChunkReport(klass->name_space, userData);
+			else
+				bufferIter = mono_identifier_escape_type_append(bufferIter, klass->name_space);
+
+			*bufferIter++ = '.';
+		}
+
+		if (format == MONO_TYPE_NAME_FORMAT_IL) {
+			char *s = strchr(klass->name, '`');
+			int len = s ? s - klass->name : strlen(klass->name);
+
+			for (int i = 0; i < len; ++i) {
+
+				*bufferIter++ = *(klass->name + i);
+				if (kNameChunkBufferSize - (bufferIter - bufferPtr) == 0) {
+					bufferIter = flush_name_buffer(bufferPtr, nameChunkReport, userData);
+				}
+			}
+
+			if (bufferPtr != bufferIter) {
+				bufferIter = flush_name_buffer(bufferPtr, nameChunkReport, userData);
+			}
+
+		}
+		else {
+			bufferIter = mono_identifier_escape_type_append(bufferIter, klass->name);
+		}
+
+		if (!is_recursed) {
+			if (bufferIter != bufferPtr)
+				bufferIter = flush_name_buffer(bufferPtr, nameChunkReport, userData);
+
+			if (mono_class_is_ginst(klass)) {
+				MonoGenericClass *gclass = mono_class_get_generic_class(klass);
+				MonoGenericInst *inst = gclass->context.class_inst;
+				MonoTypeNameFormat nested_format;
+				int i;
+
+				nested_format = format == MONO_TYPE_NAME_FORMAT_FULL_NAME ? MONO_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED : format;
+
+				if (format == MONO_TYPE_NAME_FORMAT_IL)
+					*bufferIter++ = '<';
+				else
+					*bufferIter++ = '[';
+
+				for (i = 0; i < inst->type_argc; i++) {
+					MonoType *t = inst->type_argv[i];
+
+					if (i)
+						*bufferIter++ = ',';
+					if ((nested_format == MONO_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED) &&
+						(t->type != MONO_TYPE_VAR) && (type->type != MONO_TYPE_MVAR))
+						*bufferIter++ = '[';
+
+					//flush the buffer before recursing
+					bufferIter = flush_name_buffer(bufferPtr, nameChunkReport, userData);
+					mono_unity_type_get_name_foreach_name_chunk_recurse(inst->type_argv[i], FALSE, nested_format, nameChunkReport, userData);
+
+					if ((nested_format == MONO_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED) &&
+						(t->type != MONO_TYPE_VAR) && (type->type != MONO_TYPE_MVAR))
+						*bufferIter++ = ']';
+				}
+				if (format == MONO_TYPE_NAME_FORMAT_IL)
+					*bufferIter++ = '>';
+				else
+					*bufferIter++ = ']';
+			}
+			else if (mono_class_is_gtd(klass) &&
+				(format != MONO_TYPE_NAME_FORMAT_FULL_NAME) &&
+				(format != MONO_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED)) {
+				int i;
+
+				if (format == MONO_TYPE_NAME_FORMAT_IL)
+					*bufferIter++ = '<';
+				else
+					*bufferIter++ = '[';
+
+				bufferIter = flush_name_buffer(bufferPtr, nameChunkReport, userData);
+
+				for (i = 0; i < mono_class_get_generic_container(klass)->type_argc; i++) {
+					if (i)
+						nameChunkReport(",", userData);
+					nameChunkReport(mono_generic_container_get_param_info(mono_class_get_generic_container(klass), i)->name, userData);
+				}
+				if (format == MONO_TYPE_NAME_FORMAT_IL)
+					*bufferIter++ = '>';
+				else
+					*bufferIter++ = ']';
+			}
+
+			if (type->byref)
+				*bufferIter++ = '&';
+		}
+
+		if (bufferPtr != bufferIter)
+			nameChunkReport(bufferPtr, userData);
+
+		if ((format == MONO_TYPE_NAME_FORMAT_ASSEMBLY_QUALIFIED) &&
+			(type->type != MONO_TYPE_VAR) && (type->type != MONO_TYPE_MVAR)) {
+			MonoImage *klassImg = mono_class_get_image(klass);
+			char *imgName = mono_image_get_name(klassImg);
+			nameChunkReport(imgName, userData);
+		}
+		break;
+	}
+}
+
+/**
+ * mono_unity_type_get_name_full_chunked:
+ * \param type a type
+ * \reports chunks null terminated of a type's name via a callback.
+ */
+
+MONO_API void
+mono_unity_type_get_name_full_chunked(MonoType *type, GFunc chunkReportFunc, gpointer userData)
+{
+	mono_unity_type_get_name_foreach_name_chunk_recurse(type, FALSE, MONO_TYPE_NAME_FORMAT_IL, chunkReportFunc, userData);
+}
+
+MONO_API gboolean
+mono_unity_type_is_pointer_type(MonoType *type)
+{
+	return type->type == MONO_TYPE_PTR;
+}
+
+MONO_API gboolean
+mono_unity_type_is_static(MonoType *type)
+{
+	return (type->attrs & FIELD_ATTRIBUTE_STATIC) != 0;
+}
+
+MONO_API MonoVTable *
+mono_unity_class_try_get_vtable(MonoDomain *domain, MonoClass *klass)
+{
+	return mono_class_try_get_vtable(domain, klass);
+}
+
+MONO_API uint32_t
+mono_unity_class_get_data_size(MonoClass *klass)
+{
+	return mono_class_data_size(klass);
+}
+
+MONO_API void *
+mono_unity_vtable_get_static_field_data(MonoVTable *vTable)
+{
+	return mono_vtable_get_static_field_data(vTable);
+}
+
+MONO_API gboolean
+mono_unity_class_field_is_literal(MonoClassField *field)
+{
+	return (field->type->attrs & FIELD_ATTRIBUTE_LITERAL) != 0;
+}
+
+// GC world control
+MONO_API void
+mono_unity_stop_gc_world()
+{
+#if HAVE_BOEHM_GC
+	GC_stop_world_external();
+#else
+	g_assert_not_reached();
+#endif
+}
+
+MONO_API void
+mono_unity_start_gc_world()
+{
+#if HAVE_BOEHM_GC
+	GC_start_world_external();
+#else
+	g_assert_not_reached();
+#endif
+}
+
+
+//GC memory
+static void
+handle_gc_heap_chunk(void *userdata, gpointer chunk_start, gpointer chunk_end)
+{
+	execution_ctx *ctx = (execution_ctx *)userdata;
+	mono_heap_chunk chunk;
+	chunk.start = chunk_start;
+	chunk.size = (uint8_t *)chunk_end - (uint8_t *)chunk_start;
+	ctx->callback(&chunk, ctx->user_data);
+}
+
+MONO_API void
+mono_unity_gc_heap_foreach(GFunc callback, gpointer user_data)
+{
+#if HAVE_BOEHM_GC
+	execution_ctx ctx;
+	ctx.callback = callback;
+	ctx.user_data = user_data;
+
+	GC_foreach_heap_section(&ctx, handle_gc_heap_chunk);
+#else
+	g_assert_not_reached();
+#endif
+}
+
+//GC handles
+static void
+handle_gc_handle(gpointer handle_target, gpointer handle_report_callback)
+{
+	execution_ctx *ctx = (execution_ctx *)handle_report_callback;
+	ctx->callback(handle_target, ctx->user_data);
+}
+
+MONO_API void
+mono_unity_gc_handles_foreach_get_target(GFunc callback, gpointer user_data)
+{
+#if HAVE_BOEHM_GC
+	execution_ctx ctx;
+	ctx.callback = callback;
+	ctx.user_data = user_data;
+	mono_gc_strong_handle_foreach(handle_gc_handle, &ctx);
+#else
+	g_assert_not_reached();
+#endif
+}
+
+// VM runtime info
+MONO_API uint32_t
+mono_unity_object_header_size()
+{
+	return (uint32_t)(sizeof(MonoObject));
+}
+
+MONO_API uint32_t
+mono_unity_array_object_header_size()
+{
+	return offsetof(MonoArray, vector);
+}
+
+MONO_API uint32_t
+mono_unity_offset_of_array_length_in_array_object_header()
+{
+	return offsetof(MonoArray, max_length);
+}
+
+MONO_API uint32_t
+mono_unity_offset_of_array_bounds_in_array_object_header()
+{
+	return offsetof(MonoArray, bounds);
+}
+
+MONO_API uint32_t
+mono_unity_allocation_granularity()
+{
+	return (uint32_t)(2 * sizeof(void *));
+}
+
+MONO_API gboolean
+mono_unity_class_is_open_constructed_type (MonoClass *klass)
+{
+	return mono_class_is_open_constructed_type (m_class_get_byval_arg(klass));
+}
+
+MONO_API gboolean
+mono_unity_class_has_failure(const MonoClass* klass)
+{
+	return mono_class_has_failure(klass);
 }

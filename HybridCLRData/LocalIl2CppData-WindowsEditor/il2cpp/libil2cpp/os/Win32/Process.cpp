@@ -36,7 +36,7 @@ namespace os
         const size_t bufferLength = 256;
         WCHAR buf[bufferLength];
 
-        DWORD length = ::GetProcessImageFileName((HANDLE)handle, buf, bufferLength);
+        DWORD length = ::GetModuleBaseName((HANDLE)handle, NULL, buf, bufferLength);
 
         if (length == 0)
             return std::string();

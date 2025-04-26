@@ -38,24 +38,14 @@ namespace System
 
     void Delegate::SetMulticastInvoke(Il2CppDelegate * delegate)
     {
-#if IL2CPP_TINY
-        IL2CPP_NOT_IMPLEMENTED_ICALL(Delegate::SetMulticastInvoke);
-#else
-#endif
     }
 
     Il2CppMulticastDelegate* Delegate::AllocDelegateLike_internal(Il2CppDelegate* d)
     {
-#if IL2CPP_TINY
-        IL2CPP_NOT_IMPLEMENTED_ICALL(Delegate::AllocDelegateLike_internal);
-        return NULL;
-#else
         IL2CPP_ASSERT(d->object.klass->parent == il2cpp_defaults.multicastdelegate_class);
 
         Il2CppMulticastDelegate *ret = (Il2CppMulticastDelegate*)il2cpp::vm::Object::New(d->object.klass);
 
-        ret->delegate.method = d->method;
-        IL2CPP_OBJECT_SETREF((&ret->delegate), target, d->target);
         IL2CPP_OBJECT_SETREF((&ret->delegate), invoke_impl_this, (Il2CppObject*)ret);
 
         // extra_arg stores the multicast_invoke_impl
@@ -63,18 +53,12 @@ namespace System
         ret->delegate.extraArg = d->extraArg;
 
         return ret;
-#endif
     }
 
     Il2CppReflectionMethod* Delegate::GetVirtualMethod_internal(Il2CppDelegate* _this)
     {
-#if IL2CPP_TINY
-        IL2CPP_NOT_IMPLEMENTED_ICALL(Delegate::GetVirtualMethod_internal);
-        return NULL;
-#else
         const MethodInfo* resolvedMethod = _this->target != NULL ? il2cpp::vm::Object::GetVirtualMethod(_this->target, _this->method) : _this->method;
         return il2cpp::vm::Reflection::GetMethodObject(resolvedMethod, NULL);
-#endif
     }
 } /* namespace System */
 } /* namespace mscorlib */

@@ -156,6 +156,9 @@ typedef struct Il2CppMethodDefinition
     StringIndex nameIndex;
     TypeDefinitionIndex declaringType;
     TypeIndex returnType;
+#if SUPPORT_METHOD_RETURN_TYPE_CUSTOM_ATTRIBUTE
+    uint32_t returnParameterToken;
+#endif
     ParameterIndex parameterStart;
     GenericContainerIndex genericContainerIndex;
     uint32_t token;
@@ -329,10 +332,10 @@ typedef struct Il2CppGlobalMetadataHeader
     int32_t attributeDataSize;
     int32_t attributeDataRangeOffset;
     int32_t attributeDataRangeSize;
-    int32_t unresolvedVirtualCallParameterTypesOffset; // TypeIndex
-    int32_t unresolvedVirtualCallParameterTypesSize;
-    int32_t unresolvedVirtualCallParameterRangesOffset; // Il2CppMetadataRange
-    int32_t unresolvedVirtualCallParameterRangesSize;
+    int32_t unresolvedIndirectCallParameterTypesOffset; // TypeIndex
+    int32_t unresolvedIndirectCallParameterTypesSize;
+    int32_t unresolvedIndirectCallParameterRangesOffset; // Il2CppMetadataRange
+    int32_t unresolvedIndirectCallParameterRangesSize;
     int32_t windowsRuntimeTypeNamesOffset; // Il2CppWindowsRuntimeTypeNamePair
     int32_t windowsRuntimeTypeNamesSize;
     int32_t windowsRuntimeStringsOffset; // const char*

@@ -1,7 +1,6 @@
 /*
  * Licensed to the .NET Foundation under one or more agreements.
  * The .NET Foundation licenses this file to you under the MIT license.
- * See the LICENSE file in the project root for more information.
  */
 
 /*
@@ -82,7 +81,7 @@ MONO_PROFILER_EVENT_1(method_end_invoke, MethodEndInvoke, MonoMethod *, method)
 MONO_PROFILER_EVENT_1(exception_throw, ExceptionThrow, MonoObject *, exception)
 MONO_PROFILER_EVENT_4(exception_clause, ExceptionClause, MonoMethod *, method, uint32_t, index, MonoExceptionEnum, type, MonoObject *, exception)
 
-MONO_PROFILER_EVENT_2(gc_event, GCEvent, MonoProfilerGCEvent, event, uint32_t, generation)
+MONO_PROFILER_EVENT_3(gc_event, GCEvent2, MonoProfilerGCEvent, event, uint32_t, generation, mono_bool, is_serial)
 MONO_PROFILER_EVENT_1(gc_allocation, GCAllocation, MonoObject *, object)
 MONO_PROFILER_EVENT_2(gc_moves, GCMoves, MonoObject *const *, objects, uint64_t, count)
 MONO_PROFILER_EVENT_1(gc_resize, GCResize, uintptr_t, size)
@@ -95,7 +94,6 @@ MONO_PROFILER_EVENT_1(gc_finalized_object, GCFinalizedObject, MonoObject *, obje
 MONO_PROFILER_EVENT_5(gc_root_register, RootRegister, const mono_byte *, start, uintptr_t, size, MonoGCRootSource, source, const void *, key, const char *, name)
 MONO_PROFILER_EVENT_1(gc_root_unregister, RootUnregister, const mono_byte *, start)
 MONO_PROFILER_EVENT_3(gc_roots, GCRoots, uint64_t, count, const mono_byte *const *, addresses, MonoObject *const *, objects)
-MONO_PROFILER_EVENT_2(fileio, FileIO, uint64_t, kind, uint64_t, size)
 
 MONO_PROFILER_EVENT_1(monitor_contention, MonitorContention, MonoObject *, object)
 MONO_PROFILER_EVENT_1(monitor_failed, MonitorFailed, MonoObject *, object)
@@ -108,5 +106,3 @@ MONO_PROFILER_EVENT_1(thread_exited, ThreadExited, uintptr_t, tid)
 MONO_PROFILER_EVENT_2(thread_name, ThreadName, uintptr_t, tid, const char *, name)
 
 MONO_PROFILER_EVENT_2(sample_hit, SampleHit, const mono_byte *, ip, const void *, context)
-
-MONO_PROFILER_EVENT_3(iomap_report, IOMap, const char *, report, const char *, old_path, const char *, new_path)

@@ -29,6 +29,11 @@ il2cpp::gc::GarbageCollector::MakeDescriptorForObject(size_t *bitmap, int numbit
     return NULL;
 }
 
+void* il2cpp::gc::GarbageCollector::MakeEmptyDescriptor()
+{
+    return NULL;
+}
+
 void* il2cpp::gc::GarbageCollector::MakeDescriptorForString()
 {
     return NULL;
@@ -67,10 +72,9 @@ il2cpp::gc::GarbageCollector::AddWeakLink(void **link_addr, Il2CppObject *obj, b
     *link_addr = obj;
 }
 
-bool
-il2cpp::gc::GarbageCollector::RegisterThread(void *baseptr)
+void
+il2cpp::gc::GarbageCollector::RegisterThread()
 {
-    return true;
 }
 
 bool

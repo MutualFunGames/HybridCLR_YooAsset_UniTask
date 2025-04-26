@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../C/Baselib_ReentrantLock.h"
+#include "Internal/ScopedAcquireMixin.h"
 #include "Time.h"
 
 namespace baselib
@@ -18,7 +19,7 @@ namespace baselib
         // https://en.wikipedia.org/w/index.php?title=Reentrant_mutex&oldid=818566928
         //
         // For optimal performance, baselib::ReentrantLock should be stored at a cache aligned memory location.
-        class ReentrantLock
+        class ReentrantLock : public detail::ScopedAcquireMixin<ReentrantLock>
         {
         public:
             // non-copyable
@@ -31,8 +32,9 @@ namespace baselib
 
             // Creates a reentrant lock synchronization primitive.
             // If there are not enough system resources to create a lock, process abort is triggered.
-            ReentrantLock() : m_ReentrantLockData(Baselib_ReentrantLock_Create())
+            ReentrantLock()
             {
+                Baselib_ReentrantLock_CreateInplace(&m_ReentrantLockData);
             }
 
             // Reclaim resources and memory held by lock.
@@ -41,7 +43,7 @@ namespace baselib
             // Calling this function with a nullptr result in a no-op
             ~ReentrantLock()
             {
-                Baselib_ReentrantLock_Free(&m_ReentrantLockData);
+                Baselib_ReentrantLock_FreeInplace(&m_ReentrantLockData);
             }
 
             // Acquire lock.
@@ -51,22 +53,33 @@ namespace baselib
             // If lock is held by another thread, this function wait for lock to be released.
             //
             // This function is guaranteed to emit an acquire barrier.
-            inline void Acquire()
+            //
+            // \param maxSpinCount  Max number of times to spin in user space before falling back to the kernel. The actual number
+            //                      may differ depending on the underlying implementation but will never exceed the maxSpinCount
+            //                      value.
+            inline void Acquire(const uint32_t maxSpinCount = 0)
             {
+                if (maxSpinCount && Baselib_ReentrantLock_TrySpinAcquire(&m_ReentrantLockData, maxSpinCount))
+                    return;
+
                 return Baselib_ReentrantLock_Acquire(&m_ReentrantLockData);
             }
 
-            // Try to acquire lock and return immediately.
+            // Try to acquire lock.
+            //
             // If lock is already acquired by the current thread this function increase the lock count so that an equal number of calls to Baselib_ReentrantLock_Release needs
             // to be made before the lock is released.
             //
             // When lock is acquired this function is guaranteed to emit an acquire barrier.
             //
-            // Return:          true if lock was acquired.
+            // \param maxSpinCount  Max number of times to spin in user space before falling back to the kernel. The actual number
+            //                      may differ depending on the underlying implementation but will never exceed the maxSpinCount
+            //                      value.
+            // \returns             true if lock was acquired.
             COMPILER_WARN_UNUSED_RESULT
-            FORCE_INLINE bool TryAcquire()
+            FORCE_INLINE bool TryAcquire(const uint32_t maxSpinCount = 0)
             {
-                return Baselib_ReentrantLock_TryAcquire(&m_ReentrantLockData);
+                return Baselib_ReentrantLock_TrySpinAcquire(&m_ReentrantLockData, maxSpinCount);
             }
 
             // Try to acquire lock.
@@ -82,10 +95,16 @@ namespace baselib
             // Timeout passed to this function may be subject to system clock resolution.
             // If the system clock has a resolution of e.g. 16ms that means this function may exit with a timeout error 16ms earlier than originally scheduled.
             //
-            // Return:          true if lock was acquired.
+            // \param maxSpinCount  Max number of times to spin in user space before falling back to the kernel. The actual number
+            //                      may differ depending on the underlying implementation but will never exceed the maxSpinCount
+            //                      value.
+            // \returns             true if lock was acquired.
             COMPILER_WARN_UNUSED_RESULT
-            FORCE_INLINE bool TryTimedAcquire(const timeout_ms timeoutInMilliseconds)
+            FORCE_INLINE bool TryTimedAcquire(const timeout_ms timeoutInMilliseconds, const uint32_t maxSpinCount = 0)
             {
+                if (maxSpinCount && Baselib_ReentrantLock_TrySpinAcquire(&m_ReentrantLockData, maxSpinCount))
+                    return true;
+
                 return Baselib_ReentrantLock_TryTimedAcquire(&m_ReentrantLockData, timeoutInMilliseconds.count());
             }
 
@@ -101,85 +120,7 @@ namespace baselib
                 return Baselib_ReentrantLock_Release(&m_ReentrantLockData);
             }
 
-            // Acquire lock and invoke user defined function.
-            // If lock is held by another thread, this function wait for lock to be released.
-            //
-            // When a lock is acquired this function is guaranteed to emit an acquire barrier.
-            //
-            // Example usage:
-            //  lock.AcquireScoped([] {
-            //      enteredCriticalSection++;
-            //  });
-            template<class FunctionType>
-            FORCE_INLINE void AcquireScoped(const FunctionType& func)
-            {
-                ReleaseOnDestroy releaseScope(*this);
-                Acquire();
-                func();
-            }
-
-            // Try to acquire lock and invoke user defined function.
-            // If lock is held by another thread, this function wait for timeoutInMilliseconds for lock to be released.
-            // On failure to obtain lock the user defined function is not invoked.
-            //
-            // When lock is acquired this function is guaranteed to emit an acquire barrier.
-            //
-            // Example usage:
-            //  lock.TryAcquireScoped([] {
-            //      enteredCriticalSection++;
-            //  });
-            //
-            // Return:          true if lock was acquired.
-            template<class FunctionType>
-            FORCE_INLINE bool TryAcquireScoped(const FunctionType& func)
-            {
-                if (TryAcquire())
-                {
-                    ReleaseOnDestroy releaseScope(*this);
-                    func();
-                    return true;
-                }
-                return false;
-            }
-
-            // Try to acquire lock and invoke user defined function.
-            // If lock is held by another thread, this function wait for timeoutInMilliseconds for lock to be released.
-            // On failure to obtain lock the user defined function is not invoked.
-            //
-            // When lock is acquired this function is guaranteed to emit an acquire barrier.
-            //
-            // Timeout passed to this function may be subject to system clock resolution.
-            // If the system clock has a resolution of e.g. 16ms that means this function may exit with a timeout error 16ms earlier than originally scheduled.
-            //
-            // Example usage:
-            //  bool lockAcquired = lock.TryTimedAcquireScoped(std::chrono::minutes(1), [] {
-            //      enteredCriticalSection++;
-            //  });
-            //  assert(lockAcquired);
-            //
-            // Return:          true if lock was acquired.
-            template<class FunctionType>
-            FORCE_INLINE bool TryTimedAcquireScoped(const timeout_ms timeoutInMilliseconds, const FunctionType& func)
-            {
-                if (TryTimedAcquire(timeoutInMilliseconds))
-                {
-                    ReleaseOnDestroy releaseScope(*this);
-                    func();
-                    return true;
-                }
-                return false;
-            }
-
         private:
-            class ReleaseOnDestroy
-            {
-            public:
-                FORCE_INLINE ReleaseOnDestroy(ReentrantLock& lockReference) : m_LockReference(lockReference) {}
-                FORCE_INLINE ~ReleaseOnDestroy() { m_LockReference.Release(); }
-            private:
-                ReentrantLock& m_LockReference;
-            };
-
             Baselib_ReentrantLock   m_ReentrantLockData;
         };
     }

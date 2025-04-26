@@ -13,13 +13,14 @@
 // https://en.wikipedia.org/w/index.php?title=Event_(synchronization_primitive)&oldid=781517732
 
 
-#if PLATFORM_FUTEX_NATIVE_SUPPORT
+#if PLATFORM_HAS_NATIVE_FUTEX
     #include "Internal/Baselib_EventSemaphore_FutexBased.inl.h"
 #else
     #include "Internal/Baselib_EventSemaphore_SemaphoreBased.inl.h"
 #endif
 
 // Creates an event semaphore synchronization primitive. Initial state of event is unset.
+// Use Baselib_EventSemaphore_Free() to free resources.
 //
 // If there are not enough system resources to create a semaphore, process abort is triggered.
 //
@@ -28,13 +29,35 @@
 // \returns     A struct representing a semaphore instance. Use Baselib_EventSemaphore_Free to free the semaphore.
 BASELIB_INLINE_API Baselib_EventSemaphore Baselib_EventSemaphore_Create(void);
 
-// Try to acquire semaphore.
+// Creates an event semaphore synchronization primitive in-place with memory provided by the called. Initial state of event is unset.
+// Use Baselib_EventSemaphore_FreeInplace() to free resources.
+//
+// If there are not enough system resources to create a semaphore, process abort is triggered.
+//
+// For optimal performance, the Baselib_EventSemaphore should be stored at a cache aligned memory location.
+BASELIB_INLINE_API void Baselib_EventSemaphore_CreateInplace(Baselib_EventSemaphore* semaphoreData);
+
+// Try to acquire semaphore and return immediately.
 //
 // When semaphore is acquired this function is guaranteed to emit an acquire barrier.
 //
 // \returns true if event is set, false other wise.
 COMPILER_WARN_UNUSED_RESULT
-BASELIB_INLINE_API bool Baselib_EventSemaphore_TryAcquire(Baselib_EventSemaphore* semaphore);
+BASELIB_FORCEINLINE_API bool Baselib_EventSemaphore_TryAcquire(Baselib_EventSemaphore* semaphore)
+{
+    return Baselib_EventSemaphore_TrySpinAcquire(semaphore, 0);
+}
+
+// Try to acquire semaphore.
+//
+// When semaphore is acquired this function is guaranteed to emit an acquire barrier.
+//
+// \param maxSpinCount  Max number of times to spin in user space before falling back to the kernel. The actual number
+//                      may differ depending on the underlying implementation but will never exceed the maxSpinCount
+//                      value.
+// \returns true if event is set, false other wise.
+COMPILER_WARN_UNUSED_RESULT
+BASELIB_INLINE_API bool Baselib_EventSemaphore_TrySpinAcquire(Baselib_EventSemaphore* semaphore, uint32_t maxSpinCount);
 
 // Acquire semaphore.
 //
@@ -55,7 +78,7 @@ BASELIB_INLINE_API void Baselib_EventSemaphore_Acquire(Baselib_EventSemaphore* s
 //
 // \returns     true if semaphore was acquired.
 COMPILER_WARN_UNUSED_RESULT
-BASELIB_INLINE_API bool Baselib_EventSemaphore_TryTimedAcquire(Baselib_EventSemaphore* semaphore, const uint32_t timeoutInMilliseconds);
+BASELIB_INLINE_API bool Baselib_EventSemaphore_TryTimedAcquire(Baselib_EventSemaphore* semaphore, uint32_t timeoutInMilliseconds);
 
 // Sets the event
 //
@@ -86,3 +109,9 @@ BASELIB_INLINE_API void Baselib_EventSemaphore_ResetAndReleaseWaitingThreads(Bas
 // If threads are waiting on the semaphore, calling free may trigger an assert and may cause process abort.
 // Calling this function with a nullptr result in a no-op
 BASELIB_INLINE_API void Baselib_EventSemaphore_Free(Baselib_EventSemaphore* semaphore);
+
+// Reclaim resources and memory held by the semaphore. Caller is responsible for freeing memory pointed to by the semaphore.
+//
+// If threads are waiting on the semaphore, calling free may trigger an assert and may cause process abort.
+// Calling this function with a nullptr result in a no-op
+BASELIB_INLINE_API void Baselib_EventSemaphore_FreeInplace(Baselib_EventSemaphore* semaphore);

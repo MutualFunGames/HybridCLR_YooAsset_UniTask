@@ -11,7 +11,6 @@
 #include "Baselib.h"
 #include "Cpp/ReentrantLock.h"
 
-#if !RUNTIME_TINY
 #include "vm/CCW.h"
 #include "vm/Class.h"
 #include "vm/Domain.h"
@@ -19,19 +18,14 @@
 #include "vm/RCW.h"
 #include "vm/Runtime.h"
 #include "vm/Thread.h"
-#endif
 
 using namespace il2cpp::os;
-
-#if !RUNTIME_TINY
 using namespace il2cpp::vm;
-#endif
 
 namespace il2cpp
 {
 namespace gc
 {
-#if !RUNTIME_TINY
 // So COM Callable Wrapper can be created for any kind of managed object,
 // whether it has finalizer or not. If it doesn't then it's an easy case:
 // when creating the CCW, we just register our cleanup method to be the
@@ -83,40 +77,65 @@ namespace gc
 
 #if IL2CPP_SUPPORT_THREADS
 
-    static bool s_StopFinalizer = false;
-    static il2cpp::os::Thread* s_FinalizerThread;
-    static Il2CppThread* s_FinalizerThreadObject;
-    static Semaphore s_FinalizerSemaphore(0, 32767);
-    static Event s_FinalizersThreadStartedEvent;
-    static Event s_FinalizersCompletedEvent(true, false);
+    struct GarbageCollectorContext
+    {
+        GarbageCollectorContext() :
+            m_StopFinalizer(false),
+            m_FinalizerThread(nullptr),
+            m_FinalizerThreadObject(nullptr),
+            m_FinalizerSemaphore(0, 32767),
+            m_FinalizersThreadStartedEvent(),
+            m_FinalizersCompletedEvent(true, false)
+        {
+        }
+
+        bool m_StopFinalizer;
+        il2cpp::os::Thread* m_FinalizerThread;
+        Il2CppThread* m_FinalizerThreadObject;
+        Semaphore m_FinalizerSemaphore;
+        Event m_FinalizersThreadStartedEvent;
+        Event m_FinalizersCompletedEvent;
+    };
+
+    GarbageCollectorContext* s_GarbageCollectorContext = nullptr;
 
     static void FinalizerThread(void* arg)
     {
-        s_FinalizerThreadObject = il2cpp::vm::Thread::Attach(Domain::GetCurrent());
-        s_FinalizerThread->SetName("GC Finalizer");
+        s_GarbageCollectorContext->m_FinalizerThreadObject = il2cpp::vm::Thread::Attach(Domain::GetCurrent());
+        s_GarbageCollectorContext->m_FinalizerThread->SetName("GC Finalizer");
 
-        s_FinalizersThreadStartedEvent.Set();
+        s_GarbageCollectorContext->m_FinalizersThreadStartedEvent.Set();
 
-        while (!s_StopFinalizer)
+        while (!s_GarbageCollectorContext->m_StopFinalizer)
         {
-            s_FinalizerSemaphore.Wait();
+            s_GarbageCollectorContext->m_FinalizerSemaphore.Wait();
 
             GarbageCollector::InvokeFinalizers();
 
-            s_FinalizersCompletedEvent.Set();
+            s_GarbageCollectorContext->m_FinalizersCompletedEvent.Set();
         }
 
-        il2cpp::vm::Thread::Detach(s_FinalizerThreadObject);
+        il2cpp::vm::Thread::Detach(s_GarbageCollectorContext->m_FinalizerThreadObject);
     }
 
     bool GarbageCollector::IsFinalizerThread(Il2CppThread *thread)
     {
-        return s_FinalizerThreadObject == thread;
+        return s_GarbageCollectorContext->m_FinalizerThreadObject == thread;
+    }
+
+    bool GarbageCollector::IsFinalizerInternalThread(Il2CppInternalThread *thread)
+    {
+        return s_GarbageCollectorContext->m_FinalizerThreadObject->GetInternalThread() == thread;
     }
 
 #else
 
     bool GarbageCollector::IsFinalizerThread(Il2CppThread *thread)
+    {
+        return false;
+    }
+
+    bool GarbageCollector::IsFinalizerInternalThread(Il2CppInternalThread *thread)
     {
         return false;
     }
@@ -127,29 +146,34 @@ namespace gc
     {
         GarbageCollector::InvokeFinalizers();
 #if IL2CPP_SUPPORT_THREADS
-        s_FinalizerThread = new il2cpp::os::Thread;
-        s_FinalizerThread->Run(&FinalizerThread, NULL);
-        s_FinalizersThreadStartedEvent.Wait();
+        s_GarbageCollectorContext = new GarbageCollectorContext();
+
+        s_GarbageCollectorContext->m_FinalizerThread = new il2cpp::os::Thread;
+        s_GarbageCollectorContext->m_FinalizerThread->Run(&FinalizerThread, NULL);
+        s_GarbageCollectorContext->m_FinalizersThreadStartedEvent.Wait();
 #endif
     }
 
     void GarbageCollector::UninitializeFinalizers()
     {
 #if IL2CPP_SUPPORT_THREADS
-        s_StopFinalizer = true;
+        s_GarbageCollectorContext->m_StopFinalizer = true;
         NotifyFinalizers();
-        s_FinalizerThread->Join();
-        delete s_FinalizerThread;
-        s_FinalizerThread = NULL;
-        s_StopFinalizer = false;
-        s_FinalizerThreadObject = NULL;
+        s_GarbageCollectorContext->m_FinalizerThread->Join();
+        delete s_GarbageCollectorContext->m_FinalizerThread;
+        s_GarbageCollectorContext->m_FinalizerThread = NULL;
+        s_GarbageCollectorContext->m_StopFinalizer = false;
+        s_GarbageCollectorContext->m_FinalizerThreadObject = NULL;
+
+        delete s_GarbageCollectorContext;
+        s_GarbageCollectorContext = nullptr;
 #endif
     }
 
     void GarbageCollector::NotifyFinalizers()
     {
 #if IL2CPP_SUPPORT_THREADS
-        s_FinalizerSemaphore.Post(1, NULL);
+        s_GarbageCollectorContext->m_FinalizerSemaphore.Post(1, NULL);
 #endif
     }
 
@@ -219,12 +243,12 @@ namespace gc
 
 #if IL2CPP_SUPPORT_THREADS
         /* Avoid deadlocks */
-        if (vm::Thread::Current() == s_FinalizerThreadObject)
+        if (vm::Thread::Current() == s_GarbageCollectorContext->m_FinalizerThreadObject)
             return;
 
-        s_FinalizersCompletedEvent.Reset();
+        s_GarbageCollectorContext->m_FinalizersCompletedEvent.Reset();
         NotifyFinalizers();
-        s_FinalizersCompletedEvent.Wait();
+        s_GarbageCollectorContext->m_FinalizersCompletedEvent.Wait();
 #else
         GarbageCollector::InvokeFinalizers();
 #endif
@@ -320,8 +344,6 @@ namespace gc
         vm::Exception::RaiseIfFailed(hr, true);
         return result;
     }
-
-#endif // !RUNTIME_TINY
 
     int32_t GarbageCollector::GetGeneration(void* addr)
     {

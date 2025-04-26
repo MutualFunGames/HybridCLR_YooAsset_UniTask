@@ -1,6 +1,6 @@
 #include "il2cpp-config.h"
 
-#if IL2CPP_TARGET_POSIX && !RUNTIME_TINY
+#if IL2CPP_TARGET_POSIX
 
 #include "os/NativeMethods.h"
 #include "os/Process.h"

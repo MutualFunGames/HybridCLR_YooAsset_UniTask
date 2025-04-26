@@ -26,6 +26,10 @@
 #include <mono/utils/mono-counters.h>
 #endif
 
+#if _MSC_VER
+#pragma warning(disable:4312) // FIXME pointer cast to different size
+#endif
+
 typedef struct {
 	gpointer p;
 	MonoHazardousFreeFunc free_func;
@@ -106,13 +110,22 @@ mono_thread_small_id_alloc (void)
 		hazard_table_size = HAZARD_TABLE_MAX_SIZE;
 #else
 		gpointer page_addr;
+#if defined(__PASE__)
+		/*
+		 * HACK: allocating the table with none prot will cause i 7.1
+		 * to segfault when accessing or protecting it
+		 */
+		int table_prot = MONO_MMAP_READ | MONO_MMAP_WRITE;
+#else
+		int table_prot = MONO_MMAP_NONE;
+#endif
 		int pagesize = mono_pagesize ();
 		int num_pages = (hazard_table_size * sizeof (MonoThreadHazardPointers) + pagesize - 1) / pagesize;
 
 		if (hazard_table == NULL) {
-			hazard_table = (MonoThreadHazardPointers *volatile) mono_valloc (NULL,
+			hazard_table = (MonoThreadHazardPointers*) mono_valloc (NULL,
 				sizeof (MonoThreadHazardPointers) * HAZARD_TABLE_MAX_SIZE,
-				MONO_MMAP_NONE, MONO_MEM_ACCOUNT_HAZARD_POINTERS);
+				table_prot, MONO_MEM_ACCOUNT_HAZARD_POINTERS);
 		}
 
 		g_assert (hazard_table != NULL);
@@ -392,7 +405,7 @@ mono_thread_smr_init (void)
 {
 	int i;
 
-	mono_os_mutex_init_recursive(&small_id_mutex);
+	mono_os_mutex_init (&small_id_mutex);
 	mono_counters_register ("Hazardous pointers", MONO_COUNTER_JIT | MONO_COUNTER_INT, &hazardous_pointer_count);
 
 	for (i = 0; i < HAZARD_TABLE_OVERFLOW; ++i) {

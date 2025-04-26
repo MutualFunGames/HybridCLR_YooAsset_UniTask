@@ -10,7 +10,7 @@ namespace metadata
 {
     bool Il2CppGenericClassCompare::operator()(const Il2CppGenericClass* gc1, const Il2CppGenericClass* gc2) const
     {
-        return Compare(gc1, gc2);
+        return gc1 == gc2 || Compare(gc1, gc2);
     }
 
     bool Il2CppGenericClassCompare::Compare(const Il2CppGenericClass* gc1, const Il2CppGenericClass* gc2)

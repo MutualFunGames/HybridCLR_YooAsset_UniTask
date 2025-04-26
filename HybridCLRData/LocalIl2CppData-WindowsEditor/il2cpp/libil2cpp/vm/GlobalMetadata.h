@@ -6,6 +6,7 @@
 #include "StackTrace.h"
 #include "il2cpp-class-internals.h"
 #include "il2cpp-config.h"
+#include "metadata/CustomAttributeCreator.h"
 #include "os/Mutex.h"
 #include "utils/dynamic_array.h"
 #include "vm-utils/MethodDefinitionKey.h"
@@ -60,6 +61,7 @@ namespace vm
     const int kPackingSizeIsDefault = 11;
     const int kClassSizeIsDefault = 12; // 此参数只用于反射查询，并无实际意义
     const int kSpecifiedPackingSize = 13; // This uses 4 bits from bit 13 to bit 16 。此参数目前只用于反射查询，并无直接用处
+    const int kBitIsByRefLike = 17;
 
     class GlobalMetadata
     {
@@ -101,12 +103,9 @@ namespace vm
         static Il2CppClass* GetNestedTypeFromOffset(const Il2CppClass* klass, TypeNestedTypeIndex offset);
         static Il2CppMetadataTypeHandle GetNestedTypes(Il2CppMetadataTypeHandle handle, void** iter);
 
-        static CustomAttributesCache* GenerateCustomAttributesCache(const Il2CppImage* image, uint32_t token);
-        static CustomAttributesCache* GenerateCustomAttributesCache(Il2CppMetadataCustomAttributeHandle handle);
         static Il2CppMetadataCustomAttributeHandle GetCustomAttributeTypeToken(const Il2CppImage* image, uint32_t token);
-        static std::tuple<void*, void*> GetCustomAttributeDataRange(const Il2CppImage* image, uint32_t token);
-        static bool HasAttribute(Il2CppMetadataCustomAttributeHandle token, Il2CppClass* attribute);
-        static bool HasAttribute(const Il2CppImage* image, uint32_t token, Il2CppClass* attribute);
+        static il2cpp::metadata::CustomAttributeDataReader GetCustomAttributeDataReader(const Il2CppImage* image, uint32_t token);
+        static il2cpp::metadata::CustomAttributeDataReader GetCustomAttributeDataReader(Il2CppMetadataCustomAttributeHandle handle);
 
         static const MethodInfo* GetMethodInfoFromMethodHandle(Il2CppMetadataMethodDefinitionHandle handle);
         static const MethodInfo* GetMethodInfoFromVTableSlot(const Il2CppClass* klass, int32_t vTableSlot);
@@ -114,6 +113,7 @@ namespace vm
         static const uint8_t* GetParameterDefaultValue(const MethodInfo* method, int32_t parameterPosition, const Il2CppType** type, bool* isExplicitySetNullDefaultValue);
         static Il2CppMetadataGenericContainerHandle GetGenericContainerFromIndex(GenericContainerIndex index);
         static const Il2CppMethodDefinition* GetMethodDefinitionFromIndex(MethodIndex index);
+        static MethodIndex GetMethodIndexFromDefinition(const Il2CppMethodDefinition* methodDefine);
         static const Il2CppType* GetInterfaceFromOffset(const Il2CppTypeDefinition* def, TypeInterfaceIndex offset);
         static Il2CppInterfaceOffsetInfo GetInterfaceOffsetInfo(const Il2CppTypeDefinition* typeDefine, TypeInterfaceOffsetIndex index);
         static const Il2CppMethodDefinition* GetMethodDefinitionFromVTableSlot(const Il2CppTypeDefinition* typeDefine, int32_t vTableSlot);
@@ -128,6 +128,7 @@ namespace vm
 
         static const char* GetStringFromIndex(StringIndex index);
         static TypeDefinitionIndex GetIndexForTypeDefinition(const Il2CppClass* klass);
+        static TypeDefinitionIndex GetIndexForTypeDefinition(const Il2CppTypeDefinition* typeDef);
         static const Il2CppParameterDefinition* GetParameterDefinitionFromIndex(const Il2CppClass* klass, ParameterIndex index);
         static const Il2CppParameterDefinition* GetParameterDefinitionFromIndex(const Il2CppMethodDefinition* methodDef, ParameterIndex index);
 
@@ -139,7 +140,11 @@ namespace vm
         static Il2CppMetadataMethodInfo GetMethodInfo(const Il2CppClass* klass, TypeMethodIndex index);
         static Il2CppMetadataParameterInfo GetParameterInfo(const Il2CppClass* klass, Il2CppMetadataMethodDefinitionHandle handle, MethodParameterIndex index);
         static Il2CppMetadataPropertyInfo GetPropertyInfo(const Il2CppClass* klass, TypePropertyIndex index);
+        //static const Il2CppPropertyDefinition* GetPropertyDefinitionFromIndex(const Il2CppImage* image, PropertyIndex index);
         static Il2CppMetadataEventInfo GetEventInfo(const Il2CppClass* klass, TypeEventIndex index);
+#if SUPPORT_METHOD_RETURN_TYPE_CUSTOM_ATTRIBUTE
+        static uint32_t GetReturnParameterToken(Il2CppMetadataMethodDefinitionHandle handle);
+#endif
 
         static Il2CppMetadataGenericContainerHandle GetGenericContainerFromGenericClass(const Il2CppGenericClass* genericClass);
         static Il2CppMetadataGenericContainerHandle GetGenericContainerFromMethod(Il2CppMetadataMethodDefinitionHandle handle);
@@ -150,6 +155,7 @@ namespace vm
         static std::pair<const Il2CppType*, const MethodInfo*> GetConstrainedCallFromRgctxDefinition(const Il2CppRGCTXDefinition* rgctxDef);
         static Il2CppClass* GetContainerDeclaringType(Il2CppMetadataGenericContainerHandle handle);
         static Il2CppClass* GetParameterDeclaringType(Il2CppMetadataGenericParameterHandle handle);
+        static const MethodInfo* GetParameterDeclaringMethod(Il2CppMetadataGenericParameterHandle handle);
         static Il2CppMetadataGenericParameterHandle GetGenericParameterFromIndex(Il2CppMetadataGenericContainerHandle handle, GenericContainerParameterIndex index);
         static const Il2CppType* GetGenericParameterConstraintFromIndex(Il2CppMetadataGenericParameterHandle handle, GenericParameterConstraintIndex index);
         static void MakeGenericArgType(Il2CppMetadataGenericContainerHandle containerHandle, Il2CppMetadataGenericParameterHandle paramHandle, Il2CppType* arg);

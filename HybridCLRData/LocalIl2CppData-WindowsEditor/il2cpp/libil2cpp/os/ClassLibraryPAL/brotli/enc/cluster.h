@@ -10,7 +10,7 @@
 #define BROTLI_ENC_CLUSTER_H_
 
 #include "../common/platform.h"
-#include "../include/brotli/types.h"
+#include <brotli/types.h>
 #include "./histogram.h"
 #include "./memory.h"
 

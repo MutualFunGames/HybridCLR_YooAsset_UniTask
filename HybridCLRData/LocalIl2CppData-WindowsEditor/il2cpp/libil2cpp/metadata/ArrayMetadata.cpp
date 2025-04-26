@@ -134,17 +134,23 @@ namespace metadata
         for (uint8_t i = 0; i < rank; i++)
             parameters[i] = &il2cpp_defaults.int32_class->byval_arg;
         parameters[rank] = &arrayClass->element_class->byval_arg;
-        arrayClass->methods[methodIndex++] = ConstructArrayMethod(arrayClass, "Set", &il2cpp_defaults.void_class->byval_arg, rank + 1, parameters);
+        MethodInfo* setMethod = ConstructArrayMethod(arrayClass, "Set", &il2cpp_defaults.void_class->byval_arg, rank + 1, parameters);
+        setMethod->invoker_method = vm::Runtime::GetArraySetInvoker();
+        arrayClass->methods[methodIndex++] = setMethod;
 
         parameters = (const Il2CppType**)alloca(rank * sizeof(Il2CppType*));
         for (uint8_t i = 0; i < rank; i++)
             parameters[i] = &il2cpp_defaults.int32_class->byval_arg;
-        arrayClass->methods[methodIndex++] = ConstructArrayMethod(arrayClass, "Address", &arrayClass->element_class->this_arg, rank, parameters);
+        MethodInfo* addressMethod = ConstructArrayMethod(arrayClass, "Address", &arrayClass->element_class->this_arg, rank, parameters);
+        addressMethod->invoker_method = vm::Runtime::GetMissingMethodInvoker();
+        arrayClass->methods[methodIndex++] = addressMethod;
 
         parameters = (const Il2CppType**)alloca(rank * sizeof(Il2CppType*));
         for (uint8_t i = 0; i < rank; i++)
             parameters[i] = &il2cpp_defaults.int32_class->byval_arg;
-        arrayClass->methods[methodIndex++] = ConstructArrayMethod(arrayClass, "Get", &arrayClass->element_class->byval_arg, rank, parameters);
+        MethodInfo* getMethod = ConstructArrayMethod(arrayClass, "Get", &arrayClass->element_class->byval_arg, rank, parameters);
+        getMethod->invoker_method = vm::Runtime::GetArrayGetInvoker();
+        arrayClass->methods[methodIndex++] = getMethod;
 
         IL2CPP_ASSERT(methodIndex <= std::numeric_limits<uint16_t>::max());
         PopulateArrayGenericMethods(arrayClass, static_cast<uint16_t>(methodIndex));
@@ -319,7 +325,7 @@ namespace metadata
 
                 size_t vtableIndex = klass->interfaceOffsets[i].offset + iter->interfaceMethodDefinition->slot;
                 klass->vtable[vtableIndex].method = arrayMethod;
-                klass->vtable[vtableIndex].methodPtr = il2cpp::vm::Method::GetVirtualCallMethodPointer(arrayMethod);
+                klass->vtable[vtableIndex].methodPtr = arrayMethod->virtualMethodPointer;
             }
         }
     }
@@ -531,6 +537,7 @@ namespace metadata
         klass->rank = rank;
 
         klass->instance_size = Class::GetInstanceSize(arrayClass);
+        klass->stack_slot_size = sizeof(void*);
         klass->vtable_count = static_cast<uint16_t>(slots);
 
         // need this before we access the size or has_references

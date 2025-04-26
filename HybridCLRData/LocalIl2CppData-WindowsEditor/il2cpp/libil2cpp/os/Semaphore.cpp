@@ -4,10 +4,8 @@
 #if IL2CPP_SUPPORT_THREADS
 
 #include "os/Atomic.h"
-#if IL2CPP_TARGET_WINDOWS
-#include "os/Win32/SemaphoreImpl.h"
-#elif IL2CPP_TARGET_POSIX
-#include "os/Posix/SemaphoreImpl.h"
+#if IL2CPP_TARGET_WINDOWS || IL2CPP_TARGET_POSIX
+#include "os/Generic/SemaphoreImpl.h"
 #else
 #include "os/SemaphoreImpl.h"
 #endif

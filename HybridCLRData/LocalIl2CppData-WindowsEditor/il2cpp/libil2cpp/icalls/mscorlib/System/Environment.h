@@ -40,10 +40,6 @@ namespace System
         static void FailFast(Il2CppString* message, Il2CppException* exception, Il2CppString* errorSource);
         static void InternalSetEnvironmentVariable(Il2CppChar* variable, int32_t variable_length, Il2CppChar* value, int32_t value_length);
         static void set_ExitCode(int32_t value);
-#if IL2CPP_TINY
-        static Il2CppString* GetStackTrace_internal();
-        static void FailFast_internal(Il2CppString* message);
-#endif
     };
 } /* namespace System */
 } /* namespace mscorlib */

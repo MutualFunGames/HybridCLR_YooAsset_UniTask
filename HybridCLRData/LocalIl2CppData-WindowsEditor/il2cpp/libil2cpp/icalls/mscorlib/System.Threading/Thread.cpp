@@ -48,9 +48,7 @@ namespace Threading
         startData->m_Semaphore->Wait();
 
         {
-            int temp = 0;
-            if (!GarbageCollector::RegisterThread(&temp))
-                IL2CPP_ASSERT(0 && "GarbageCollector::RegisterThread failed");
+            GarbageCollector::RegisterThread();
 
             il2cpp::vm::StackTrace::InitializeStackTracesForCurrentThread();
 

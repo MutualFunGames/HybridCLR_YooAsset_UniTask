@@ -3,9 +3,9 @@
 #include "../Baselib_Atomic_TypeSafe.h"
 #include "../Baselib_SystemSemaphore.h"
 #include "../Baselib_Thread.h"
+#include "Baselib_SpinLoop.h"
 
-
-#if PLATFORM_FUTEX_NATIVE_SUPPORT
+#if PLATFORM_HAS_NATIVE_FUTEX
     #error "It's highly recommended to use Baselib_Semaphore_FutexBased.inl.h on platforms which has native semaphore support"
 #endif
 
@@ -13,29 +13,39 @@ typedef struct Baselib_Semaphore
 {
     Baselib_SystemSemaphore_Handle handle;
     int32_t count;
-    char _cachelineSpacer0[PLATFORM_CACHE_LINE_SIZE - sizeof(int32_t) - sizeof(Baselib_SystemSemaphore_Handle)];
+    char _cachelineSpacer0[PLATFORM_PROPERTY_CACHE_LINE_SIZE - sizeof(int32_t) - sizeof(Baselib_SystemSemaphore_Handle)];
     char _systemSemaphoreData[Baselib_SystemSemaphore_PlatformSize];
 } Baselib_Semaphore;
 
-BASELIB_STATIC_ASSERT((offsetof(Baselib_Semaphore, count) + PLATFORM_CACHE_LINE_SIZE - sizeof(Baselib_SystemSemaphore_Handle)) ==
+BASELIB_STATIC_ASSERT((offsetof(Baselib_Semaphore, count) + PLATFORM_PROPERTY_CACHE_LINE_SIZE - sizeof(Baselib_SystemSemaphore_Handle)) ==
     offsetof(Baselib_Semaphore, _systemSemaphoreData), "count and internalData must not share cacheline");
 
 BASELIB_INLINE_API Baselib_Semaphore Baselib_Semaphore_Create(void)
 {
-    Baselib_Semaphore semaphore = {{0}, 0, {0}, {0}};
-    semaphore.handle = Baselib_SystemSemaphore_CreateInplace(&semaphore._systemSemaphoreData);
+    Baselib_Semaphore semaphore = {Baselib_SystemSemaphore_Create(), 0, {0}, {0}};
     return semaphore;
 }
 
-BASELIB_INLINE_API bool Baselib_Semaphore_TryAcquire(Baselib_Semaphore* semaphore)
+BASELIB_INLINE_API void Baselib_Semaphore_CreateInplace(Baselib_Semaphore* semaphoreData)
+{
+    semaphoreData->handle = Baselib_SystemSemaphore_CreateInplace(&semaphoreData->_systemSemaphoreData);
+    semaphoreData->count = 0;
+}
+
+COMPILER_WARN_UNUSED_RESULT
+BASELIB_INLINE_API bool Baselib_Semaphore_TrySpinAcquire(Baselib_Semaphore* semaphore, uint32_t maxSpinCount)
 {
     int32_t previousCount = Baselib_atomic_load_32_relaxed(&semaphore->count);
-    while (previousCount > 0)
+    while (true)
     {
-        if (Baselib_atomic_compare_exchange_weak_32_acquire_relaxed(&semaphore->count, &previousCount, previousCount - 1))
-            return true;
+        while (previousCount > 0)
+        {
+            if (Baselib_atomic_compare_exchange_weak_32_acquire_relaxed(&semaphore->count, &previousCount, previousCount - 1))
+                return true;
+        }
+        if (!Detail_Baselib_SpinLoop(&semaphore->count, &previousCount, &maxSpinCount))
+            return false;
     }
-    return false;
 }
 
 BASELIB_INLINE_API void Baselib_Semaphore_Acquire(Baselib_Semaphore* semaphore)
@@ -47,6 +57,7 @@ BASELIB_INLINE_API void Baselib_Semaphore_Acquire(Baselib_Semaphore* semaphore)
     Baselib_SystemSemaphore_Acquire(semaphore->handle);
 }
 
+COMPILER_WARN_UNUSED_RESULT
 BASELIB_INLINE_API bool Baselib_Semaphore_TryTimedAcquire(Baselib_Semaphore* semaphore, const uint32_t timeoutInMilliseconds)
 {
     const int32_t previousCount = Baselib_atomic_fetch_add_32_acquire(&semaphore->count, -1);
@@ -70,7 +81,7 @@ BASELIB_INLINE_API bool Baselib_Semaphore_TryTimedAcquire(Baselib_Semaphore* sem
                 return false;
         }
         // Likely a race, yield to give the release operation room to complete.
-        // This includes a fully memory barrier which ensures that there is no reordering between changing/reading count and wakeup consumption.
+        // This includes a full memory barrier which ensures that there is no reordering between changing/reading count and wakeup consumption.
         Baselib_Thread_YieldExecution();
     }
     while (!Baselib_SystemSemaphore_TryAcquire(semaphore->handle));
@@ -86,12 +97,16 @@ BASELIB_INLINE_API void Baselib_Semaphore_Release(Baselib_Semaphore* semaphore, 
     // See overflow protection below.
     BaselibAssert(previousCount <= (previousCount + count), "Semaphore count overflow (current: %d, added: %d).", previousCount, count);
 
-    if (OPTIMIZER_UNLIKELY(previousCount < 0))
+    if (previousCount < 1)
     {
-        const int32_t waitingThreads = -previousCount;
-        const int32_t threadsToWakeup = count < waitingThreads ? count : waitingThreads;
-        Baselib_SystemSemaphore_Release(semaphore->handle, threadsToWakeup);
-        return;
+        Baselib_Cpu_Hint_MonitorRelease();
+        if (OPTIMIZER_UNLIKELY(previousCount < 0))
+        {
+            const int32_t waitingThreads = -previousCount;
+            const int32_t threadsToWakeup = count < waitingThreads ? count : waitingThreads;
+            Baselib_SystemSemaphore_Release(semaphore->handle, threadsToWakeup);
+            return;
+        }
     }
 
     // overflow protection
@@ -117,6 +132,15 @@ BASELIB_INLINE_API uint32_t Baselib_Semaphore_ResetAndReleaseWaitingThreads(Base
 }
 
 BASELIB_INLINE_API void Baselib_Semaphore_Free(Baselib_Semaphore* semaphore)
+{
+    if (!semaphore)
+        return;
+    const int32_t count = Baselib_atomic_load_32_seq_cst(&semaphore->count);
+    BaselibAssert(count >= 0, "Destruction is not allowed when there are still threads waiting on the semaphore.");
+    Baselib_SystemSemaphore_Free(semaphore->handle);
+}
+
+BASELIB_INLINE_API void Baselib_Semaphore_FreeInplace(Baselib_Semaphore* semaphore)
 {
     if (!semaphore)
         return;

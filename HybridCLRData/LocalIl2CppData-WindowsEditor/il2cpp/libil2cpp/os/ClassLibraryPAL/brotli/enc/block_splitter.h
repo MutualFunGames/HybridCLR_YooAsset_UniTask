@@ -10,7 +10,7 @@
 #define BROTLI_ENC_BLOCK_SPLITTER_H_
 
 #include "../common/platform.h"
-#include "../include/brotli/types.h"
+#include <brotli/types.h>
 #include "./command.h"
 #include "./memory.h"
 #include "./quality.h"

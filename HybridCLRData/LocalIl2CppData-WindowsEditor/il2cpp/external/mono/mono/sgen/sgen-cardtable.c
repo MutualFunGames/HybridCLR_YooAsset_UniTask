@@ -26,6 +26,7 @@
 #include "mono/sgen/sgen-client.h"
 #include "mono/sgen/gc-internal-agnostic.h"
 #include "mono/utils/mono-memory-model.h"
+#include "mono/utils/mono-tls-inline.h"
 
 //#define CARDTABLE_STATS
 
@@ -67,10 +68,10 @@ sgen_card_table_wbarrier_set_field (GCObject *obj, gpointer field_ptr, GCObject*
 }
 
 static void
-sgen_card_table_wbarrier_arrayref_copy (gpointer dest_ptr, gpointer src_ptr, int count)
+sgen_card_table_wbarrier_arrayref_copy (gpointer dest_ptr, gconstpointer src_ptr, int count)
 {
 	gpointer *dest = (gpointer *)dest_ptr;
-	gpointer *src = (gpointer *)src_ptr;
+	const gpointer *src = (const gpointer *)src_ptr;
 
 	/*overlapping that required backward copying*/
 	if (src < dest && (src + count) > dest) {
@@ -98,7 +99,7 @@ sgen_card_table_wbarrier_arrayref_copy (gpointer dest_ptr, gpointer src_ptr, int
 }
 
 static void
-sgen_card_table_wbarrier_value_copy (gpointer dest, gpointer src, int count, size_t element_size)
+sgen_card_table_wbarrier_value_copy (gpointer dest, gconstpointer src, int count, size_t element_size)
 {
 	size_t size = count * element_size;
 
@@ -133,7 +134,7 @@ sgen_card_table_wbarrier_generic_nostore (gpointer ptr)
 }
 
 static void
-sgen_card_table_wbarrier_range_copy (gpointer _dest, gpointer _src, int size)
+sgen_card_table_wbarrier_range_copy (gpointer _dest, gconstpointer _src, int size)
 {
 	GCObject **dest = (GCObject **)_dest;
 	GCObject **src = (GCObject **)_src;
@@ -152,7 +153,7 @@ sgen_card_table_wbarrier_range_copy (gpointer _dest, gpointer _src, int size)
 	while (size) {
 		GCObject *value = *src;
 		*dest = value;
-		if (SGEN_PTR_IN_NURSERY (value, nursery_bits, start, end) || concurrent_collection_in_progress) {
+		if (SGEN_PTR_IN_NURSERY (value, nursery_bits, start, end) || sgen_concurrent_collection_in_progress) {
 			*card_address = 1;
 			sgen_dummy_use (value);
 		}
@@ -440,17 +441,24 @@ sgen_card_table_clear_cards (void)
 }
 
 static void
-sgen_card_table_start_scan_remsets (void)
+sgen_card_table_start_scan_remsets (gboolean is_parallel)
 {
 #ifdef SGEN_HAVE_OVERLAPPING_CARDS
 	/*FIXME we should have a bit on each block/los object telling if the object have marked cards.*/
 	/*First we copy*/
-	sgen_major_collector_iterate_block_ranges (move_cards_to_shadow_table);
-	sgen_los_iterate_live_block_ranges (move_cards_to_shadow_table);
-	sgen_wbroots_iterate_live_block_ranges (move_cards_to_shadow_table);
+	if (is_parallel) {
+		sgen_iterate_all_block_ranges (move_cards_to_shadow_table, is_parallel);
+	} else {
+		sgen_major_collector_iterate_block_ranges (move_cards_to_shadow_table);
+		sgen_los_iterate_live_block_ranges (move_cards_to_shadow_table);
+		sgen_wbroots_iterate_live_block_ranges (move_cards_to_shadow_table);
+	}
 
 	/*Then we clear*/
-	sgen_card_table_clear_cards ();
+	if (is_parallel)
+		sgen_iterate_all_block_ranges (clear_cards, is_parallel);
+	else
+		sgen_card_table_clear_cards ();
 #endif
 }
 
@@ -468,6 +476,26 @@ sgen_get_card_table_configuration (int *shift_bits, gpointer *mask)
 	*mask = (gpointer)CARD_MASK;
 #else
 	*mask = NULL;
+#endif
+
+	return sgen_cardtable;
+#endif
+}
+
+guint8*
+sgen_get_target_card_table_configuration (int *shift_bits, target_mgreg_t *mask)
+{
+#ifndef MANAGED_WBARRIER
+	return NULL;
+#else
+	if (!sgen_cardtable)
+		return NULL;
+
+	*shift_bits = CARD_BITS;
+#ifdef SGEN_TARGET_HAVE_OVERLAPPING_CARDS
+	*mask = CARD_MASK;
+#else
+	*mask = 0;
 #endif
 
 	return sgen_cardtable;
@@ -500,13 +528,13 @@ sgen_card_table_dump_obj_card (GCObject *object, size_t size, void *dummy)
 
 #define MWORD_MASK (sizeof (mword) - 1)
 
-static inline int
+static int
 find_card_offset (mword card)
 {
 /*XXX Use assembly as this generates some pretty bad code */
-#if (defined(__i386__) || defined(__arm__)) && defined(__GNUC__)
+#if (defined(__i386__) || defined(__arm__) || (defined (__riscv) && __riscv_xlen == 32)) && defined(__GNUC__)
 	return  (__builtin_ffs (card) - 1) / 8;
-#elif (defined(__x86_64__) || defined(__aarch64__)) && defined(__GNUC__)
+#elif (defined(__x86_64__) || defined(__aarch64__) || (defined (__riscv) && __riscv_xlen == 64)) && defined(__GNUC__)
 	return (__builtin_ffsll (card) - 1) / 8;
 #elif defined(__s390x__)
 	return (__builtin_ffsll (GUINT64_TO_LE(card)) - 1) / 8;
@@ -571,7 +599,7 @@ sgen_cardtable_scan_object (GCObject *obj, mword block_obj_size, guint8 *cards, 
 		ctx.ops->scan_object (obj, sgen_obj_get_descriptor (obj), ctx.queue);
 	}
 
-	binary_protocol_card_scan (obj, sgen_safe_object_get_size (obj));
+	sgen_binary_protocol_card_scan (obj, sgen_safe_object_get_size (obj));
 }
 
 void

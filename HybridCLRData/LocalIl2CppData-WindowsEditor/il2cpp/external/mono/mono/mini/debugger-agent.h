@@ -9,66 +9,50 @@
 #include "mini.h"
 #endif
 
-#include "il2cpp-api-debugger.h"
 #include <mono/utils/mono-stack-unwinding.h>
 
-MONO_API void
-mono_debugger_agent_parse_options(char *options);
-
 #ifdef RUNTIME_IL2CPP
-void
-mono_debugger_run_debugger_thread_func(void* arg);
-
 typedef MonoStackFrameInfo StackFrameInfo;
+typedef struct Il2CppSequencePoint Il2CppSequencePoint;
+#include <mono/metadata/threads-types.h>
 #endif // RUNTIME_IL2CPP
 
-void
-mono_debugger_agent_init(void);
+#define MONO_DBG_CALLBACKS_VERSION (3)
+// 2. debug_log parameters changed from MonoString* to MonoStringHandle
+// 3. debug_log parameters changed from MonoStringHandle back to MonoString*
+
+struct _MonoDebuggerCallbacks {
+	int version;
+	void (*parse_options) (char *options);
+	void (*init) (void);
+	void (*breakpoint_hit) (void *sigctx);
+	void (*single_step_event) (void *sigctx);
+	void (*single_step_from_context) (MonoContext *ctx, Il2CppSequencePoint* sequencePoint);
+	void (*breakpoint_from_context) (MonoContext *ctx);
+	void (*free_domain_info) (MonoDomain *domain);
+	void (*unhandled_exception) (MonoException *exc);
+	void (*handle_exception) (MonoException *exc, MonoContext *throw_ctx,
+							  MonoContext *catch_ctx, StackFrameInfo *catch_frame);
+	void (*begin_exception_filter) (MonoException *exc, MonoContext *ctx, MonoContext *orig_ctx);
+	void (*end_exception_filter) (MonoException *exc, MonoContext *ctx, MonoContext *orig_ctx);
+	void (*user_break) (void);
+	void (*debug_log) (int level, MonoString *category, MonoString *message);
+	gboolean (*debug_log_is_enabled) (void);
+	void (*send_crash) (char *json_dump, MonoStackHash *hashes, int pause);
+};
+
+typedef struct _DebuggerTlsData DebuggerTlsData;
+
+MONO_API void
+mono_debugger_agent_init (void);
+
+MONO_API void
+mono_debugger_agent_parse_options (char *options);
 
 void
-mono_debugger_agent_breakpoint_hit(void *sigctx);
-
-void
-mono_debugger_agent_single_step_event(void *sigctx);
-
-void
-#ifndef RUNTIME_IL2CPP
-debugger_agent_single_step_from_context(MonoContext *ctx);
-#else
-debugger_agent_single_step_from_context(MonoContext * ctx, Il2CppSequencePoint * sequencePoint);
-#endif
-
-void
-debugger_agent_breakpoint_from_context(MonoContext *ctx);
-
-void
-mono_debugger_agent_free_domain_info(MonoDomain *domain);
-
-#if defined(HOST_ANDROID) || defined(TARGET_ANDROID)
-void
-mono_debugger_agent_unhandled_exception(MonoException *exc);
-#endif
-
-void
-mono_debugger_agent_handle_exception(MonoException *exc, MonoContext *throw_ctx,
-    MonoContext *catch_ctx, StackFrameInfo *catch_frame);
-
-void
-mono_debugger_agent_begin_exception_filter(MonoException *exc, MonoContext *ctx, MonoContext *orig_ctx);
-
-void
-mono_debugger_agent_end_exception_filter(MonoException *exc, MonoContext *ctx, MonoContext *orig_ctx);
-
-void
-mono_debugger_agent_user_break(void);
-
-void
-mono_debugger_agent_debug_log(int level, MonoString *category, MonoString *message);
-
-gboolean
-mono_debugger_agent_debug_log_is_enabled(void);
+mono_debugger_agent_stub_init (void);
 
 MONO_API gboolean
-mono_debugger_agent_transport_handshake(void);
+mono_debugger_agent_transport_handshake (void);
 
 #endif

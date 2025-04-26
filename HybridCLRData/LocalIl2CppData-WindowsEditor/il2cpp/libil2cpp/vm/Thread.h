@@ -69,7 +69,6 @@ namespace vm
         static Il2CppThread* Attach(Il2CppDomain *domain);
         static void Detach(Il2CppThread *thread);
         static void WalkFrameStack(Il2CppThread *thread, Il2CppFrameWalkFunc func, void *user_data);
-        static Il2CppThread** GetAllAttachedThreads(size_t &size);
         static void AbortAllThreads();
         static Il2CppThread* Main();
         static bool IsVmThread(Il2CppThread *thread);
@@ -94,11 +93,9 @@ namespace vm
         static void Initialize();
         static void Uninitialize();
 
-        static void AdjustStaticData();
+        static void AllocateStaticDataForCurrentThread();
         static int32_t AllocThreadStaticData(int32_t size);
-        static void FreeThreadStaticData(Il2CppThread *thread);
         static void* GetThreadStaticData(int32_t offset);
-        static void* GetThreadStaticDataForThread(int32_t offset, Il2CppThread* thread);
         static void* GetThreadStaticDataForThread(int32_t offset, Il2CppInternalThread* thread);
 
         static void Register(Il2CppThread *thread);
@@ -138,8 +135,12 @@ namespace vm
 
         static void SetDefaultAffinityMask(int64_t affinityMask);
 
+        static void Detach(Il2CppThread *thread, bool inNativeThreadCleanup);
+        static void UninitializeManagedThread(Il2CppThread *thread, bool inNativeThreadCleanup);
+
     private:
         static Il2CppThread* s_MainThread;
+        static void FreeCurrentThreadStaticData(Il2CppThread *thread, bool inNativeThreadCleanup);
     };
 
     class ThreadStateSetter : il2cpp::utils::NonCopyable

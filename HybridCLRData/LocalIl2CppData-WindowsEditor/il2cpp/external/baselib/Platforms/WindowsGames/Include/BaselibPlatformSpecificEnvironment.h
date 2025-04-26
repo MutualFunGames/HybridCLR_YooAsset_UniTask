@@ -17,16 +17,30 @@ enum { Baselib_SystemSemaphore_PlatformSize = 1 }; // unused but 1 to simplify t
     #define IMPORTED_SYMBOL __declspec(dllimport)
 #endif
 
-#ifndef PLATFORM_FUTEX_NATIVE_SUPPORT
-    #define PLATFORM_FUTEX_NATIVE_SUPPORT 1
+// Enable LLSC native support for supported compilers and architectures/profiles
+#ifndef PLATFORM_HAS_NATIVE_LLSC
+    #if COMPILER_CLANG && (defined(__arm__) || defined(__arm64__))
+        #define PLATFORM_HAS_NATIVE_LLSC 1
+    #else
+        #define PLATFORM_HAS_NATIVE_LLSC 0
+    #endif
+#endif
+
+#ifndef PLATFORM_HAS_POSIX_SOCKET_IPV6_SUPPORT
+#   define PLATFORM_HAS_POSIX_SOCKET_IPV6_SUPPORT 1
 #endif
 
 // Malloc is specified to have 16 byte alignment on 64bit platforms.
 // see https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/malloc?view=vs-2019
-#ifndef PLATFORM_MEMORY_MALLOC_MIN_ALIGNMENT
+#ifndef PLATFORM_PROPERTY_MEMORY_MALLOC_MIN_ALIGNMENT
     #if PLATFORM_ARCH_64
-        #define PLATFORM_MEMORY_MALLOC_MIN_ALIGNMENT 16
+        #define PLATFORM_PROPERTY_MEMORY_MALLOC_MIN_ALIGNMENT 16
     #else
-        #define PLATFORM_MEMORY_MALLOC_MIN_ALIGNMENT 8
+        #define PLATFORM_PROPERTY_MEMORY_MALLOC_MIN_ALIGNMENT 8
     #endif
+#endif
+
+// Cache line size in bytes
+#ifndef PLATFORM_PROPERTY_CACHE_LINE_SIZE
+    #define PLATFORM_PROPERTY_CACHE_LINE_SIZE 64
 #endif

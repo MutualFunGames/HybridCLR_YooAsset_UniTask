@@ -1,7 +1,6 @@
 /*
  * Licensed to the .NET Foundation under one or more agreements.
  * The .NET Foundation licenses this file to you under the MIT license.
- * See the LICENSE file in the project root for more information.
  */
 
 #include <config.h>
@@ -9,11 +8,13 @@
 #include <mono/metadata/gc-internals.h>
 #include <mono/metadata/mono-config-dirs.h>
 #include <mono/metadata/mono-debug.h>
+#include <mono/metadata/profiler-legacy.h>
 #include <mono/metadata/profiler-private.h>
 #include <mono/metadata/debug-internals.h>
 #include <mono/utils/mono-dl.h>
 #include <mono/utils/mono-error-internals.h>
 #include <mono/utils/mono-logger-internals.h>
+#include <mono/utils/w32subset.h>
 
 MonoProfilerState mono_profiler_state;
 
@@ -25,14 +26,13 @@ typedef void (*MonoProfilerInitializer) (const char *);
 static gboolean
 load_profiler (MonoDl *module, const char *name, const char *desc)
 {
-	if (!module)
-		return FALSE;
+	g_assert (module);
 
 	char *err, *old_name = g_strdup_printf (OLD_INITIALIZER_NAME);
 	MonoProfilerInitializer func;
 
-	if (!(err = mono_dl_symbol (module, old_name, (gpointer) &func))) {
-		mono_profiler_printf_err ("Found old-style startup symbol '%s' for the '%s' profiler; it has not been migrated to the new API.", old_name, name);
+	if (!(err = mono_dl_symbol (module, old_name, (gpointer*) &func))) {
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_PROFILER, "Found old-style startup symbol '%s' for the '%s' profiler; it has not been migrated to the new API.", old_name, name);
 		g_free (old_name);
 		return FALSE;
 	}
@@ -71,7 +71,7 @@ load_profiler_from_executable (const char *name, const char *desc)
 	MonoDl *module = mono_dl_open (NULL, MONO_DL_EAGER, &err);
 
 	if (!module) {
-		mono_profiler_printf_err ("Could not open main executable: %s", err);
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_PROFILER, "Could not open main executable: %s", err);
 		g_free (err);
 		return FALSE;
 	}
@@ -82,17 +82,22 @@ load_profiler_from_executable (const char *name, const char *desc)
 static gboolean
 load_profiler_from_directory (const char *directory, const char *libname, const char *name, const char *desc)
 {
-	char* path;
+	char *path, *err;
 	void *iter = NULL;
 
 	while ((path = mono_dl_build_path (directory, libname, &iter))) {
-		// See the comment in load_embedded_profiler ().
-		MonoDl *module = mono_dl_open (path, MONO_DL_EAGER, NULL);
+		MonoDl *module = mono_dl_open (path, MONO_DL_EAGER, &err);
+
+		if (!module) {
+			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_PROFILER, "Could not open from directory \"%s\": %s", path, err);
+			g_free (err);
+			g_free (path);
+			continue;
+		}
 
 		g_free (path);
 
-		if (module)
-			return load_profiler (module, name, desc);
+		return load_profiler (module, name, desc);
 	}
 
 	return FALSE;
@@ -104,12 +109,13 @@ load_profiler_from_installation (const char *libname, const char *name, const ch
 	char *err;
 	MonoDl *module = mono_dl_open_runtime_lib (libname, MONO_DL_EAGER, &err);
 
-	g_free (err);
+	if (!module) {
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_PROFILER, "Could not open from installation: %s", err);
+		g_free (err);
+		return FALSE;
+	}
 
-	if (module)
-		return load_profiler (module, name, desc);
-
-	return FALSE;
+	return load_profiler (module, name, desc);
 }
 
 /**
@@ -138,35 +144,44 @@ load_profiler_from_installation (const char *libname, const char *name, const ch
 void
 mono_profiler_load (const char *desc)
 {
+	const char *col;
+	char *mname, *libname;
+
+	mname = libname = NULL;
+
 	if (!desc || !strcmp ("default", desc))
+#if HAVE_API_SUPPORT_WIN32_PIPE_OPEN_CLOSE && !defined (HOST_WIN32)
 		desc = "log:report";
+#else
+		desc = "log";
+#endif
 
-	const char *col = strchr (desc, ':');
-	char *mname;
-
-	if (col != NULL) {
+	if ((col = strchr (desc, ':')) != NULL) {
 		mname = (char *) g_memdup (desc, col - desc + 1);
 		mname [col - desc] = 0;
-	} else
+	} else {
 		mname = g_strdup (desc);
-
-	if (!load_profiler_from_executable (mname, desc)) {
-		char *libname = g_strdup_printf ("mono-profiler-%s", mname);
-		gboolean res = load_profiler_from_installation (libname, mname, desc);
-
-		if (!res && mono_config_get_assemblies_dir ())
-			res = load_profiler_from_directory (mono_assembly_getrootdir (), libname, mname, desc);
-
-		if (!res)
-			res = load_profiler_from_directory (NULL, libname, mname, desc);
-
-		if (!res)
-			mono_profiler_printf_err ("The '%s' profiler wasn't found in the main executable nor could it be loaded from '%s'.", mname, libname);
-
-		g_free (libname);
 	}
 
+	if (load_profiler_from_executable (mname, desc))
+		goto done;
+
+	libname = g_strdup_printf ("mono-profiler-%s", mname);
+
+	if (load_profiler_from_installation (libname, mname, desc))
+		goto done;
+
+	if (mono_config_get_assemblies_dir () && load_profiler_from_directory (mono_assembly_getrootdir (), libname, mname, desc))
+		goto done;
+
+	if (load_profiler_from_directory (NULL, libname, mname, desc))
+		goto done;
+
+	mono_trace (G_LOG_LEVEL_CRITICAL, MONO_TRACE_PROFILER, "The '%s' profiler wasn't found in the main executable nor could it be loaded from '%s'.", mname, libname);
+
+done:
 	g_free (mname);
+	g_free (libname);
 }
 #endif
 
@@ -248,7 +263,6 @@ mono_profiler_enable_coverage (void)
 		return FALSE;
 
 	mono_os_mutex_init (&mono_profiler_state.coverage_mutex);
-	mono_profiler_state.coverage_hash = g_hash_table_new (NULL, NULL);
 
 	if (!mono_debug_enabled ())
 		mono_debug_init (MONO_DEBUG_FORMAT_MONO);
@@ -279,15 +293,87 @@ mono_profiler_set_coverage_filter_callback (MonoProfilerHandle handle, MonoProfi
 }
 
 static void
-coverage_lock (void)
+coverage_domains_lock (void)
 {
 	mono_os_mutex_lock (&mono_profiler_state.coverage_mutex);
 }
 
 static void
-coverage_unlock (void)
+coverage_domains_unlock (void)
 {
 	mono_os_mutex_unlock (&mono_profiler_state.coverage_mutex);
+}
+
+static MonoDomainCoverage*
+get_coverage_for_domain (MonoDomain* domain)
+{
+	coverage_domains_lock ();
+	MonoDomainCoverage* cov = mono_profiler_state.coverage_domains;
+	while (cov)
+	{
+		if (cov->domain == domain)
+			break;
+		cov = cov->next;
+	}
+	coverage_domains_unlock ();
+	return cov;
+}
+
+void
+mono_profiler_coverage_domain_init (MonoDomain* domain)
+{
+	if (!mono_profiler_state.code_coverage)
+		return;
+
+	MonoDomainCoverage* cov = g_new0 (MonoDomainCoverage, 1);
+	cov->domain = domain;
+	cov->coverage_hash = g_hash_table_new (NULL, NULL);
+	mono_os_mutex_init (&cov->mutex);
+
+	coverage_domains_lock ();
+	cov->next = mono_profiler_state.coverage_domains;
+	mono_profiler_state.coverage_domains = cov;
+	coverage_domains_unlock ();
+}
+
+void
+mono_profiler_coverage_domain_free (MonoDomain* domain)
+{
+	if (!mono_profiler_state.code_coverage)
+		return;
+
+	coverage_domains_lock ();
+
+	MonoDomainCoverage* cov = mono_profiler_state.coverage_domains;
+	MonoDomainCoverage** prev = &mono_profiler_state.coverage_domains;
+	while (cov)
+	{
+		if (cov->domain == domain)
+			break;
+
+		prev = &cov->next;
+		cov = cov->next;
+	}
+
+	if (cov != NULL)
+	{
+		*prev = cov->next;
+
+		GHashTableIter iter;
+		g_hash_table_iter_init (&iter, cov->coverage_hash);
+
+		MonoProfilerCoverageInfo* info;
+		while (g_hash_table_iter_next (&iter, NULL, (gpointer*)&info))
+			g_free (info);
+
+		g_hash_table_destroy (cov->coverage_hash);
+
+		mono_os_mutex_destroy (&cov->mutex);
+
+		g_free (cov);
+	}
+
+	coverage_domains_unlock ();
 }
 
 /**
@@ -313,24 +399,24 @@ mono_profiler_get_coverage_data (MonoProfilerHandle handle, MonoMethod *method, 
 	if ((method->flags & METHOD_ATTRIBUTE_ABSTRACT) || (method->iflags & METHOD_IMPL_ATTRIBUTE_RUNTIME) || (method->iflags & METHOD_IMPL_ATTRIBUTE_INTERNAL_CALL) || (method->flags & METHOD_ATTRIBUTE_PINVOKE_IMPL))
 		return FALSE;
 
-	coverage_lock ();
+	MonoDomainCoverage* domain = get_coverage_for_domain (mono_domain_get ());
 
-	MonoProfilerCoverageInfo *info = g_hash_table_lookup (mono_profiler_state.coverage_hash, method);
+	mono_os_mutex_lock (&domain->mutex);
 
-	coverage_unlock ();
+	MonoProfilerCoverageInfo *info = (MonoProfilerCoverageInfo*)g_hash_table_lookup (domain->coverage_hash, method);
 
-	MonoError error;
-	MonoMethodHeader *header = mono_method_get_header_checked (method, &error);
-	mono_error_assert_ok (&error);
+	mono_os_mutex_unlock (&domain->mutex);
 
-	guint32 size;
+	MonoMethodHeaderSummary header;
 
-	const unsigned char *start = mono_method_header_get_code (header, &size, NULL);
+	g_assert (mono_method_get_header_summary (method, &header));
+
+	guint32 size = header.code_size;
+	const unsigned char *start = header.code;
 	const unsigned char *end = start + size;
 	MonoDebugMethodInfo *minfo = mono_debug_lookup_method (method);
 
 	if (!info) {
-		char *source_file;
 		int i, n_il_offsets;
 		int *source_files;
 		GPtrArray *source_file_list;
@@ -341,7 +427,7 @@ mono_profiler_get_coverage_data (MonoProfilerHandle handle, MonoMethod *method, 
 
 		/* Return 0 counts for all locations */
 
-		mono_debug_get_seq_points (minfo, &source_file, &source_file_list, &source_files, &sym_seq_points, &n_il_offsets);
+		mono_debug_get_seq_points (minfo, NULL, &source_file_list, &source_files, &sym_seq_points, &n_il_offsets);
 		for (i = 0; i < n_il_offsets; ++i) {
 			MonoSymSeqPoint *sp = &sym_seq_points [i];
 			const char *srcfile = "";
@@ -351,14 +437,14 @@ mono_profiler_get_coverage_data (MonoProfilerHandle handle, MonoMethod *method, 
 				srcfile = sinfo->source_file;
 			}
 
-			MonoProfilerCoverageData data = {
-				.method = method,
-				.il_offset = sp->il_offset,
-				.counter = 0,
-				.file_name = srcfile,
-				.line = sp->line,
-				.column = 0,
-			};
+			MonoProfilerCoverageData data;
+			memset (&data, 0, sizeof (data));
+			data.method = method;
+			data.il_offset = sp->il_offset;
+			data.counter = 0;
+			data.file_name = srcfile;
+			data.line = sp->line;
+			data.column = 0;
 
 			cb (handle->prof, &data);
 		}
@@ -367,7 +453,6 @@ mono_profiler_get_coverage_data (MonoProfilerHandle handle, MonoMethod *method, 
 		g_free (sym_seq_points);
 		g_ptr_array_free (source_file_list, TRUE);
 
-		mono_metadata_free_mh (header);
 		return TRUE;
 	}
 
@@ -377,13 +462,13 @@ mono_profiler_get_coverage_data (MonoProfilerHandle handle, MonoMethod *method, 
 		if (cil_code && cil_code >= start && cil_code < end) {
 			guint32 offset = cil_code - start;
 
-			MonoProfilerCoverageData data = {
-				.method = method,
-				.il_offset = offset,
-				.counter = info->data [i].count,
-				.line = 1,
-				.column = 1,
-			};
+			MonoProfilerCoverageData data;
+			memset (&data, 0, sizeof (data));
+			data.method = method;
+			data.il_offset = offset;
+			data.counter = info->data [i].count;
+			data.line = 1;
+			data.column = 1;
 
 			if (minfo) {
 				MonoDebugSourceLocation *loc = mono_debug_method_lookup_location (minfo, offset);
@@ -403,42 +488,172 @@ mono_profiler_get_coverage_data (MonoProfilerHandle handle, MonoMethod *method, 
 		}
 	}
 
-	mono_metadata_free_mh (header);
-
 	return TRUE;
 }
-#endif
 
-MonoProfilerCoverageInfo *
-mono_profiler_coverage_alloc (MonoMethod *method, guint32 entries)
+
+typedef struct
+{
+	MonoProfilerCoverageCallback cb;
+	MonoProfilerHandle handle;
+} InvokeCallbackInfo;
+
+static void invoke_coverage_callback_for_hashtable_entry (gpointer key, gpointer value, gpointer user_data)
+{
+	InvokeCallbackInfo* invokeInfo = (InvokeCallbackInfo*)user_data;
+	MonoMethod* method = (MonoMethod*)key;
+	MonoProfilerCoverageInfo* info = (MonoProfilerCoverageInfo*)value;
+
+	MonoError error;
+	MonoMethodHeader* header = mono_method_get_header_checked (method, &error);
+	mono_error_assert_ok (&error);
+
+	guint32 size;
+
+	const unsigned char* start = mono_method_header_get_code (header, &size, NULL);
+	const unsigned char* end = start + size;
+	MonoDebugMethodInfo* minfo = mono_debug_lookup_method (method);
+
+	for (guint32 i = 0; i < info->entries; i++) {
+		guchar* cil_code = info->data[i].cil_code;
+
+		if (cil_code && cil_code >= start && cil_code < end) {
+			guint32 offset = cil_code - start;
+
+			MonoProfilerCoverageData data = {
+				.method = method,
+				.il_offset = offset,
+				.counter = info->data[i].count,
+				.line = 1,
+				.column = 1,
+			};
+
+			if (minfo) {
+				MonoDebugSourceLocation* loc = mono_debug_method_lookup_location (minfo, offset);
+
+				if (loc) {
+					data.file_name = g_strdup (loc->source_file);
+					data.line = loc->row;
+					data.column = loc->column;
+
+					mono_debug_free_source_location (loc);
+				}
+			}
+
+			invokeInfo->cb (invokeInfo->handle->prof, &data);
+
+			g_free ((char*)data.file_name);
+		}
+	}
+
+	mono_metadata_free_mh (header);
+}
+
+mono_bool
+mono_profiler_get_all_coverage_data (MonoProfilerHandle handle, MonoProfilerCoverageCallback cb)
 {
 	if (!mono_profiler_state.code_coverage)
 		return FALSE;
 
-	if (method->wrapper_type)
+	InvokeCallbackInfo info;
+	info.cb = cb;
+	info.handle = handle;
+
+	MonoDomainCoverage* domain = get_coverage_for_domain (mono_domain_get ());
+
+	mono_os_mutex_lock (&domain->mutex);
+
+	g_hash_table_foreach (domain->coverage_hash, invoke_coverage_callback_for_hashtable_entry, &info);
+
+	mono_os_mutex_unlock (&domain->mutex);
+
+	return TRUE;
+}
+
+mono_bool
+mono_profiler_reset_coverage (MonoMethod* method)
+{
+	if (!mono_profiler_state.code_coverage)
 		return FALSE;
 
+	if ((method->flags & METHOD_ATTRIBUTE_ABSTRACT) || (method->iflags & METHOD_IMPL_ATTRIBUTE_RUNTIME) || (method->iflags & METHOD_IMPL_ATTRIBUTE_INTERNAL_CALL) || (method->flags & METHOD_ATTRIBUTE_PINVOKE_IMPL))
+		return FALSE;
+
+	MonoDomainCoverage* domain = get_coverage_for_domain (mono_domain_get ());
+
+	mono_os_mutex_lock (&domain->mutex);
+
+	MonoProfilerCoverageInfo* info = g_hash_table_lookup (domain->coverage_hash, method);
+
+	mono_os_mutex_unlock (&domain->mutex);
+
+	if (!info)
+		return TRUE;
+
+	for (guint32 i = 0; i < info->entries; i++)
+		info->data[i].count = 0;
+
+	return TRUE;
+}
+
+static void reset_coverage_for_hashtable_entry (gpointer key, gpointer value, gpointer user_data)
+{
+	MonoProfilerCoverageInfo* info = (MonoProfilerCoverageInfo*)value;
+
+	for (guint32 i = 0; i < info->entries; i++)
+		info->data[i].count = 0;
+}
+
+void mono_profiler_reset_all_coverage ()
+{
+	if (!mono_profiler_state.code_coverage)
+		return;
+
+	MonoDomainCoverage* domain = get_coverage_for_domain (mono_domain_get ());
+
+	mono_os_mutex_lock (&domain->mutex);
+
+	g_hash_table_foreach (domain->coverage_hash, reset_coverage_for_hashtable_entry, NULL);
+
+	mono_os_mutex_unlock (&domain->mutex);
+}
+#endif
+
+gboolean
+mono_profiler_coverage_instrumentation_enabled (MonoMethod *method)
+{
 	gboolean cover = FALSE;
 
 	for (MonoProfilerHandle handle = mono_profiler_state.profilers; handle; handle = handle->next) {
-		MonoProfilerCoverageFilterCallback cb = handle->coverage_filter;
+		MonoProfilerCoverageFilterCallback cb = (MonoProfilerCoverageFilterCallback)handle->coverage_filter;
 
 		if (cb)
 			cover |= cb (handle->prof, method);
 	}
 
-	if (!cover)
+	return cover;
+}
+
+MonoProfilerCoverageInfo *
+mono_profiler_coverage_alloc (MonoDomain* domain, MonoMethod *method, guint32 entries)
+{
+	if (!mono_profiler_state.code_coverage)
 		return NULL;
 
-	coverage_lock ();
+	if (!mono_profiler_coverage_instrumentation_enabled (method))
+		return NULL;
 
-	MonoProfilerCoverageInfo *info = g_malloc0 (sizeof (MonoProfilerCoverageInfo) + SIZEOF_VOID_P * 2 * entries);
+	MonoDomainCoverage* covdomain = get_coverage_for_domain (domain);
+
+	mono_os_mutex_lock (&covdomain->mutex);
+
+	MonoProfilerCoverageInfo *info = g_malloc0 (sizeof (MonoProfilerCoverageInfo) + sizeof (MonoProfilerCoverageInfoEntry) * entries);
 
 	info->entries = entries;
 
-	g_hash_table_insert (mono_profiler_state.coverage_hash, method, info);
+	g_hash_table_insert (covdomain->coverage_hash, method, info);
 
-	coverage_unlock ();
+	mono_os_mutex_unlock (&covdomain->mutex);
 
 	return info;
 }
@@ -562,15 +777,32 @@ mono_profiler_enable_allocations (void)
 #ifndef RUNTIME_IL2CPP
 	if (mono_gc_get_managed_allocator_types () > 0 && mono_profiler_state.startup_done)
 		return FALSE;
-#endif
+#endif // !RUNTIME_IL2CPP
 
 	return mono_profiler_state.allocations = TRUE;
 }
 
+/**
+ * mono_profiler_enable_clauses:
+ *
+ * Enables instrumentation of exception clauses. This is necessary so that CIL
+ * \c leave instructions can be instrumented with a call into the profiler API.
+ * Exception clauses will not be reported unless this function is called.
+ * Returns \c TRUE if exception clause instrumentation was enabled, or \c FALSE
+ * if the function was called too late for this to be possible.
+ *
+ * This function is \b not async safe.
+ *
+ * This function may \b only be called from a profiler's init function or prior
+ * to running managed code.
+ */
 mono_bool
-mono_profiler_enable_fileio (void)
+mono_profiler_enable_clauses (void)
 {
-	return mono_profiler_state.fileio = TRUE;
+	if (mono_profiler_state.startup_done)
+		return FALSE;
+
+	return mono_profiler_state.clauses = TRUE;
 }
 
 /**
@@ -580,7 +812,7 @@ mono_profiler_enable_fileio (void)
  * filter functions from all installed profilers. If any of them return flags
  * other than \c MONO_PROFILER_CALL_INSTRUMENTATION_NONE, then the given method
  * will be instrumented as requested. All filters are guaranteed to be called
- * exactly once per method, even if earlier filters have already specified all
+ * at least once per method, even if earlier filters have already specified all
  * flags.
  *
  * Note that filter functions must be installed before a method is compiled in
@@ -613,13 +845,6 @@ mono_profiler_set_call_instrumentation_filter_callback (MonoProfilerHandle handl
  * functions (they will simply return \c NULL). Returns \c TRUE if call context
  * introspection was enabled, or \c FALSE if the function was called too late for
  * this to be possible.
- *
- * Please note: Mono's LLVM backend does not support this feature. This means
- * that methods with call context instrumentation will be handled by Mono's
- * JIT even in LLVM mode. There is also a special case when Mono is compiling
- * in LLVM-only mode: Since LLVM does not provide a way to implement call
- * contexts, a \c NULL context will always be passed to enter/leave events even
- * though this method returns \c TRUE.
  *
  * This function is \b not async safe.
  *
@@ -750,13 +975,15 @@ mono_profiler_call_context_free_buffer (void *buffer)
 	mono_profiler_state.context_free_buffer (buffer);
 }
 
+G_ENUM_FUNCTIONS (MonoProfilerCallInstrumentationFlags)
+
 MonoProfilerCallInstrumentationFlags
 mono_profiler_get_call_instrumentation_flags (MonoMethod *method)
 {
 	MonoProfilerCallInstrumentationFlags flags = MONO_PROFILER_CALL_INSTRUMENTATION_NONE;
 
 	for (MonoProfilerHandle handle = mono_profiler_state.profilers; handle; handle = handle->next) {
-		MonoProfilerCallInstrumentationFilterCallback cb = handle->call_instrumentation_filter;
+		MonoProfilerCallInstrumentationFilterCallback cb = (MonoProfilerCallInstrumentationFilterCallback)handle->call_instrumentation_filter;
 
 		if (cb)
 			flags |= cb (handle->prof, method);
@@ -826,7 +1053,7 @@ mono_profiler_cleanup (void)
 	MonoProfilerHandle head = mono_profiler_state.profilers;
 
 	while (head) {
-		MonoProfilerCleanupCallback cb = head->cleanup_callback;
+		MonoProfilerCleanupCallback cb = (MonoProfilerCleanupCallback)head->cleanup_callback;
 
 		if (cb)
 			cb (head->prof);
@@ -835,21 +1062,6 @@ mono_profiler_cleanup (void)
 		head = head->next;
 
 		g_free (cur);
-	}
-
-	if (mono_profiler_state.code_coverage) {
-		mono_os_mutex_destroy (&mono_profiler_state.coverage_mutex);
-
-		GHashTableIter iter;
-
-		g_hash_table_iter_init (&iter, mono_profiler_state.coverage_hash);
-
-		MonoProfilerCoverageInfo *info;
-
-		while (g_hash_table_iter_next (&iter, NULL, (gpointer *) &info))
-			g_free (info);
-
-		g_hash_table_destroy (mono_profiler_state.coverage_hash);
 	}
 
 	if (mono_profiler_state.sampling_owner)
@@ -912,8 +1124,9 @@ update_callback (volatile gpointer *location, gpointer new_, volatile gint32 *co
 	void \
 	mono_profiler_raise_ ## name params \
 	{ \
+		if (!mono_profiler_state.startup_done) return;	\
 		for (MonoProfilerHandle h = mono_profiler_state.profilers; h; h = h->next) { \
-			MonoProfiler ## type ## Callback cb = h->name ## _cb; \
+			MonoProfiler ## type ## Callback cb = (MonoProfiler ## type ## Callback)h->name ## _cb; \
 			if (cb) \
 				cb args; \
 		} \
@@ -939,26 +1152,6 @@ update_callback (volatile gpointer *location, gpointer new_, volatile gint32 *co
 #undef MONO_PROFILER_EVENT_5
 #undef _MONO_PROFILER_EVENT
 
-/*
- * The following code is here to maintain compatibility with a few profiler API
- * functions used by Xamarin.{Android,iOS,Mac} so that they keep working
- * regardless of which system Mono version is used.
- *
- * TODO: Remove this some day if we're OK with breaking compatibility.
- */
-
-typedef void *MonoLegacyProfiler;
-
-typedef void (*MonoLegacyProfileFunc) (MonoLegacyProfiler *prof);
-typedef void (*MonoLegacyProfileThreadFunc) (MonoLegacyProfiler *prof, uintptr_t tid);
-typedef void (*MonoLegacyProfileGCFunc) (MonoLegacyProfiler *prof, MonoProfilerGCEvent event, int generation);
-typedef void (*MonoLegacyProfileGCResizeFunc) (MonoLegacyProfiler *prof, int64_t new_size);
-typedef void (*MonoLegacyProfileJitResult) (MonoLegacyProfiler *prof, MonoMethod *method, MonoJitInfo *jinfo, int result);
-typedef void (*MonoLegacyProfileAllocFunc) (MonoLegacyProfiler *prof, MonoObject *obj, MonoClass *klass);
-typedef void (*MonoLegacyProfileMethodFunc) (MonoLegacyProfiler *prof, MonoMethod *method);
-typedef void (*MonoLegacyProfileExceptionFunc) (MonoLegacyProfiler *prof, MonoObject *object);
-typedef void (*MonoLegacyProfileExceptionClauseFunc) (MonoLegacyProfiler *prof, MonoMethod *method, int clause_type, int clause_num);
-typedef void (*MonoLegacyProfileFileIOFunc) (MonoLegacyProfiler *prof, int kind, int size);
 
 struct _MonoProfiler {
 	MonoProfilerHandle handle;
@@ -969,7 +1162,6 @@ struct _MonoProfiler {
 	MonoLegacyProfileGCResizeFunc gc_heap_resize;
 	MonoLegacyProfileJitResult jit_end2;
 	MonoLegacyProfileAllocFunc allocation;
-	MonoLegacyProfileFileIOFunc fileio;
 	MonoLegacyProfileMethodFunc enter;
 	MonoLegacyProfileMethodFunc leave;
 	MonoLegacyProfileExceptionFunc throw_callback;
@@ -978,16 +1170,6 @@ struct _MonoProfiler {
 };
 
 static MonoProfiler *current;
-
-MONO_API void mono_profiler_install (MonoLegacyProfiler *prof, MonoLegacyProfileFunc callback);
-MONO_API void mono_profiler_install_thread (MonoLegacyProfileThreadFunc start, MonoLegacyProfileThreadFunc end);
-MONO_API void mono_profiler_install_gc (MonoLegacyProfileGCFunc callback, MonoLegacyProfileGCResizeFunc heap_resize_callback);
-MONO_API void mono_profiler_install_jit_end (MonoLegacyProfileJitResult end);
-MONO_API void mono_profiler_set_events (int flags);
-MONO_API void mono_profiler_install_allocation (MonoLegacyProfileAllocFunc callback);
-MONO_API void mono_profiler_install_enter_leave (MonoLegacyProfileMethodFunc enter, MonoLegacyProfileMethodFunc fleave);
-MONO_API void mono_profiler_install_fileio (MonoLegacyProfileFileIOFunc callback);
-MONO_API void mono_profiler_install_exception (MonoLegacyProfileExceptionFunc throw_callback, MonoLegacyProfileMethodFunc exc_method_leave, MonoLegacyProfileExceptionClauseFunc clause_callback);
 
 static void
 shutdown_cb (MonoProfiler *prof)
@@ -1033,7 +1215,7 @@ mono_profiler_install_thread (MonoLegacyProfileThreadFunc start, MonoLegacyProfi
 }
 
 static void
-gc_event_cb (MonoProfiler *prof, MonoProfilerGCEvent event, uint32_t generation)
+gc_event_cb (MonoProfiler *prof, MonoProfilerGCEvent event, uint32_t generation, gboolean is_serial)
 {
 	prof->gc_event (prof->profiler, event, generation);
 }
@@ -1105,8 +1287,7 @@ typedef enum
 	MONO_PROFILE_ENTER_LEAVE = 1 << 12,
 	MONO_PROFILE_COVERAGE = 1 << 13,
 	MONO_PROFILE_INS_COVERAGE = 1 << 14,
-	MONO_PROFILE_STATISTICAL = 1 << 15,
-	MONO_PROFILE_FILEIO = 1 << 16
+	MONO_PROFILE_STATISTICAL = 1 << 15
 } LegacyMonoProfileFlags;
 
 void
@@ -1120,9 +1301,6 @@ mono_profiler_set_events (int flags)
 
 	if (flags & MONO_PROFILE_ALLOCATIONS)
 		mono_profiler_enable_allocations ();
-
-	if (flags & MONO_PROFILE_FILEIO)
-		mono_profiler_enable_fileio ();
 }
 
 static void
@@ -1138,21 +1316,6 @@ mono_profiler_install_allocation (MonoLegacyProfileAllocFunc callback)
 
 	if (callback)
 		mono_profiler_set_gc_allocation_callback (current->handle, allocation_cb);
-}
-
-static void
-fileio_cb (MonoProfiler *prof, uint64_t kind, uint64_t size)
-{
-	prof->fileio (prof->profiler, kind, size);
-}
-
-void
-mono_profiler_install_fileio (MonoLegacyProfileFileIOFunc callback)
-{
-	current->fileio = callback;
-
-	if (callback)
-		mono_profiler_set_fileio_callback (current->handle, fileio_cb);
 }
 
 static void

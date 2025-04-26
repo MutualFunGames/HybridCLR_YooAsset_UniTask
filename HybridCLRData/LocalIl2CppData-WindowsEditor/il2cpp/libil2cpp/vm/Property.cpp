@@ -35,5 +35,13 @@ namespace vm
     {
         return prop->token;
     }
+
+    const Il2CppType* Property::GetType(const PropertyInfo* prop)
+    {
+        if (prop->get)
+            return prop->get->return_type;
+
+        return prop->set->parameters[prop->set->parameters_count - 1];
+    }
 } /* namespace vm */
 } /* namespace il2cpp */

@@ -18,8 +18,6 @@ extern "C"
 {
 #endif
 
-UnityPalErrorCode UnityPalGetLastError();
-void UnityPalSetLastError(UnityPalErrorCode code);
 int32_t UnityPalSuccess(UnityPalErrorCode code);
 
 #if defined(__cplusplus)

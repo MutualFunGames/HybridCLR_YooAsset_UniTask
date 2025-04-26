@@ -2046,9 +2046,14 @@ GC_API void GC_CALL GC_set_disable_automatic_collection(int);
 
 /* APIs for getting access to raw GC heap */
 /* These are NOT thread safe, so should be called with GC lock held */
-typedef void (*GC_heap_section_proc)(void* user_data, GC_PTR start, GC_PTR end);
+typedef enum
+{
+	GC_HEAP_SECTION_TYPE_FREE = 0,
+	GC_HEAP_SECTION_TYPE_PADDING = 1,
+	GC_HEAP_SECTION_TYPE_USED = 2
+} GC_heap_section_type;
+typedef void (*GC_heap_section_proc)(void* user_data, GC_PTR start, GC_PTR end, GC_heap_section_type type);
 GC_API void GC_foreach_heap_section(void* user_data, GC_heap_section_proc callback);
-GC_API GC_word GC_get_heap_section_count(void);
 
 #ifdef __cplusplus
   } /* extern "C" */

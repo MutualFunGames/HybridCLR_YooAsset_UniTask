@@ -1,18 +1,20 @@
 #pragma once
 
-#if !IL2CPP_THREADS_STD && IL2CPP_THREADS_PTHREAD && !RUNTIME_TINY
+#if !IL2CPP_THREADS_STD && IL2CPP_THREADS_PTHREAD
 
 #include <pthread.h>
 #include <vector>
 #include <atomic>
 
-#include "PosixWaitObject.h"
+#include "os/Generic/WaitObject.h"
 #include "os/ErrorCodes.h"
 #include "os/Mutex.h"
 #include "os/Event.h"
 #include "os/Thread.h"
 #include "os/WaitStatus.h"
 #include "utils/NonCopyable.h"
+#include "Cpp/CappedSemaphore.h"
+#include "Cpp/Atomic.h"
 
 #if defined(IL2CPP_ENABLE_PLATFORM_THREAD_AFFINTY)
 struct cpu_set_t;
@@ -39,6 +41,10 @@ namespace os
         ThreadImpl();
         ~ThreadImpl();
 
+        static void AllocateStaticData();
+        static void FreeStaticData();
+
+
         uint64_t Id();
         ErrorCode Run(Thread::StartFunc func, void* arg, int64_t affinityMask);
         void QueueUserAPC(Thread::APCFunc func, void* context);
@@ -46,6 +52,10 @@ namespace os
         void SetPriority(ThreadPriority priority);
         ThreadPriority GetPriority();
         void SetStackSize(size_t newsize);
+
+        void ReleaseSemaphore() {m_ConditionSemaphore.Release(1);}
+        void AcquireSemaphore() {m_ConditionSemaphore.Acquire();}
+        bool TryTimedAcquireSemaphore(uint32_t timeout) { return m_ConditionSemaphore.TryTimedAcquire(baselib::timeout_ms(timeout));}
         static int GetMaxStackSize();
 
         /// Handle any pending APCs.
@@ -67,17 +77,13 @@ namespace os
 
     private:
 
-        friend class posix::PosixWaitObject; // SetWaitObject(), CheckForAPCAndHandle()
+        friend class WaitObject; // SetWaitObject(), CheckForAPCAndHandle()
 
         std::atomic<pthread_t> m_Handle;
 
         /// The synchronization primitive that this thread is currently blocked on.
-        ///
-        /// NOTE: This field effectively turns these wait object into shared resources -- which makes deletion
-        ///       a tricky affair. To avoid one thread trying to interrupt a wait while the other thread already
-        ///       is in progress of deleting the wait object, we use a global mutex in PosixWaitObject.cpp that
-        ///       must be locked by any thread trying to trigger an interrupt.
-        posix::PosixWaitObject* m_CurrentWaitObject;
+        /// Atomic to signal intent
+        baselib::atomic<WaitObject*> m_CurrentWaitObject;
 
         /// Start data.
         Thread::StartFunc m_StartFunc;
@@ -95,14 +101,15 @@ namespace os
             }
         };
 
-        pthread_mutex_t m_PendingAPCsMutex;
+        baselib::Lock m_PendingAPCsMutex;
         std::vector<APCRequest> m_PendingAPCs;
+        baselib::CappedSemaphore m_ConditionSemaphore;
 
         size_t m_StackSize; // size of stack (can not be adjusted after thread creation)
 
         /// Set the synchronization object the thread is about to wait on.
         /// NOTE: This can only be called on the current thread.
-        void SetWaitObject(posix::PosixWaitObject* waitObject);
+        void SetWaitObject(WaitObject* waitObject);
 
         static void* ThreadStartWrapper(void* arg);
     };

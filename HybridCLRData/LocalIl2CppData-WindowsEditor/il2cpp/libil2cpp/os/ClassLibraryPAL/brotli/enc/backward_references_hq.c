@@ -13,7 +13,7 @@
 #include "../common/constants.h"
 #include "../common/context.h"
 #include "../common/platform.h"
-#include "../include/brotli/types.h"
+#include <brotli/types.h>
 #include "./command.h"
 #include "./fast_log.h"
 #include "./find_match_length.h"

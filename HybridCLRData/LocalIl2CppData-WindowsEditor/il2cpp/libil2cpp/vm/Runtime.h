@@ -47,7 +47,6 @@ namespace vm
         static void ObjectInitException(Il2CppObject* object, Il2CppException **exc);
         static void SetUnhandledExceptionPolicy(Il2CppRuntimeUnhandledExceptionPolicy value);
 
-        static void GetGenericVirtualMethod(const MethodInfo* vtableSlotMethod, const MethodInfo* genericVirtualmethod, VirtualInvokeData* invokeData);
         static void AlwaysRaiseExecutionEngineException(const MethodInfo* method);
         static void AlwaysRaiseExecutionEngineExceptionOnVirtualCall(const MethodInfo* method);
 
@@ -74,21 +73,17 @@ namespace vm
         static void SetExitCode(int32_t value);
 
         static InvokerMethod GetMissingMethodInvoker();
+        static InvokerMethod GetArraySetInvoker();
+        static InvokerMethod GetArrayGetInvoker();
         static void RaiseAmbiguousImplementationException(const MethodInfo* method);
         static void RaiseExecutionEngineException(const MethodInfo* method, bool virtualCall);
         static void RaiseExecutionEngineException(const MethodInfo* method, const char* methodFullName, bool virtualCall);
-
-#if IL2CPP_TINY
-        static void FailFast(const std::string& message);
-#endif
 
     private:
         static void CallUnhandledExceptionDelegate(Il2CppDomain* domain, Il2CppDelegate* delegate, Il2CppException* exc);
         static Il2CppObject* CreateUnhandledExceptionEventArgs(Il2CppException* exc);
 
         static void VerifyApiVersion();
-
-        static void RaiseExecutionEngineExceptionIfGenericVirtualMethodIsNotFound(const MethodInfo* method, const Il2CppGenericMethod* genericMethod, const MethodInfo* infaltedMethod);
     };
 } /* namespace vm */
 } /* namespace il2cpp */

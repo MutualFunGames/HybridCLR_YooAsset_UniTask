@@ -132,11 +132,11 @@ static inline Baselib_Socket_PollFd Baselib_Socket_PollFd_New(Baselib_Socket_Han
 // wait indefinitely.
 //
 // Possible error codes on the outer parameter errorState:
-// - Baselib_ErrorCode_InvalidArgument: Sockets list is null. An individual socket handle is invalid.
+// - Baselib_ErrorCode_InvalidArgument: Sockets list is null. An individual socket handle is invalid. Or flags are used in an invalid combination.
 //
 // Possible error codes on sockets[i].errorState:
 // - Baselib_ErrorCode_AddressUnreachable: Asynchronous Connect() failed.
-// - Baselib_ErrorCode_Disconnected: Socket has been disconnected, or asynchronous Connect() failed (apple devices).
+// - Baselib_ErrorCode_Disconnected: Socket has been disconnected.
 BASELIB_API void Baselib_Socket_Poll(
     Baselib_Socket_PollFd*          sockets,
     uint32_t                        socketsCount,
@@ -205,6 +205,10 @@ BASELIB_API uint32_t Baselib_Socket_UDP_Send(
 );
 
 // Send a message to the connected peer.
+//
+// Nagle's algorithm is disabled in Baselib TCP sockets, so if making multiple
+// small sends in quick succession, it is recommended to instead batch them in
+// a single send call instead to improve bandwidth efficiency.
 //
 // \returns The possibly-zero length of the message actually sent, which may be less than `dataLen`.
 //

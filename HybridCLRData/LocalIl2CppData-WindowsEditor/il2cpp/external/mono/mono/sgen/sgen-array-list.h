@@ -4,18 +4,7 @@
  *
  * Copyright (C) 2016 Xamarin Inc
  *
- * This library is free software; you can redistribute it and/or
- * modify it under the terms of the GNU Library General Public
- * License 2.0 as published by the Free Software Foundation;
- *
- * This library is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * Library General Public License for more details.
- *
- * You should have received a copy of the GNU Library General Public
- * License 2.0 along with this library; if not, write to the Free
- * Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * Licensed under the MIT license. See LICENSE file in the project root for full license information.
  */
 
 #ifndef __MONO_SGEN_ARRAY_LIST_H__
@@ -60,6 +49,38 @@ typedef struct {
 	int mem_type; /* sgen internal mem type or -1 for malloc allocation */
 } SgenArrayList;
 
+#if defined(__GNUC__)
+static inline guint32
+sgen_clz (guint32 x)
+{
+	return __builtin_clz (x);
+}
+#elif !defined(ENABLE_MSVC_LZCNT) && defined(_MSC_VER)
+static inline guint32
+sgen_clz (guint32 x)
+{
+	gulong leading_zero_bits;
+	return _BitScanReverse (&leading_zero_bits, (gulong)x) ? 31 - leading_zero_bits : 32;
+}
+#elif defined(ENABLE_MSVC_LZCNT) && defined(_MSC_VER)
+static inline guint32
+sgen_clz (guint32 x)
+{
+	return __lzcnt (x);
+}
+#else
+static inline guint32
+sgen_clz (guint32 x)
+{
+	guint count = 0;
+	while (x) {
+		++count;
+		x >>= 1;
+	}
+	return 32 - count;
+}
+#endif
+
 /*
  * Computes floor(log2(index + MIN_BUCKET_SIZE)) - 1, giving the index
  * of the bucket containing a slot.
@@ -67,17 +88,7 @@ typedef struct {
 static inline guint32
 sgen_array_list_index_bucket (guint32 index)
 {
-#ifdef __GNUC__
-	return CHAR_BIT * sizeof (index) - __builtin_clz (index + SGEN_ARRAY_LIST_MIN_BUCKET_SIZE) - 1 - SGEN_ARRAY_LIST_MIN_BUCKET_BITS;
-#else
-	guint count = 0;
-	index += SGEN_ARRAY_LIST_MIN_BUCKET_SIZE;
-	while (index) {
-		++count;
-		index >>= 1;
-	}
-	return count - 1 - SGEN_ARRAY_LIST_MIN_BUCKET_BITS;
-#endif
+	return CHAR_BIT * sizeof (index) - sgen_clz (index + SGEN_ARRAY_LIST_MIN_BUCKET_SIZE) - 1 - SGEN_ARRAY_LIST_MIN_BUCKET_BITS;
 }
 
 static inline guint32

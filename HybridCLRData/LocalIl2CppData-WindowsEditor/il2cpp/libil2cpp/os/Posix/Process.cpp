@@ -1,6 +1,6 @@
 #include "il2cpp-config.h"
 
-#if IL2CPP_TARGET_POSIX && !(IL2CPP_TARGET_DARWIN || IL2CPP_TARGET_LUMIN) && !RUNTIME_TINY
+#if IL2CPP_TARGET_POSIX && !IL2CPP_TARGET_DARWIN
 
 #include <sys/types.h>
 #include <unistd.h>

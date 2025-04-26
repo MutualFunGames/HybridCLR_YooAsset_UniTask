@@ -1,6 +1,6 @@
 #include "il2cpp-config.h"
 
-#if IL2CPP_TARGET_WINRT || IL2CPP_TARGET_XBOXONE || IL2CPP_TARGET_WINDOWS_GAMES
+#if IL2CPP_TARGET_WINRT || IL2CPP_TARGET_WINDOWS_GAMES
 
 #include "os/Locale.h"
 #include "os/Win32/WindowsHeaders.h"

@@ -1,6 +1,6 @@
 #include "il2cpp-config.h"
 
-#if IL2CPP_TARGET_WINRT || IL2CPP_TARGET_XBOXONE
+#if IL2CPP_TARGET_WINRT
 
 #include "os\Environment.h"
 #include "os\Win32\WindowsHelpers.h"
@@ -14,42 +14,6 @@
 using namespace ABI::Windows::Storage;
 using namespace Microsoft::WRL;
 using namespace Microsoft::WRL::Wrappers;
-
-#if !IL2CPP_TARGET_XBOXONE
-namespace winrt_interfaces
-{
-    MIDL_INTERFACE("F9C53912-ABC4-46FF-8A2B-DC9D7FA6E52F")
-    IUserDataPaths : IInspectable
-    {
-        virtual HRESULT STDMETHODCALLTYPE get_CameraRoll(HSTRING* value) = 0;
-        virtual HRESULT STDMETHODCALLTYPE get_Cookies(HSTRING* value) = 0;
-        virtual HRESULT STDMETHODCALLTYPE get_Desktop(HSTRING* value) = 0;
-        virtual HRESULT STDMETHODCALLTYPE get_Documents(HSTRING* value) = 0;
-        virtual HRESULT STDMETHODCALLTYPE get_Downloads(HSTRING* value) = 0;
-        virtual HRESULT STDMETHODCALLTYPE get_Favorites(HSTRING* value) = 0;
-        virtual HRESULT STDMETHODCALLTYPE get_History(HSTRING* value) = 0;
-        virtual HRESULT STDMETHODCALLTYPE get_InternetCache(HSTRING* value) = 0;
-        virtual HRESULT STDMETHODCALLTYPE get_LocalAppData(HSTRING* value) = 0;
-        virtual HRESULT STDMETHODCALLTYPE get_LocalAppDataLow(HSTRING* value) = 0;
-        virtual HRESULT STDMETHODCALLTYPE get_Music(HSTRING* value) = 0;
-        virtual HRESULT STDMETHODCALLTYPE get_Pictures(HSTRING* value) = 0;
-        virtual HRESULT STDMETHODCALLTYPE get_Profile(HSTRING* value) = 0;
-        virtual HRESULT STDMETHODCALLTYPE get_Recent(HSTRING* value) = 0;
-        virtual HRESULT STDMETHODCALLTYPE get_RoamingAppData(HSTRING* value) = 0;
-        virtual HRESULT STDMETHODCALLTYPE get_SavedPictures(HSTRING* value) = 0;
-        virtual HRESULT STDMETHODCALLTYPE get_Screenshots(HSTRING* value) = 0;
-        virtual HRESULT STDMETHODCALLTYPE get_Templates(HSTRING* value) = 0;
-        virtual HRESULT STDMETHODCALLTYPE get_Videos(HSTRING* value) = 0;
-    };
-
-    MIDL_INTERFACE("01B29DEF-E062-48A1-8B0C-F2C7A9CA56C0")
-    IUserDataPathsStatics : IInspectable
-    {
-        virtual HRESULT STDMETHODCALLTYPE GetForUser(struct IUser* user, IUserDataPaths** result) = 0;
-        virtual HRESULT STDMETHODCALLTYPE GetDefault(IUserDataPaths** result) = 0;
-    };
-}
-#endif
 
 namespace il2cpp
 {
@@ -146,7 +110,6 @@ namespace os
         return GetAppFolder([](IApplicationData* appData, IStorageFolder** folder) { return appData->get_LocalFolder(folder); });
     }
 
-#if !IL2CPP_TARGET_XBOXONE
     static inline utils::Expected<std::string> GetRoamingAppDataFolder()
     {
         return GetAppFolder([](IApplicationData* appData, IStorageFolder** folder) { return appData->get_RoamingFolder(folder); });
@@ -155,7 +118,7 @@ namespace os
     template<typename T>
     static utils::Expected<std::string> GetUserFolderPath(T&& userDataPathToFolderPathConverter)
     {
-        ComPtr<winrt_interfaces::IUserDataPathsStatics> userDataPathsStatics;
+        ComPtr<ABI::Windows::Storage::IUserDataPathsStatics> userDataPathsStatics;
         auto hr = RoGetActivationFactory(HStringReference(L"Windows.Storage.UserDataPaths").Get(), __uuidof(userDataPathsStatics), &userDataPathsStatics);
         if (FAILED(hr))
         {
@@ -165,7 +128,7 @@ namespace os
             return utils::Il2CppError(utils::UnauthorizedAccess, "Failed getting the path of a special folder: Access Denied.");
         }
 
-        ComPtr<winrt_interfaces::IUserDataPaths> userDataPaths;
+        ComPtr<ABI::Windows::Storage::IUserDataPaths> userDataPaths;
         hr = userDataPathsStatics->GetDefault(&userDataPaths);
         if (IL2CPP_HR_FAILED(hr))
             return utils::Il2CppError(utils::ComError, hr);
@@ -179,52 +142,48 @@ namespace os
         return utils::StringUtils::Utf16ToUtf8(resultHString.GetRawBuffer(&dummy));
     }
 
-#endif
-
     utils::Expected<std::string> Environment::GetWindowsFolderPath(int32_t folder)
     {
         switch (folder)
         {
-#if !IL2CPP_TARGET_XBOXONE
             case CSIDL_APPDATA:
                 return GetRoamingAppDataFolder();
 
             case CSIDL_COOKIES:
-                return GetUserFolderPath([](winrt_interfaces::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Cookies(result); });
+                return GetUserFolderPath([](ABI::Windows::Storage::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Cookies(result); });
 
             case CSIDL_DESKTOP:
-                return GetUserFolderPath([](winrt_interfaces::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Desktop(result); });
+                return GetUserFolderPath([](ABI::Windows::Storage::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Desktop(result); });
 
             case CSIDL_FAVORITES:
-                return GetUserFolderPath([](winrt_interfaces::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Favorites(result); });
+                return GetUserFolderPath([](ABI::Windows::Storage::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Favorites(result); });
 
             case CSIDL_HISTORY:
-                return GetUserFolderPath([](winrt_interfaces::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_History(result); });
+                return GetUserFolderPath([](ABI::Windows::Storage::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_History(result); });
 
             case CSIDL_INTERNET_CACHE:
-                return GetUserFolderPath([](winrt_interfaces::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_InternetCache(result); });
+                return GetUserFolderPath([](ABI::Windows::Storage::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_InternetCache(result); });
 
             case CSIDL_MYMUSIC:
-                return GetUserFolderPath([](winrt_interfaces::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Music(result); });
+                return GetUserFolderPath([](ABI::Windows::Storage::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Music(result); });
 
             case CSIDL_MYPICTURES:
-                return GetUserFolderPath([](winrt_interfaces::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Pictures(result); });
+                return GetUserFolderPath([](ABI::Windows::Storage::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Pictures(result); });
 
             case CSIDL_MYVIDEO:
-                return GetUserFolderPath([](winrt_interfaces::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Videos(result); });
+                return GetUserFolderPath([](ABI::Windows::Storage::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Videos(result); });
 
             case CSIDL_PERSONAL:
-                return GetUserFolderPath([](winrt_interfaces::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Documents(result); });
+                return GetUserFolderPath([](ABI::Windows::Storage::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Documents(result); });
 
             case CSIDL_PROFILE:
-                return GetUserFolderPath([](winrt_interfaces::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Profile(result); });
+                return GetUserFolderPath([](ABI::Windows::Storage::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Profile(result); });
 
             case CSIDL_RECENT:
-                return GetUserFolderPath([](winrt_interfaces::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Recent(result); });
+                return GetUserFolderPath([](ABI::Windows::Storage::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Recent(result); });
 
             case CSIDL_TEMPLATES:
-                return GetUserFolderPath([](winrt_interfaces::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Templates(result); });
-#endif
+                return GetUserFolderPath([](ABI::Windows::Storage::IUserDataPaths* userDataPaths, HSTRING* result) { return userDataPaths->get_Templates(result); });
 
             case CSIDL_LOCAL_APPDATA:
                 return GetLocalAppDataFolder();
@@ -239,11 +198,10 @@ namespace os
     utils::Expected<bool> Environment::Is64BitOs()
     {
 #if IL2CPP_TARGET_WINRT
-#if WINDOWS_SDK_BUILD_VERSION >= 16299
         BOOL isWow64Process = FALSE;
         if (IsWow64Process(GetCurrentProcess(), &isWow64Process))
             return isWow64Process == TRUE;
-#endif // WINDOWS_SDK_BUILD_VERSION >= 16299
+
         return false;
 #endif // IL2CPP_TARGET_WINRT
         return true;

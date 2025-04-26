@@ -18,7 +18,6 @@ namespace os
         virtual WaitStatus Wait(bool interruptible) = 0;
         virtual WaitStatus Wait(uint32_t ms, bool interruptible) = 0;
         virtual void Signal() = 0;
-        virtual void* GetOSHandle() = 0;
 
         static int32_t WaitAny(const std::vector<Handle*>& handles, int32_t ms);
         static bool WaitAll(std::vector<Handle*>& handles, int32_t ms);

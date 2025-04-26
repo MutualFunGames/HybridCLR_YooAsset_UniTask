@@ -1,3 +1,11 @@
+#undef g_malloc
+#undef g_realloc
+#undef g_malloc0
+#undef g_calloc
+#undef g_try_malloc
+#undef g_try_realloc
+#undef g_memdup
+
 #define g_array_append monoeg_g_array_append
 #define g_array_append_vals monoeg_g_array_append_vals
 #define g_array_free monoeg_g_array_free
@@ -8,6 +16,7 @@
 #define g_array_set_size monoeg_g_array_set_size
 #define g_array_sized_new monoeg_g_array_sized_new
 #define g_ascii_strdown monoeg_g_ascii_strdown
+#define g_ascii_strdown_no_alloc monoeg_g_ascii_strdown_no_alloc
 #define g_ascii_strncasecmp monoeg_g_ascii_strncasecmp
 #define g_ascii_tolower monoeg_g_ascii_tolower
 #define g_ascii_xdigit_value monoeg_g_ascii_xdigit_value
@@ -20,6 +29,7 @@
 #define g_clear_error monoeg_g_clear_error
 #define g_convert monoeg_g_convert
 #define g_convert_error_quark monoeg_g_convert_error_quark
+#define g_fixed_buffer_custom_allocator monoeg_g_fixed_buffer_custom_allocator
 #define g_dir_close monoeg_g_dir_close
 #define g_dir_open monoeg_g_dir_open
 #define g_dir_read_name monoeg_g_dir_read_name
@@ -59,6 +69,7 @@
 #define g_hash_table_foreach_steal monoeg_g_hash_table_foreach_steal
 #define g_hash_table_get_keys monoeg_g_hash_table_get_keys
 #define g_hash_table_get_values monoeg_g_hash_table_get_values
+#define g_hash_table_contains monoeg_g_hash_table_contains
 #define g_hash_table_insert_replace monoeg_g_hash_table_insert_replace
 #define g_hash_table_lookup monoeg_g_hash_table_lookup
 #define g_hash_table_lookup_extended monoeg_g_hash_table_lookup_extended
@@ -112,7 +123,9 @@
 #define g_markup_parse_context_parse monoeg_g_markup_parse_context_parse
 #define g_memdup monoeg_g_memdup
 #define g_mem_set_vtable monoeg_g_mem_set_vtable
+#define g_mem_get_vtable monoeg_g_mem_get_vtable
 #define g_mkdtemp monoeg_g_mkdtemp
+#define g_module_address monoeg_g_module_address
 #define g_module_build_path monoeg_g_module_build_path
 #define g_module_close monoeg_g_module_close
 #define g_module_error monoeg_g_module_error
@@ -124,8 +137,14 @@
 #define g_pattern_match_string monoeg_g_pattern_match_string
 #define g_pattern_spec_free monoeg_g_pattern_spec_free
 #define g_pattern_spec_new monoeg_g_pattern_spec_new
+#define g_async_safe_fgets monoeg_g_async_safe_fgets
+#define g_async_safe_fprintf monoeg_g_async_safe_fprintf
+#define g_async_safe_vfprintf monoeg_g_async_safe_vfprintf
+#define g_async_safe_printf monoeg_g_async_safe_printf
+#define g_async_safe_vprintf monoeg_g_async_safe_vprintf
 #define g_print monoeg_g_print
 #define g_printf monoeg_g_printf
+#define g_printv monoeg_g_printv
 #define g_printerr monoeg_g_printerr
 #define g_propagate_error monoeg_g_propagate_error
 #define g_ptr_array_add monoeg_g_ptr_array_add
@@ -141,6 +160,7 @@
 #define g_ptr_array_sized_new monoeg_g_ptr_array_sized_new
 #define g_ptr_array_sort monoeg_g_ptr_array_sort
 #define g_ptr_array_sort_with_data monoeg_g_ptr_array_sort_with_data
+#define g_ptr_array_find monoeg_g_ptr_array_find
 #define g_qsort_with_data monoeg_g_qsort_with_data
 #define g_queue_free monoeg_g_queue_free
 #define g_queue_is_empty monoeg_g_queue_is_empty
@@ -205,12 +225,9 @@
 #define g_string_append_unichar monoeg_g_string_append_unichar
 #define g_string_append_printf monoeg_g_string_append_printf
 #define g_string_append_vprintf monoeg_g_string_append_vprintf
-#define g_string_erase monoeg_g_string_erase
 #define g_string_free monoeg_g_string_free
-#define g_string_insert monoeg_g_string_insert
 #define g_string_new monoeg_g_string_new
 #define g_string_new_len monoeg_g_string_new_len
-#define g_string_prepend monoeg_g_string_prepend
 #define g_string_printf monoeg_g_string_printf
 #define g_string_set_size monoeg_g_string_set_size
 #define g_string_sized_new monoeg_g_string_sized_new
@@ -220,6 +237,8 @@
 #define g_strlcpy monoeg_g_strlcpy
 #define g_strndup monoeg_g_strndup
 #define g_strnfill monoeg_g_strnfill
+#define g_strnlen monoeg_g_strnlen
+#define g_str_from_file_region monoeg_g_str_from_file_region
 #define g_strreverse monoeg_g_strreverse
 #define g_strsplit monoeg_g_strsplit
 #define g_strsplit_set monoeg_g_strsplit_set
@@ -243,6 +262,10 @@
 #define g_usleep monoeg_g_usleep
 #define g_utf16_to_ucs4 monoeg_g_utf16_to_ucs4
 #define g_utf16_to_utf8 monoeg_g_utf16_to_utf8
+#define g_utf16_to_utf8_custom_alloc monoeg_g_utf16_to_utf8_custom_alloc
+#define g_utf16_ascii_equal monoeg_g_utf16_ascii_equal
+#define g_utf16_asciiz_equal monoeg_g_utf16_asciiz_equal
+#define g_utf8_jump_table monoeg_g_utf8_jump_table
 #define g_utf8_get_char monoeg_g_utf8_get_char
 #define g_utf8_offset_to_pointer monoeg_g_utf8_offset_to_pointer
 #define g_utf8_pointer_to_offset monoeg_g_utf8_pointer_to_offset
@@ -251,6 +274,7 @@
 #define g_utf8_strup monoeg_g_utf8_strup
 #define g_utf8_to_ucs4_fast monoeg_g_utf8_to_ucs4_fast
 #define g_utf8_to_utf16 monoeg_g_utf8_to_utf16
+#define g_utf8_to_utf16_custom_alloc monoeg_g_utf8_to_utf16_custom_alloc
 #define g_utf8_validate monoeg_g_utf8_validate
 #define g_unichar_to_utf8 monoeg_g_unichar_to_utf8
 #define g_unichar_is_space monoeg_g_unichar_is_space
@@ -260,7 +284,10 @@
 #define g_utf8_to_ucs4_fast monoeg_g_utf8_to_ucs4_fast
 #define g_vasprintf monoeg_g_vasprintf
 #define g_win32_getlocale monoeg_g_win32_getlocale
+#define g_assertion_disable_global monoeg_assertion_disable_global
+#define g_assert_abort monoeg_assert_abort
 #define g_assertion_message monoeg_assertion_message
+#define g_get_assertion_message monoeg_get_assertion_message
 #define g_malloc monoeg_malloc
 #define g_malloc0 monoeg_malloc0
 #define g_ptr_array_grow monoeg_ptr_array_grow
@@ -270,6 +297,7 @@
 #define g_strdup monoeg_strdup
 #define g_ucs4_to_utf16_len monoeg_ucs4_to_utf16_len
 #define g_utf16_to_ucs4_len monoeg_utf16_to_ucs4_len
+#define g_utf16_len monoeg_utf16_len
 
 #define g_ascii_strcasecmp monoeg_ascii_strcasecmp
 #define g_ascii_strup monoeg_ascii_strup
@@ -277,9 +305,7 @@
 #define g_unichar_break_type monoeg_unichar_break_type
 #define g_unichar_isspace monoeg_unichar_isspace
 #define g_unichar_to_utf16 monoeg_unichar_to_utf16
-#define g_utf8_find_prev_char monoeg_utf8_find_prev_char
 #define g_utf8_get_char_validated monoeg_utf8_get_char_validated
-#define g_utf8_prev_char monoeg_utf8_prev_char
 #define g_utf8_to_ucs4 monoeg_utf8_to_ucs4
 
 
@@ -287,3 +313,8 @@
 #define g_log_set_default_handler monoeg_log_set_default_handler
 #define g_set_print_handler monoeg_set_print_handler
 #define g_set_printerr_handler monoeg_set_printerr_handler
+
+#define g_size_to_int monoeg_size_to_int
+#define g_ascii_charcmp monoeg_ascii_charcmp
+#define g_ascii_charcasecmp monoeg_ascii_charcasecmp
+#define g_warning_d monoeg_warning_d

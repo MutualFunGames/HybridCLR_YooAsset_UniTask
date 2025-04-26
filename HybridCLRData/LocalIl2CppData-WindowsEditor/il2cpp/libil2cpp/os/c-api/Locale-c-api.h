@@ -6,7 +6,6 @@ extern "C"
 #endif
 
 void UnityPalLocaleInitialize();
-void UnityPalLocaleUnInitialize();
 char* UnityPalGetLocale();
 
 #if defined(__cplusplus)

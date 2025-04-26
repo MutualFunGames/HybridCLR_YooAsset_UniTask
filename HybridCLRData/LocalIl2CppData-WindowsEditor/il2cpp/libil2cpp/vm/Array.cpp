@@ -131,13 +131,11 @@ namespace vm
             memset((char*)o + sizeof(Il2CppObject), 0, byte_len - sizeof(Il2CppObject));
 #endif
         }
-#if !RUNTIME_TINY
         else if (klass->element_class->byval_arg.valuetype &&
                  ((GC_descr)klass->element_class->gc_desc & GC_DS_TAGS) == GC_DS_BITMAP)
         {
             o = (Il2CppObject*)GC_gcj_vector_malloc(byte_len, klass);
         }
-#endif
 #if IL2CPP_HAS_GC_DESCRIPTORS
         else if (klass->gc_desc != GC_NO_DESCRIPTOR)
         {
@@ -270,6 +268,21 @@ namespace vm
     char* Array::GetFirstElementAddress(Il2CppArray *array)
     {
         return reinterpret_cast<char*>(array) + kIl2CppSizeOfArray;
+    }
+
+    il2cpp_array_size_t Array::IndexFromIndices(Il2CppArray* thisPtr, int32_t const * indices)
+    {
+        int32_t i;
+        il2cpp_array_size_t pos;
+        Il2CppClass* ac;
+        ac = thisPtr->klass;
+
+        pos = indices[0] - thisPtr->bounds[0].lower_bound;
+        for (i = 1; i < ac->rank; i++)
+            pos = pos * thisPtr->bounds[i].length + indices[i] -
+                thisPtr->bounds[i].lower_bound;
+
+        return pos;
     }
 } /* namespace vm */
 } /* namespace il2cpp */

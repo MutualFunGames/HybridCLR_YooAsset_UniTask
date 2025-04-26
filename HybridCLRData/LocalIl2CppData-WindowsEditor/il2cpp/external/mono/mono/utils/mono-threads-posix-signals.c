@@ -16,6 +16,7 @@
 #if defined(USE_POSIX_BACKEND)
 
 #include <errno.h>
+#include <mono/utils/mono-errno.h>
 #include <signal.h>
 
 #ifdef HAVE_ANDROID_LEGACY_SIGNAL_INLINES_H
@@ -23,6 +24,7 @@
 #endif
 
 #include "mono-threads-debug.h"
+#include "mono-threads-coop.h"
 
 gint
 mono_threads_suspend_search_alternative_signal (void)
@@ -68,6 +70,8 @@ abort_signal_get (void)
 {
 #if defined(HOST_ANDROID)
 	return SIGTTIN;
+#elif defined (__OpenBSD__)
+	return SIGUSR1;
 #elif defined (SIGRTMIN)
 	static int abort_signum = -1;
 	if (abort_signum == -1)
@@ -122,7 +126,7 @@ restart_signal_handler (int _dummy, siginfo_t *_info, void *context)
 
 	info = mono_thread_info_current ();
 	info->signal = restart_signal_num;
-	errno = old_errno;
+	mono_set_errno (old_errno);
 }
 
 static void
@@ -145,6 +149,21 @@ suspend_signal_handler (int _dummy, siginfo_t *info, void *context)
 	if (!mono_threads_transition_finish_async_suspend (current)) {
 		current->suspend_can_continue = TRUE;
 		THREADS_SUSPEND_DEBUG ("\tlost race with self suspend %p\n", mono_thread_info_get_tid (current));
+		/* Under full preemptive suspend, there is no self suspension,
+		 * so no race.
+		 *
+		 * Under full cooperative suspend, there is no signal, so no
+		 * race.
+		 *
+		 * Under hybrid a blocking thread could race done/abort
+		 * blocking with the signal handler running: if the done/abort
+		 * blocking win, they will wait for a resume - the signal
+		 * handler should notify the suspend initiator that the thread
+		 * suspended, and then immediately return and let the thread
+		 * continue waiting on the resume semaphore.
+		 */
+		g_assert (mono_threads_is_hybrid_suspension_enabled ());
+		mono_threads_notify_initiator_of_suspend (current);
 		goto done;
 	}
 
@@ -201,7 +220,7 @@ suspend_signal_handler (int _dummy, siginfo_t *info, void *context)
 
 done:
 	mono_hazard_pointer_restore_for_signal_handler (hp_save_index);
-	errno = old_errno;
+	mono_set_errno (old_errno);
 }
 
 void
@@ -275,5 +294,11 @@ mono_threads_suspend_get_abort_signal (void)
 	g_assert (abort_signal_num != -1);
 	return abort_signal_num;
 }
+
+#else
+
+#include <mono/utils/mono-compiler.h>
+
+MONO_EMPTY_SOURCE_FILE (mono_threads_posix_signals);
 
 #endif /* defined(USE_POSIX_BACKEND) */

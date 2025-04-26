@@ -12,6 +12,7 @@
 #include "config.h"
 #ifdef HAVE_SGEN_GC
 
+
 #include <string.h>
 
 #include "mono/sgen/sgen-gc.h"
@@ -19,6 +20,8 @@
 #include "mono/sgen/sgen-thread-pool.h"
 #include "mono/utils/mono-membar.h"
 #include "mono/sgen/sgen-client.h"
+
+#ifndef DISABLE_SGEN_MAJOR_MARKSWEEP_CONC
 
 static WorkerContext worker_contexts [GENERATION_MAX];
 
@@ -139,7 +142,7 @@ worker_try_finish (WorkerData *data)
 			 * Log to be able to get the duration of normal concurrent M&S phase.
 			 * Worker indexes are 1 based, since 0 is logically considered gc thread.
 			 */
-			binary_protocol_worker_finish_stats (data - &context->workers_data [0] + 1, context->generation, context->forced_stop, data->major_scan_time, data->los_scan_time, data->total_time + sgen_timestamp () - last_start);
+			sgen_binary_protocol_worker_finish_stats (data - &context->workers_data [0] + 1, context->generation, context->forced_stop, data->major_scan_time, data->los_scan_time, data->total_time + sgen_timestamp () - last_start);
 			goto work_available;
 		}
 	}
@@ -165,7 +168,7 @@ worker_try_finish (WorkerData *data)
 	mono_os_mutex_unlock (&context->finished_lock);
 
 	data->total_time += (sgen_timestamp () - last_start);
-	binary_protocol_worker_finish_stats (data - &context->workers_data [0] + 1, context->generation, context->forced_stop, data->major_scan_time, data->los_scan_time, data->total_time);
+	sgen_binary_protocol_worker_finish_stats (data - &context->workers_data [0] + 1, context->generation, context->forced_stop, data->major_scan_time, data->los_scan_time, data->total_time);
 
 	sgen_gray_object_queue_trim_free_list (&data->private_gray_queue);
 	return;
@@ -184,6 +187,32 @@ sgen_workers_enqueue_job (int generation, SgenThreadPoolJob *job, gboolean enque
 	}
 
 	sgen_thread_pool_job_enqueue (worker_contexts [generation].thread_pool_context, job);
+}
+
+/*
+ * LOCKING: Assumes the GC lock is held.
+ */
+
+void
+sgen_workers_enqueue_deferred_job (int generation, SgenThreadPoolJob *job, gboolean enqueue)
+{
+	if (!enqueue) {
+		job->func (NULL, job);
+		sgen_thread_pool_job_free (job);
+		return;
+	}
+
+	sgen_thread_pool_job_enqueue_deferred (worker_contexts [generation].thread_pool_context, job);
+}
+
+/*
+ * LOCKING: Assumes the GC lock is held.
+ */
+
+void
+sgen_workers_flush_deferred_jobs (int generation, gboolean signal)
+{
+	sgen_thread_pool_flush_deferred_jobs (generation, signal);
 }
 
 static gboolean
@@ -245,7 +274,7 @@ workers_steal_work (WorkerData *data)
 static void
 concurrent_enqueue_check (GCObject *obj)
 {
-	g_assert (sgen_concurrent_collection_in_progress ());
+	g_assert (sgen_get_concurrent_collection_in_progress ());
 	g_assert (!sgen_ptr_in_nursery (obj));
 	g_assert (SGEN_LOAD_VTABLE (obj));
 }
@@ -358,7 +387,7 @@ sgen_workers_create_context (int generation, int num_workers)
 {
 	static gboolean stat_inited = FALSE;
 	int i;
-	WorkerData **workers_data_ptrs = (WorkerData**)sgen_alloc_internal_dynamic (num_workers * sizeof(WorkerData*), INTERNAL_MEM_WORKER_DATA, TRUE);
+	WorkerData **workers_data_ptrs;
 	WorkerContext *context = &worker_contexts [generation];
 
 	SGEN_ASSERT (0, !context->workers_num, "We can't init the worker context for a generation twice");
@@ -366,20 +395,21 @@ sgen_workers_create_context (int generation, int num_workers)
 	mono_os_mutex_init (&context->finished_lock);
 
 	context->generation = generation;
-	context->workers_num = num_workers;
-	context->active_workers_num = num_workers;
+	context->workers_num = (num_workers > SGEN_THREADPOOL_MAX_NUM_THREADS) ? SGEN_THREADPOOL_MAX_NUM_THREADS : num_workers;
+	context->active_workers_num = context->workers_num;
 
-	context->workers_data = (WorkerData *)sgen_alloc_internal_dynamic (sizeof (WorkerData) * num_workers, INTERNAL_MEM_WORKER_DATA, TRUE);
-	memset (context->workers_data, 0, sizeof (WorkerData) * num_workers);
+	context->workers_data = (WorkerData *)sgen_alloc_internal_dynamic (sizeof (WorkerData) * context->workers_num, INTERNAL_MEM_WORKER_DATA, TRUE);
+	memset (context->workers_data, 0, sizeof (WorkerData) * context->workers_num);
 
 	init_distribute_gray_queue (context);
 
-	for (i = 0; i < num_workers; ++i) {
+	workers_data_ptrs = (WorkerData**)sgen_alloc_internal_dynamic (context->workers_num * sizeof (WorkerData*), INTERNAL_MEM_WORKER_DATA, TRUE);
+	for (i = 0; i < context->workers_num; ++i) {
 		workers_data_ptrs [i] = &context->workers_data [i];
 		context->workers_data [i].context = context;
 	}
 
-	context->thread_pool_context = sgen_thread_pool_create_context (num_workers, thread_pool_init_func, marker_idle_func, continue_idle_func, should_work_func, (void**)workers_data_ptrs);
+	context->thread_pool_context = sgen_thread_pool_create_context (context->workers_num, thread_pool_init_func, marker_idle_func, continue_idle_func, should_work_func, (void**)workers_data_ptrs);
 
 	if (!stat_inited) {
 		mono_counters_register ("# workers finished", MONO_COUNTER_GC | MONO_COUNTER_ULONG, &stat_workers_num_finished);
@@ -467,6 +497,7 @@ sgen_workers_start_all_workers (int generation, SgenObjectOperations *object_ops
 	WorkerContext *context = &worker_contexts [generation];
 	int i;
 	SGEN_ASSERT (0, !context->started, "Why are we starting to work without finishing previous cycle");
+	SGEN_ASSERT (0, !sgen_thread_pool_have_deferred_jobs (generation), "All deferred jobs should have been flushed");
 
 	context->idle_func_object_ops_par = object_ops_par;
 	context->idle_func_object_ops_nopar = object_ops_nopar;
@@ -589,6 +620,12 @@ sgen_workers_get_job_split_count (int generation)
 	return (worker_contexts [generation].active_workers_num > 1) ? worker_contexts [generation].active_workers_num * 4 : 1;
 }
 
+int
+sgen_workers_get_active_worker_count (int generation)
+{
+	return (worker_contexts [generation].active_workers_num);
+}
+
 void
 sgen_workers_foreach (int generation, SgenWorkerCallback callback)
 {
@@ -605,4 +642,90 @@ sgen_workers_is_worker_thread (MonoNativeThreadId id)
 	return sgen_thread_pool_is_thread_pool_thread (id);
 }
 
-#endif
+#else
+// Single theaded sgen-workers impl
+
+void
+sgen_workers_enqueue_job (int generation, SgenThreadPoolJob *job, gboolean enqueue)
+{
+	if (!enqueue) {
+		job->func (NULL, job);
+		sgen_thread_pool_job_free (job);
+		return;
+	}
+}
+
+void
+sgen_workers_enqueue_deferred_job (int generation, SgenThreadPoolJob *job, gboolean enqueue)
+{
+	sgen_workers_enqueue_job (generation, job, enqueue);
+}
+
+void sgen_workers_flush_deferred_jobs (int generation, gboolean signal)
+{
+}
+
+gboolean
+sgen_workers_all_done (void)
+{
+	return TRUE;
+}
+
+void
+sgen_workers_assert_gray_queue_is_empty (int generation)
+{
+}
+
+SgenObjectOperations*
+sgen_workers_get_idle_func_object_ops (WorkerData *worker)
+{
+	g_assert (worker->context->idle_func_object_ops);
+	return worker->context->idle_func_object_ops;
+}
+
+int
+sgen_workers_get_job_split_count (int generation)
+{
+	return 1;
+}
+
+int
+sgen_workers_get_active_worker_count (int generation)
+{
+	return 0;
+}
+
+gboolean
+sgen_workers_have_idle_work (int generation)
+{
+	return FALSE;
+}
+
+gboolean
+sgen_workers_is_worker_thread (MonoNativeThreadId id)
+{
+	return FALSE;
+}
+
+void
+sgen_workers_join (int generation)
+{
+}
+
+void
+sgen_workers_set_num_active_workers (int generation, int num_workers)
+{
+}
+
+void
+sgen_workers_stop_all_workers (int generation)
+{
+}
+
+void
+sgen_workers_take_from_queue (int generation, SgenGrayQueue *queue)
+{
+}
+
+#endif //#ifdef DISABLE_SGEN_MAJOR_MARKSWEEP_CONC
+#endif // #ifdef HAVE_SGEN_GC

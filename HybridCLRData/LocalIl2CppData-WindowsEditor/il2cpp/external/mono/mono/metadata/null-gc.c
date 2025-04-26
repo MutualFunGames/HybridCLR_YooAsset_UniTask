@@ -14,6 +14,7 @@
 #include <mono/metadata/gc-internals.h>
 #include <mono/metadata/runtime.h>
 #include <mono/metadata/w32handle.h>
+#include <mono/metadata/abi-details.h>
 #include <mono/utils/atomic.h>
 #include <mono/utils/mono-threads.h>
 #include <mono/utils/mono-counters.h>
@@ -51,12 +52,28 @@ mono_gc_base_cleanup (void)
 }
 
 void
+mono_gc_init_icalls (void)
+{
+}
+
+void
 mono_gc_collect (int generation)
+{
+}
+
+void
+mono_gc_start_incremental_collection()
 {
 }
 
 int
 mono_gc_max_generation (void)
+{
+	return 0;
+}
+
+guint64
+mono_gc_get_allocated_bytes_for_current_thread (void)
 {
 	return 0;
 }
@@ -71,6 +88,18 @@ int
 mono_gc_collection_count (int generation)
 {
 	return 0;
+}
+
+void
+mono_gc_stop_world ()
+{
+	g_assert ("mono_gc_stop_world is not supported in null GC");
+}
+
+void
+mono_gc_restart_world ()
+{
+	g_assert ("mono_gc_restart_world is not supported in null GC");
 }
 
 void
@@ -185,10 +214,16 @@ mono_gc_make_root_descr_all_refs (int numbits)
 	return NULL;
 }
 
-void*
+MonoObject*
 mono_gc_alloc_fixed (size_t size, void *descr, MonoGCRootSource source, void *key, const char *msg)
 {
-	return g_malloc0 (size);
+	return (MonoObject*)g_malloc0 (size);
+}
+
+MonoObject*
+mono_gc_alloc_fixed_no_descriptor (size_t size, MonoGCRootSource source, void *key, const char *msg)
+{
+	return mono_gc_alloc_fixed (size, NULL, source, key, msg);
 }
 
 void
@@ -197,7 +232,7 @@ mono_gc_free_fixed (void* addr)
 	g_free (addr);
 }
 
-void *
+MonoObject*
 mono_gc_alloc_obj (MonoVTable *vtable, size_t size)
 {
 	MonoObject *obj = g_calloc (1, size);
@@ -207,7 +242,13 @@ mono_gc_alloc_obj (MonoVTable *vtable, size_t size)
 	return obj;
 }
 
-void *
+MonoArray*
+mono_gc_alloc_pinned_vector (MonoVTable *vtable, size_t size, uintptr_t max_length)
+{
+	return mono_gc_alloc_vector (vtable, size, max_length);
+}
+
+MonoArray*
 mono_gc_alloc_vector (MonoVTable *vtable, size_t size, uintptr_t max_length)
 {
 	MonoArray *obj = g_calloc (1, size);
@@ -218,7 +259,7 @@ mono_gc_alloc_vector (MonoVTable *vtable, size_t size, uintptr_t max_length)
 	return obj;
 }
 
-void *
+MonoArray*
 mono_gc_alloc_array (MonoVTable *vtable, size_t size, uintptr_t max_length, uintptr_t bounds_size)
 {
 	MonoArray *obj = g_calloc (1, size);
@@ -232,7 +273,7 @@ mono_gc_alloc_array (MonoVTable *vtable, size_t size, uintptr_t max_length, uint
 	return obj;
 }
 
-void *
+MonoString*
 mono_gc_alloc_string (MonoVTable *vtable, size_t size, gint32 len)
 {
 	MonoString *obj = g_calloc (1, size);
@@ -244,65 +285,65 @@ mono_gc_alloc_string (MonoVTable *vtable, size_t size, gint32 len)
 	return obj;
 }
 
-void*
+MonoObject*
 mono_gc_alloc_mature (MonoVTable *vtable, size_t size)
 {
 	return mono_gc_alloc_obj (vtable, size);
 }
 
-void*
+MonoObject*
 mono_gc_alloc_pinned_obj (MonoVTable *vtable, size_t size)
 {
 	return mono_gc_alloc_obj (vtable, size);
 }
 
 void
-mono_gc_wbarrier_set_field (MonoObject *obj, gpointer field_ptr, MonoObject* value)
+mono_gc_wbarrier_set_field_internal (MonoObject *obj, gpointer field_ptr, MonoObject* value)
 {
 	*(void**)field_ptr = value;
 }
 
 void
-mono_gc_wbarrier_set_arrayref (MonoArray *arr, gpointer slot_ptr, MonoObject* value)
+mono_gc_wbarrier_set_arrayref_internal (MonoArray *arr, gpointer slot_ptr, MonoObject* value)
 {
 	*(void**)slot_ptr = value;
 }
 
 void
-mono_gc_wbarrier_arrayref_copy (gpointer dest_ptr, gpointer src_ptr, int count)
+mono_gc_wbarrier_arrayref_copy_internal (gpointer dest_ptr, gconstpointer src_ptr, int count)
 {
 	mono_gc_memmove_aligned (dest_ptr, src_ptr, count * sizeof (gpointer));
 }
 
 void
-mono_gc_wbarrier_generic_store (gpointer ptr, MonoObject* value)
+mono_gc_wbarrier_generic_store_internal (void volatile* ptr, MonoObject* value)
 {
 	*(void**)ptr = value;
 }
 
 void
-mono_gc_wbarrier_generic_store_atomic (gpointer ptr, MonoObject *value)
+mono_gc_wbarrier_generic_store_atomic_internal (gpointer ptr, MonoObject *value)
 {
 	mono_atomic_store_ptr (ptr, value);
 }
 
 void
-mono_gc_wbarrier_generic_nostore (gpointer ptr)
+mono_gc_wbarrier_generic_nostore_internal (gpointer ptr)
 {
 }
 
 void
-mono_gc_wbarrier_value_copy (gpointer dest, gpointer src, int count, MonoClass *klass)
+mono_gc_wbarrier_value_copy_internal (gpointer dest, gconstpointer src, int count, MonoClass *klass)
 {
 	mono_gc_memmove_atomic (dest, src, count * mono_class_value_size (klass, NULL));
 }
 
 void
-mono_gc_wbarrier_object_copy (MonoObject* obj, MonoObject *src)
+mono_gc_wbarrier_object_copy_internal (MonoObject* obj, MonoObject *src)
 {
 	/* do not copy the sync state */
-	mono_gc_memmove_aligned ((char*)obj + sizeof (MonoObject), (char*)src + sizeof (MonoObject),
-			mono_object_class (obj)->instance_size - sizeof (MonoObject));
+	mono_gc_memmove_aligned (mono_object_get_data (obj), (char*)src + MONO_ABI_SIZEOF (MonoObject),
+			mono_object_class (obj)->instance_size - MONO_ABI_SIZEOF (MonoObject));
 }
 
 gboolean
@@ -431,18 +472,24 @@ mono_gc_is_moving (void)
 }
 
 gboolean
+mono_gc_needs_write_barriers(void)
+{
+	return FALSE;
+}
+
+gboolean
 mono_gc_is_disabled (void)
 {
 	return FALSE;
 }
 
 void
-mono_gc_wbarrier_range_copy (gpointer _dest, gpointer _src, int size)
+mono_gc_wbarrier_range_copy (gpointer _dest, gconstpointer _src, int size)
 {
 	g_assert_not_reached ();
 }
 
-void*
+MonoRangeCopyFunction
 mono_gc_get_range_copy_func (void)
 {
 	return &mono_gc_wbarrier_range_copy;
@@ -452,6 +499,14 @@ guint8*
 mono_gc_get_card_table (int *shift_bits, gpointer *card_mask)
 {
 	g_assert_not_reached ();
+	return NULL;
+}
+
+guint8*
+mono_gc_get_target_card_table (int *shift_bits, target_mgreg_t *card_mask)
+{
+	*shift_bits = 0;
+	*card_mask = 0;
 	return NULL;
 }
 
@@ -537,7 +592,14 @@ mono_gc_pthread_create (pthread_t *new_thread, const pthread_attr_t *attr, void 
 }
 #endif
 
-void mono_gc_set_skip_thread (gboolean value)
+void
+mono_gc_skip_thread_changing (gboolean skip)
+{
+	// No STW, nothing needs to be done.
+}
+
+void
+mono_gc_skip_thread_changed (gboolean skip)
 {
 }
 
@@ -582,6 +644,31 @@ MonoBoolean
 mono_gc_pending_finalizers (void)
 {
 	return FALSE;
+}
+
+gboolean
+mono_gc_ephemeron_array_add (MonoObject *obj)
+{
+	return TRUE;
+}
+
+guint64 mono_gc_get_total_allocated_bytes (MonoBoolean precise) 
+{
+	return 0;
+}
+
+void
+mono_gc_get_gcmemoryinfo (gint64* high_memory_load_threshold_bytes,
+						  gint64* memory_load_bytes,
+						  gint64* total_available_memory_bytes,
+						  gint64* heap_size_bytes,
+						  gint64* fragmented_bytes)
+{
+	*high_memory_load_threshold_bytes = 0;
+	*memory_load_bytes = 0;
+	*total_available_memory_bytes = 0;
+	*heap_size_bytes = 0;
+	*fragmented_bytes = 0;
 }
 
 #else

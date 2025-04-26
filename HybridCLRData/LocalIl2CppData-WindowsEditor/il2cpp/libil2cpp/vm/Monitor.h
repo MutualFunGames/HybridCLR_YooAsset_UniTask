@@ -9,6 +9,9 @@ namespace vm
     class LIBIL2CPP_CODEGEN_API Monitor
     {
     public:
+        static void AllocateStaticData();
+        static void FreeStaticData();
+
         static void Enter(Il2CppObject* object);
         static bool TryEnter(Il2CppObject* object, uint32_t timeout);
         static void Exit(Il2CppObject* object);
@@ -21,6 +24,13 @@ namespace vm
     };
 
 #if !IL2CPP_SUPPORT_THREADS
+    inline void Monitor::AllocateStaticData()
+    {
+    }
+
+    inline void Monitor::FreeStaticData()
+    {
+    }
 
     inline void Monitor::Enter(Il2CppObject* object)
     {

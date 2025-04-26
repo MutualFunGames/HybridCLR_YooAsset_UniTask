@@ -18,7 +18,7 @@ static const size_t Baselib_Memory_MaxAlignment = 64 * 1024;
 //
 // Guaranteed to be at least 8.
 // Note that on some platforms it is possible to overwrite the internally used allocator in which case this guarantee may no longer be upheld.
-static const size_t Baselib_Memory_MinGuaranteedAlignment = PLATFORM_MEMORY_MALLOC_MIN_ALIGNMENT;
+static const size_t Baselib_Memory_MinGuaranteedAlignment = PLATFORM_PROPERTY_MEMORY_MALLOC_MIN_ALIGNMENT;
 
 #else
 
@@ -163,6 +163,16 @@ BASELIB_ENUM_ENSURE_ABI_COMPATIBILITY(Baselib_Memory_PageState);
 // \returns Page allocation info or Baselib_Memory_PageAllocation_Invalid in case of an error.
 BASELIB_API Baselib_Memory_PageAllocation Baselib_Memory_AllocatePages(uint64_t pageSize, uint64_t pageCount, uint64_t alignmentInMultipleOfPageSize, Baselib_Memory_PageState pageState, Baselib_ErrorState* errorState);
 
+// Allocates a given number of memory pages and guarantees that the returned pointer is aligned to specified multiple of the page size.
+//
+// Identical to `Baselib_Memory_AllocatePages` with the addition of the `extPageState` parameter which extends the internally translated page state
+// (from the `pageState` parameter) with a native page state.
+// The `ext_page_state` value has no validation and is ultimately a bitwise OR operation applied to the internally translated native state.
+// The only exception is when the existing native representation of `Baselib_Memory_PageState` conflicts with the extended state in which case the
+// most permissive mode will be used. This does not affect any bit-values not conflicting with the native representation of `Baselib_Memory_PageState`.
+//
+BASELIB_API Baselib_Memory_PageAllocation Baselib_Memory_AllocatePagesEx(uint64_t pageSize, uint64_t pageCount, uint64_t alignmentInMultipleOfPageSize, Baselib_Memory_PageState pageState, uint32_t extPageState, Baselib_ErrorState* errorState);
+
 // Releases the previously allocated pages (using either Baselib_Memory_AllocatePages)
 //
 // A single call of ReleasePages must encompass all pages that were originally allocated with a single call of AllocatePages.
@@ -190,6 +200,16 @@ BASELIB_API void Baselib_Memory_ReleasePages(Baselib_Memory_PageAllocation pageA
 // - Baselib_ErrorCode_InvalidPageSize:         If page size doesn't match the previous allocation at `addressOfFirstPage`.
 // - Baselib_ErrorCode_UnsupportedPageState:    The underlying system doesn't support the requested page state (see Baselib_Memory_PageState).
 BASELIB_API void Baselib_Memory_SetPageState(void* addressOfFirstPage, uint64_t pageSize, uint64_t pageCount, Baselib_Memory_PageState pageState, Baselib_ErrorState* errorState);
+
+// Modifies the page state property of an already allocated virtual address range.
+//
+// Identical to `Baselib_Memory_AllocatePages` with the addition of the `extPageState` parameter which extends the internally translated page state
+// (from the `pageState` parameter) with a native page state.
+// The `ext_page_state` value has no validation and is ultimately a bitwise OR operation applied to the internally translated native state.
+// The only exception is when the existing native representation of `Baselib_Memory_PageState` conflicts with the extended state in which case the
+// most permissive mode will be used. This does not affect any bit-values not conflicting with the native representation of `Baselib_Memory_PageState`.
+//
+BASELIB_API void Baselib_Memory_SetPageStateEx(void* addressOfFirstPage, uint64_t pageSize, uint64_t pageCount, Baselib_Memory_PageState pageState, uint32_t extPageState, Baselib_ErrorState* errorState);
 
 #ifdef __cplusplus
 } // BASELIB_C_INTERFACE

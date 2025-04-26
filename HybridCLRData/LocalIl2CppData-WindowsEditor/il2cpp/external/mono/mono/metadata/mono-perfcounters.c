@@ -47,8 +47,10 @@
 #include "utils/mono-proclib.h"
 #include "utils/mono-networkinterfaces.h"
 #include "utils/mono-error-internals.h"
+#include "utils/memfuncs.h"
 #include "utils/atomic.h"
 #include "utils/unlocked.h"
+#include "icall-decl.h"
 
 /* map of CounterSample.cs */
 struct _MonoCounterSample {
@@ -258,6 +260,8 @@ typedef struct {
 typedef struct {
 	const char *name;
 	const char *help;
+	int name_length;
+	int help_length;
 	unsigned char id;
 	signed int type : 2;
 	unsigned int instance_type : 6;
@@ -267,6 +271,8 @@ typedef struct {
 typedef struct {
 	const char *name;
 	const char *help;
+	int name_length;
+	int help_length;
 	short id;
 	unsigned short offset; // offset inside MonoPerfCounters
 	int type;
@@ -274,22 +280,22 @@ typedef struct {
 
 #undef PERFCTR_CAT
 #undef PERFCTR_COUNTER
-#define PERFCTR_CAT(id,name,help,type,inst,first_counter) {name, help, CATEGORY_ ## id, type, inst ## Instance, CCOUNTER_ ## first_counter},
+#define PERFCTR_CAT(id,name,help,type,inst,first_counter) {name, help, sizeof (name) - 1, sizeof (help) - 1, CATEGORY_ ## id, type, inst ## Instance, CCOUNTER_ ## first_counter},
 #define PERFCTR_COUNTER(id,name,help,type,field)
 static const CategoryDesc
 predef_categories [] = {
 #include "mono-perfcounters-def.h"
-	{NULL, NULL, NUM_CATEGORIES, -1, 0, NUM_COUNTERS}
+	{NULL, NULL, 0, 0, NUM_CATEGORIES, -1, 0, NUM_COUNTERS}
 };
 
 #undef PERFCTR_CAT
 #undef PERFCTR_COUNTER
 #define PERFCTR_CAT(id,name,help,type,inst,first_counter)
-#define PERFCTR_COUNTER(id,name,help,type,field) {name, help, COUNTER_ ## id, G_STRUCT_OFFSET (MonoPerfCounters, field), type},
+#define PERFCTR_COUNTER(id,name,help,type,field) {name, help, sizeof (name) - 1, sizeof (help) - 1, COUNTER_ ## id, G_STRUCT_OFFSET (MonoPerfCounters, field), type},
 static const CounterDesc
 predef_counters [] = {
 #include "mono-perfcounters-def.h"
-	{NULL, NULL, -1, 0, 0}
+	{NULL, NULL, 0, 0, -1, 0, 0}
 };
 
 /*
@@ -410,131 +416,6 @@ predef_cleanup (ImplVtable *vtable)
 	perfctr_unlock ();
 }
 
-static guint64
-mono_determine_physical_ram_size (void)
-{
-#if defined (TARGET_WIN32)
-	MEMORYSTATUSEX memstat;
-
-	memstat.dwLength = sizeof (memstat);
-	GlobalMemoryStatusEx (&memstat);
-	return (guint64)memstat.ullTotalPhys;
-#elif defined (__NetBSD__) || defined (__APPLE__)
-#ifdef __NetBSD__
-	unsigned long value;
-#else
-	guint64 value;
-#endif
-	int mib[2] = {
-		CTL_HW,
-#ifdef __NetBSD__
-		HW_PHYSMEM64
-#else
-		HW_MEMSIZE
-#endif
-	};
-	size_t size_sys = sizeof (value);
-
-	sysctl (mib, 2, &value, &size_sys, NULL, 0);
-	if (value == 0)
-		return 134217728;
-
-	return (guint64)value;
-#elif defined (HAVE_SYSCONF)
-	guint64 page_size = 0, num_pages = 0;
-
-	/* sysconf works on most *NIX operating systems, if your system doesn't have it or if it
-	 * reports invalid values, please add your OS specific code below. */
-#ifdef _SC_PAGESIZE
-	page_size = (guint64)sysconf (_SC_PAGESIZE);
-#endif
-
-#ifdef _SC_PHYS_PAGES
-	num_pages = (guint64)sysconf (_SC_PHYS_PAGES);
-#endif
-
-	if (!page_size || !num_pages) {
-		g_warning ("Your operating system's sysconf (3) function doesn't correctly report physical memory size!");
-		return 134217728;
-	}
-
-	return page_size * num_pages;
-#else
-	return 134217728;
-#endif
-}
-
-static guint64
-mono_determine_physical_ram_available_size (void)
-{
-#if defined (TARGET_WIN32)
-	MEMORYSTATUSEX memstat;
-
-	memstat.dwLength = sizeof (memstat);
-	GlobalMemoryStatusEx (&memstat);
-	return (guint64)memstat.ullAvailPhys;
-
-#elif defined (__NetBSD__)
-	struct vmtotal vm_total;
-	guint64 page_size;
-	int mib[2];
-	size_t len;
-
-	mib[0] = CTL_VM;
-	mib[1] = VM_METER;
-
-	len = sizeof (vm_total);
-	sysctl (mib, 2, &vm_total, &len, NULL, 0);
-
-	mib[0] = CTL_HW;
-	mib[1] = HW_PAGESIZE;
-
-	len = sizeof (page_size);
-	sysctl (mib, 2, &page_size, &len, NULL, 0);
-
-	return ((guint64) vm_total.t_free * page_size) / 1024;
-#elif defined (__APPLE__)
-	mach_msg_type_number_t count = HOST_VM_INFO_COUNT;
-	mach_port_t host = mach_host_self();
-	vm_size_t page_size;
-	vm_statistics_data_t vmstat;
-	kern_return_t ret;
-	do {
-		ret = host_statistics(host, HOST_VM_INFO, (host_info_t)&vmstat, &count);
-	} while (ret == KERN_ABORTED);
-
-	if (ret != KERN_SUCCESS) {
-		g_warning ("Mono was unable to retrieve memory usage!");
-		return 0;
-	}
-
-	host_page_size(host, &page_size);
-	return (guint64) vmstat.free_count * page_size;
-
-#elif defined (HAVE_SYSCONF)
-	guint64 page_size = 0, num_pages = 0;
-
-	/* sysconf works on most *NIX operating systems, if your system doesn't have it or if it
-	 * reports invalid values, please add your OS specific code below. */
-#ifdef _SC_PAGESIZE
-	page_size = (guint64)sysconf (_SC_PAGESIZE);
-#endif
-
-#ifdef _SC_AVPHYS_PAGES
-	num_pages = (guint64)sysconf (_SC_AVPHYS_PAGES);
-#endif
-
-	if (!page_size || !num_pages) {
-		g_warning ("Your operating system's sysconf (3) function doesn't correctly report physical memory size!");
-		return 0;
-	}
-
-	return page_size * num_pages;
-#else
-	return 0;
-#endif
-}
-
 void
 mono_perfcounters_init (void)
 {
@@ -629,21 +510,33 @@ foreach_shared_item (SharedFunc func, void *data)
 	foreach_shared_item_in_area (p, end, func, data);
 }
 
-static int
-mono_string_compare_ascii (MonoString *str, const char *ascii_str)
+static gboolean
+mono_utf16_equal_ascii (const gunichar2 *strc, const char *ascii_str)
 {
 	/* FIXME: make this case insensitive */
-	guint16 *strc = mono_string_chars (str);
 	while (*strc == *ascii_str++) {
 		if (*strc == 0)
-			return 0;
+			return TRUE;
 		strc++;
 	}
-	return *strc - *(const unsigned char *)(ascii_str - 1);
+	return *strc == *(const unsigned char *)(ascii_str - 1);
+}
+
+static gboolean
+mono_utf16_equal_ascii_len (const gunichar2 *utf16, int utf16_length, const char *ascii, int ascii_length)
+{
+	/* FIXME: make this case insensitive */
+	if (utf16_length != ascii_length)
+		return FALSE;
+	for (int i = 0; i < utf16_length; ++i) {
+		if (ascii [i] != utf16 [i])
+			return FALSE;
+	}
+	return TRUE;
 }
 
 typedef struct {
-	MonoString *name;
+	const gunichar2 *name;
 	SharedCategory *cat;
 } CatSearch;
 
@@ -653,7 +546,7 @@ category_search (SharedHeader *header, void *data)
 	CatSearch *search = (CatSearch *)data;
 	if (header->ftype == FTYPE_CATEGORY) {
 		SharedCategory *cat = (SharedCategory*)header;
-		if (mono_string_compare_ascii (search->name, cat->name) == 0) {
+		if (mono_utf16_equal_ascii (search->name, cat->name)) {
 			search->cat = cat;
 			return FALSE;
 		}
@@ -662,7 +555,7 @@ category_search (SharedHeader *header, void *data)
 }
 
 static SharedCategory*
-find_custom_category (MonoString *name)
+find_custom_category (const gunichar2 *name)
 {
 	CatSearch search;
 	search.name = name;
@@ -688,26 +581,29 @@ get_custom_categories (void) {
 	return list;
 }
 
-static char*
+static SharedCounter*
 custom_category_counters (SharedCategory* cat)
 {
-	char *p = cat->name + strlen (cat->name) + 1;
-	p += strlen (p) + 1; /* skip category help */
-	return p;
+	char *help = cat->name + strlen (cat->name) + 1;
+	return (SharedCounter*)(help + strlen (help) + 1);
 }
 
 static SharedCounter*
-find_custom_counter (SharedCategory* cat, MonoString *name)
+next_custom_category_counter (SharedCounter* counter)
+{
+	char *help = counter->name + strlen (counter->name) + 1;
+	return (SharedCounter*)(help + strlen (help) + 1);
+}
+
+static SharedCounter*
+find_custom_counter (SharedCategory* cat, const gunichar2 *name)
 {
 	int i;
-	char *p = custom_category_counters (cat);
+	SharedCounter *counter = custom_category_counters (cat);
 	for (i = 0; i < cat->num_counters; ++i) {
-		SharedCounter *counter = (SharedCounter*)p;
-		if (mono_string_compare_ascii (name, counter->name) == 0)
+		if (mono_utf16_equal_ascii (name, counter->name))
 			return counter;
-		p += 2; /* skip counter type */
-		p += strlen (p) + 1; /* skip counter name */
-		p += strlen (p) + 1; /* skip counter help */
+		counter = next_custom_category_counter (counter);
 	}
 	return NULL;
 }
@@ -773,12 +669,12 @@ custom_category_help (SharedCategory* cat)
 }
 
 static const CounterDesc*
-get_counter_in_category (const CategoryDesc *desc, MonoString *counter)
+get_counter_in_category (const CategoryDesc *desc, const gunichar2 *counter, int counter_length)
 {
 	const CounterDesc *cdesc = &predef_counters [desc->first_counter];
 	const CounterDesc *end = &predef_counters [desc [1].first_counter];
 	for (; cdesc < end; ++cdesc) {
-		if (mono_string_compare_ascii (counter, cdesc->name) == 0)
+		if (mono_utf16_equal_ascii_len (counter, counter_length, cdesc->name, cdesc->name_length))
 			return cdesc;
 	}
 	return NULL;
@@ -843,14 +739,14 @@ get_cpu_counter (ImplVtable *vtable, MonoBoolean only_value, MonoCounterSample *
 }
 
 static void*
-cpu_get_impl (MonoString* counter, const gchar* instance, int *type, MonoBoolean *custom)
+cpu_get_impl (const gunichar2 *counter, int counter_length, const char *instance, int *type, MonoBoolean *custom)
 {
 	int id = id_from_string (instance, FALSE) << 5;
 	const CounterDesc *cdesc;
 	*custom = FALSE;
 	/* increase the shift above and the mask also in the implementation functions */
 	//g_assert (32 > desc [1].first_counter - desc->first_counter);
-	if ((cdesc = get_counter_in_category (&predef_categories [CATEGORY_CPU], counter))) {
+	if ((cdesc = get_counter_in_category (&predef_categories [CATEGORY_CPU], counter, counter_length))) {
 		*type = cdesc->type;
 		return create_vtable (GINT_TO_POINTER (id | cdesc->id), get_cpu_counter, NULL);
 	}
@@ -904,7 +800,7 @@ network_cleanup (ImplVtable *vtable)
 }
 
 static void*
-network_get_impl (MonoString* counter, const gchar* instance, int *type, MonoBoolean *custom)
+network_get_impl (const gunichar2 *counter, int counter_length, const char *instance, int *type, MonoBoolean *custom)
 {
 	const CounterDesc *cdesc;
 	NetworkVtableArg *narg;
@@ -912,7 +808,7 @@ network_get_impl (MonoString* counter, const gchar* instance, int *type, MonoBoo
 	char *instance_name;
 
 	*custom = FALSE;
-	if ((cdesc = get_counter_in_category (&predef_categories [CATEGORY_NETWORK], counter))) {
+	if ((cdesc = get_counter_in_category (&predef_categories [CATEGORY_NETWORK], counter, counter_length))) {
 		instance_name = g_strdup (instance);
 		narg = g_new0 (NetworkVtableArg, 1);
 		narg->id = cdesc->id;
@@ -965,14 +861,14 @@ get_process_counter (ImplVtable *vtable, MonoBoolean only_value, MonoCounterSamp
 }
 
 static void*
-process_get_impl (MonoString* counter, const gchar* instance, int *type, MonoBoolean *custom)
+process_get_impl (const gunichar2 *counter, int counter_length, const char *instance, int *type, MonoBoolean *custom)
 {
 	int id = id_from_string (instance, TRUE) << 5;
 	const CounterDesc *cdesc;
 	*custom = FALSE;
 	/* increase the shift above and the mask also in the implementation functions */
 	//g_assert (32 > desc [1].first_counter - desc->first_counter);
-	if ((cdesc = get_counter_in_category (&predef_categories [CATEGORY_PROC], counter))) {
+	if ((cdesc = get_counter_in_category (&predef_categories [CATEGORY_PROC], counter, counter_length))) {
 		*type = cdesc->type;
 		return create_vtable (GINT_TO_POINTER (id | cdesc->id), get_process_counter, NULL);
 	}
@@ -993,21 +889,21 @@ mono_mem_counter (ImplVtable *vtable, MonoBoolean only_value, MonoCounterSample 
 		sample->rawValue = 0;
 		return TRUE;
 	case COUNTER_MEM_PHYS_TOTAL:
-		sample->rawValue = mono_determine_physical_ram_size ();;
+		sample->rawValue = mono_determine_physical_ram_size ();
 		return TRUE;
 	case COUNTER_MEM_PHYS_AVAILABLE:
-		sample->rawValue = mono_determine_physical_ram_available_size ();;
+		sample->rawValue = mono_determine_physical_ram_available_size ();
 		return TRUE;
 	}
 	return FALSE;
 }
 
 static void*
-mono_mem_get_impl (MonoString* counter, const gchar* instance, int *type, MonoBoolean *custom)
+mono_mem_get_impl (const gunichar2 *counter, int counter_length, const char *instance, int *type, MonoBoolean *custom)
 {
 	const CounterDesc *cdesc;
 	*custom = FALSE;
-	if ((cdesc = get_counter_in_category (&predef_categories [CATEGORY_MONO_MEM], counter))) {
+	if ((cdesc = get_counter_in_category (&predef_categories [CATEGORY_MONO_MEM], counter, counter_length))) {
 		*type = cdesc->type;
 		return create_vtable (GINT_TO_POINTER ((gint) cdesc->id), mono_mem_counter, NULL);
 	}
@@ -1180,11 +1076,11 @@ predef_writable_update (ImplVtable *vtable, MonoBoolean do_incr, gint64 value)
 }
 
 static void*
-predef_writable_get_impl (int cat, MonoString* counter, const gchar *instance, int *type, MonoBoolean *custom)
+predef_writable_get_impl (int cat, const gunichar2 *counter, int counter_length, const char *instance, int *type, MonoBoolean *custom)
 {
 	const CounterDesc *cdesc;
 	*custom = TRUE;
-	if ((cdesc = get_counter_in_category (&predef_categories [cat], counter))) {
+	if ((cdesc = get_counter_in_category (&predef_categories [cat], counter, counter_length))) {
 		*type = cdesc->type;
 		if (instance == NULL || strcmp (instance, "") == 0)
 			return create_vtable (GINT_TO_POINTER ((cdesc->id << 16) | cat), predef_writable_counter, predef_writable_update);
@@ -1245,7 +1141,6 @@ custom_get_instance (SharedCategory *cat, SharedCounter *scounter, char* name)
 	inst = (SharedInstance*) shared_data_reserve_room (size, FTYPE_INSTANCE);
 	if (!inst) {
 		perfctr_unlock ();
-		g_free (name);
 		return NULL;
 	}
 	inst->category_offset = (char*)cat - (char*)shared_area;
@@ -1284,7 +1179,7 @@ custom_get_value_address (SharedCounter *scounter, SharedInstance* sinst)
 }
 
 static void*
-custom_get_impl (SharedCategory *cat, MonoString *counter, MonoString* instance, int *type, MonoError *error)
+custom_get_impl (SharedCategory *cat, const gunichar2 *counter, int counter_length, const gunichar2 *instance, int *type, MonoError *error)
 {
 	SharedCounter *scounter;
 	SharedInstance* inst;
@@ -1294,7 +1189,7 @@ custom_get_impl (SharedCategory *cat, MonoString *counter, MonoString* instance,
 	scounter = find_custom_counter (cat, counter);
 	if (!scounter)
 		return NULL;
-	name = mono_string_to_utf8_checked (counter, error);
+	name = mono_utf16_to_utf8 (counter, counter_length, error);
 	return_val_if_nok (error, NULL);
 	*type = simple_type_to_type [scounter->type];
 	inst = custom_get_instance (cat, scounter, name);
@@ -1305,52 +1200,48 @@ custom_get_impl (SharedCategory *cat, MonoString *counter, MonoString* instance,
 }
 
 static const CategoryDesc*
-find_category (MonoString *category)
+find_category (const gunichar2 *category, int category_length)
 {
 	int i;
 	for (i = 0; i < NUM_CATEGORIES; ++i) {
-		if (mono_string_compare_ascii (category, predef_categories [i].name) == 0)
+		if (mono_utf16_equal_ascii_len (category, category_length, predef_categories [i].name, predef_categories [i].name_length))
 			return &predef_categories [i];
 	}
 	return NULL;
 }
 
 void*
-mono_perfcounter_get_impl (MonoString* category, MonoString* counter, MonoString* instance,
-		MonoString* machine, int *type, MonoBoolean *custom)
+mono_perfcounter_get_impl (const gunichar2 *category, gint32 category_length,
+		const gunichar2 *counter, gint32 counter_length,
+		const gunichar2 *instance, gint32 instance_length,
+		gint32 *type, MonoBoolean *custom, MonoError *error)
 {
-	MonoError error;
 	const CategoryDesc *cdesc;
 	void *result = NULL;
-	/* no support for counters on other machines */
-	if (mono_string_compare_ascii (machine, "."))
-		return NULL;
-	cdesc = find_category (category);
+	cdesc = find_category (category, category_length);
 	if (!cdesc) {
 		SharedCategory *scat = find_custom_category (category);
 		if (!scat)
 			return NULL;
 		*custom = TRUE;
-		result = custom_get_impl (scat, counter, instance, type, &error);
-		if (mono_error_set_pending_exception (&error))
-			return NULL;
+		result = custom_get_impl (scat, counter, counter_length, instance, type, error);
+		return_val_if_nok (error, NULL);
 		return result;
 	}
-	gchar *c_instance = mono_string_to_utf8_checked (instance, &error);
-	if (mono_error_set_pending_exception (&error))
-		return NULL;
+	char *c_instance = mono_utf16_to_utf8 (instance, instance_length, error);
+	return_val_if_nok (error, NULL);
 	switch (cdesc->id) {
 	case CATEGORY_CPU:
-		result = cpu_get_impl (counter, c_instance, type, custom);
+		result = cpu_get_impl (counter, counter_length, c_instance, type, custom);
 		break;
 	case CATEGORY_PROC:
-		result = process_get_impl (counter, c_instance, type, custom);
+		result = process_get_impl (counter, counter_length, c_instance, type, custom);
 		break;
 	case CATEGORY_MONO_MEM:
-		result = mono_mem_get_impl (counter, c_instance, type, custom);
+		result = mono_mem_get_impl (counter, counter_length, c_instance, type, custom);
 		break;
 	case CATEGORY_NETWORK:
-		result = network_get_impl (counter, c_instance, type, custom);
+		result = network_get_impl (counter, counter_length, c_instance, type, custom);
 		break;
 	case CATEGORY_JIT:
 	case CATEGORY_EXC:
@@ -1362,7 +1253,7 @@ mono_perfcounter_get_impl (MonoString* category, MonoString* counter, MonoString
 	case CATEGORY_SECURITY:
 	case CATEGORY_ASPNET:
 	case CATEGORY_THREADPOOL:
-		result = predef_writable_get_impl (cdesc->id, counter, c_instance, type, custom);
+		result = predef_writable_get_impl (cdesc->id, counter, counter_length, c_instance, type, custom);
 		break;
 	}
 	g_free (c_instance);
@@ -1398,11 +1289,11 @@ mono_perfcounter_free_data (void *impl)
 
 /* Category icalls */
 MonoBoolean
-mono_perfcounter_category_del (MonoString *name)
+mono_perfcounter_category_del (const gunichar2 *name, gint32 name_length, MonoError *error)
 {
 	const CategoryDesc *cdesc;
 	SharedCategory *cat;
-	cdesc = find_category (name);
+	cdesc = find_category (name, name_length);
 	/* can't delete a predefined category */
 	if (cdesc)
 		return FALSE;
@@ -1419,44 +1310,36 @@ mono_perfcounter_category_del (MonoString *name)
 }
 
 /* this is an icall */
-MonoString*
-mono_perfcounter_category_help (MonoString *category, MonoString *machine)
+MonoStringHandle
+mono_perfcounter_category_help (const gunichar2 *category, gint32 category_length, MonoError *error)
 {
-	MonoError error;
-	MonoString *result = NULL;
+	MonoStringHandle result = NULL_HANDLE_STRING;
 	const CategoryDesc *cdesc;
-	error_init (&error);
-	/* no support for counters on other machines */
-	if (mono_string_compare_ascii (machine, "."))
-		return NULL;
-	cdesc = find_category (category);
+	error_init (error);
+	cdesc = find_category (category, category_length);
 	if (!cdesc) {
 		SharedCategory *scat = find_custom_category (category);
 		if (!scat)
-			return NULL;
-		result = mono_string_new_checked (mono_domain_get (), custom_category_help (scat), &error);
-		if (mono_error_set_pending_exception (&error))
-			return NULL;
+			return NULL_HANDLE_STRING;
+		result = mono_string_new_handle (mono_domain_get (), custom_category_help (scat), error);
+		return_val_if_nok (error, NULL_HANDLE_STRING);
 		return result;
 	}
-	result = mono_string_new_checked (mono_domain_get (), cdesc->help, &error);
-	if (mono_error_set_pending_exception (&error))
-		return NULL;
+	result = mono_string_new_utf8_len (mono_domain_get (), cdesc->help, cdesc->help_length, error);
+	return_val_if_nok (error, NULL_HANDLE_STRING);
 	return result;
 }
 
 /*
- * Check if the category named @category exists on @machine. If @counter is not NULL, return
+ * Check if the category named @category exists. If @counter is not NULL, return
  * TRUE only if a counter with that name exists in the category.
  */
 MonoBoolean
-mono_perfcounter_category_exists (MonoString *counter, MonoString *category, MonoString *machine)
+mono_perfcounter_category_exists (const gunichar2 *counter, gint32 counter_length, const gunichar2 *category,
+	gint32 category_length, MonoError *error)
 {
 	const CategoryDesc *cdesc;
-	/* no support for counters on other machines */
-	if (mono_string_compare_ascii (machine, "."))
-		return FALSE;
-	cdesc = find_category (category);
+	cdesc = find_category (category, category_length);
 	if (!cdesc) {
 		SharedCategory *scat = find_custom_category (category);
 		if (!scat)
@@ -1470,7 +1353,7 @@ mono_perfcounter_category_exists (MonoString *counter, MonoString *category, Mon
 	/* counter is allowed to be null */
 	if (!counter)
 		return TRUE;
-	if (get_counter_in_category (cdesc, counter))
+	if (get_counter_in_category (cdesc, counter, counter_length))
 		return TRUE;
 	return FALSE;
 }
@@ -1483,48 +1366,53 @@ typedef struct {
 	int type;
 } CounterCreationData;
 
+TYPED_HANDLE_DECL (CounterCreationData);
+
 /*
  * Since we'll keep a copy of the category per-process, we should also make sure
  * categories with the same name are compatible.
  */
 MonoBoolean
-mono_perfcounter_create (MonoString *category, MonoString *help, int type, MonoArray *items)
+mono_perfcounter_create (const gunichar2 *category, gint32 category_length, const gunichar2 *help,
+	gint32 help_length, gint32 type, MonoArrayHandle items, MonoError *error)
 {
-	MonoError error;
 	int result = FALSE;
-	int i, size;
-	int num_counters = mono_array_length (items);
+	int i, j = 0, k, size;
+	int num_counters = mono_array_handle_length (items);
 	int counters_data_size;
 	char *name = NULL;
 	char *chelp = NULL;
 	char **counter_info = NULL;
 	char *p;
 	SharedCategory *cat;
+	gsize name_length = 0;
+	gsize chelp_length = 0;
+	CounterCreationDataHandle data = MONO_HANDLE_NEW (CounterCreationData, NULL);
+	MonoStringHandle str = MONO_HANDLE_NEW (MonoString, NULL);
 
 	/* FIXME: ensure there isn't a category created already */
-	name = mono_string_to_utf8_checked (category, &error);
-	if (!mono_error_ok (&error))
-		goto failure;
-	chelp = mono_string_to_utf8_checked (help, &error);
-	if (!mono_error_ok (&error))
-		goto failure;
+	name = mono_utf16_to_utf8len (category, category_length, &name_length, error);
+	goto_if_nok (error, failure);
+	chelp = mono_utf16_to_utf8len (help, help_length, &chelp_length, error);
+	goto_if_nok (error, failure);
 	counter_info = g_new0 (char*, num_counters * 2);
 	/* calculate the size we need structure size + name/help + 2 0 string terminators */
-	size = G_STRUCT_OFFSET (SharedCategory, name) + strlen (name) + strlen (chelp) + 2;
+	size = G_STRUCT_OFFSET (SharedCategory, name) + name_length + chelp_length + 2;
 	for (i = 0; i < num_counters; ++i) {
-		CounterCreationData *data = mono_array_get (items, CounterCreationData*, i);
-		counter_info [i * 2] = mono_string_to_utf8_checked (data->name, &error);
-		if (!mono_error_ok (&error))
-			goto failure;
-		counter_info [i * 2 + 1] = mono_string_to_utf8_checked (data->help, &error);
-		if (!mono_error_ok (&error))
-			goto failure;
-		size += sizeof (SharedCounter) + 1; /* 1 is for the help 0 terminator */
-	}
-	for (i = 0; i < num_counters * 2; ++i) {
-		if (!counter_info [i])
-			goto failure;
-		size += strlen (counter_info [i]) + 1;
+		MONO_HANDLE_ARRAY_GETREF (data, items, i);
+		for (k = 0; k < 2; ++k) {
+			if (k)
+				MONO_HANDLE_GET (str, data, help);
+			else
+				MONO_HANDLE_GET (str, data, name);
+			gsize utf8_length = 0;
+			counter_info [j] = mono_string_to_utf8len (str, &utf8_length, error);
+			if (!is_ok (error) || !counter_info [j])
+				goto failure;
+			size += utf8_length + 1;
+			++j;
+		}
+		size += sizeof (SharedCounter) + 1; /* FIXME +1 should be -1 */
 	}
 	size += 7;
 	size &= ~7;
@@ -1545,10 +1433,11 @@ mono_perfcounter_create (MonoString *category, MonoString *help, int type, MonoA
 	p += strlen (name) + 1;
 	strcpy (p, chelp);
 	p += strlen (chelp) + 1;
+	j = 0;
 	for (i = 0; i < num_counters; ++i) {
-		CounterCreationData *data = mono_array_get (items, CounterCreationData*, i);
+		MONO_HANDLE_ARRAY_GETREF (data, items, i);
 		/* emit the SharedCounter structures */
-		*p++ = perfctr_type_compress (data->type);
+		*p++ = perfctr_type_compress (MONO_HANDLE_GETVAL (data, type));
 		*p++ = i;
 		strcpy (p, counter_info [i * 2]);
 		p += strlen (counter_info [i * 2]) + 1;
@@ -1567,30 +1456,24 @@ failure:
 	}
 	g_free (name);
 	g_free (chelp);
-	mono_error_cleanup (&error);
 	return result;
 }
 
-int
-mono_perfcounter_instance_exists (MonoString *instance, MonoString *category, MonoString *machine)
+MonoBoolean
+mono_perfcounter_instance_exists (const gunichar2 *instance, gint32 instance_length,
+	const gunichar2 *category, gint32 category_length, MonoError *error)
 {
-	MonoError error;
 	const CategoryDesc *cdesc;
 	SharedInstance *sinst;
 	char *name;
-	/* no support for counters on other machines */
-	/*FIXME: machine appears to be wrong
-	if (mono_string_compare_ascii (machine, "."))
-		return FALSE;*/
-	cdesc = find_category (category);
+	cdesc = find_category (category, category_length);
 	if (!cdesc) {
 		SharedCategory *scat;
 		scat = find_custom_category (category);
 		if (!scat)
 			return FALSE;
-		name = mono_string_to_utf8_checked (instance, &error);
-		if (mono_error_set_pending_exception (&error))
-			return FALSE;
+		name = mono_utf16_to_utf8 (instance, instance_length, error);
+		return_val_if_nok (error, FALSE);
 		sinst = find_custom_instance (scat, name);
 		g_free (name);
 		if (sinst)
@@ -1602,112 +1485,115 @@ mono_perfcounter_instance_exists (MonoString *instance, MonoString *category, Mo
 }
 
 /* this is an icall */
-MonoArray*
-mono_perfcounter_category_names (MonoString *machine)
+MonoArrayHandle
+mono_perfcounter_category_names (MonoError *error)
 {
-	MonoError error;
+	HANDLE_LOOP_PREPARE;
+
 	int i;
-	MonoArray *res;
+	MonoArrayHandle res;
 	MonoDomain *domain = mono_domain_get ();
 	GSList *custom_categories, *tmp;
-	/* no support for counters on other machines */
-	if (mono_string_compare_ascii (machine, ".")) {
-		res = mono_array_new_checked (domain, mono_get_string_class (), 0, &error);
-		mono_error_set_pending_exception (&error);
-		return res;
-	}
 	perfctr_lock ();
 	custom_categories = get_custom_categories ();
-	res = mono_array_new_checked (domain, mono_get_string_class (), NUM_CATEGORIES + g_slist_length (custom_categories), &error);
-	if (mono_error_set_pending_exception (&error)) {
-		perfctr_unlock ();
-		return NULL;
+	res = mono_array_new_handle (domain, mono_get_string_class (), NUM_CATEGORIES + g_slist_length (custom_categories), error);
+	if (!is_ok (error)) {
+		res = NULL_HANDLE_ARRAY;
+		goto leave;
 	}
 
 	for (i = 0; i < NUM_CATEGORIES; ++i) {
 		const CategoryDesc *cdesc = &predef_categories [i];
-		MonoString *name = mono_string_new_checked (domain, cdesc->name, &error);
-		goto_if_nok (&error, leave);
-		mono_array_setref (res, i, name);
+		MonoStringHandle name;
+		SETUP_ICALL_FRAME;
+		name = mono_string_new_utf8_len (domain, cdesc->name, cdesc->name_length, error);
+		if (is_ok (error))
+			MONO_HANDLE_ARRAY_SETREF (res, i, name);
+		CLEAR_ICALL_FRAME;
+		goto_if_nok (error, leave);
 	}
 	for (tmp = custom_categories; tmp; tmp = tmp->next) {
 		SharedCategory *scat = (SharedCategory *)tmp->data;
-		MonoString *name = mono_string_new_checked (domain, scat->name, &error);
-		goto_if_nok (&error, leave);
-		mono_array_setref (res, i, name);
+		MonoStringHandle name;
+		SETUP_ICALL_FRAME;
+		name = mono_string_new_utf8_len (domain, scat->name, strlen (scat->name), error);
+		if (is_ok (error))
+			MONO_HANDLE_ARRAY_SETREF (res, i, name);
+		CLEAR_ICALL_FRAME;
+		goto_if_nok (error, leave);
 		i++;
 	}
 leave:
 	perfctr_unlock ();
 	g_slist_free (custom_categories);
-	mono_error_set_pending_exception (&error);
 	return res;
 }
 
-MonoArray*
-mono_perfcounter_counter_names (MonoString *category, MonoString *machine)
+MonoArrayHandle
+mono_perfcounter_counter_names (const gunichar2 *category, gint32 category_length, MonoError *error)
 {
-	MonoError error;
+	HANDLE_LOOP_PREPARE;
+
 	int i;
 	SharedCategory *scat;
 	const CategoryDesc *cdesc;
-	MonoArray *res;
+	MonoArrayHandle res = NULL_HANDLE_ARRAY;
 	MonoDomain *domain = mono_domain_get ();
-	/* no support for counters on other machines */
-	if (mono_string_compare_ascii (machine, ".")) {
-		res =  mono_array_new_checked (domain, mono_get_string_class (), 0, &error);
-		mono_error_set_pending_exception (&error);
-		return res;
-	}
-	cdesc = find_category (category);
+
+	cdesc = find_category (category, category_length);
 	if (cdesc) {
-		res = mono_array_new_checked (domain, mono_get_string_class (), cdesc [1].first_counter - cdesc->first_counter, &error);
-		if (mono_error_set_pending_exception (&error))
-			return NULL;
+		res = mono_array_new_handle (domain, mono_get_string_class (), cdesc [1].first_counter - cdesc->first_counter, error);
+		return_val_if_nok (error, NULL_HANDLE_ARRAY);
 		for (i = cdesc->first_counter; i < cdesc [1].first_counter; ++i) {
 			const CounterDesc *desc = &predef_counters [i];
-			MonoString *name = mono_string_new_checked (domain, desc->name, &error);
-			if (mono_error_set_pending_exception (&error))
-				return NULL;
-			mono_array_setref (res, i - cdesc->first_counter, name);
+			MonoStringHandle name;
+			SETUP_ICALL_FRAME;
+			name = mono_string_new_utf8_len (domain, desc->name, desc->name_length, error);
+			if (is_ok (error))
+				MONO_HANDLE_ARRAY_SETREF (res, i - cdesc->first_counter, name);
+			CLEAR_ICALL_FRAME;
+			return_val_if_nok (error, NULL_HANDLE_ARRAY);
 		}
 		return res;
 	}
 	perfctr_lock ();
 	scat = find_custom_category (category);
 	if (scat) {
-		char *p = custom_category_counters (scat);
+		SharedCounter *counter = custom_category_counters (scat);
 		int i;
-		res = mono_array_new_checked (domain, mono_get_string_class (), scat->num_counters, &error);
-		if (mono_error_set_pending_exception (&error)) {
-			perfctr_unlock ();
-			return NULL;
+		res = mono_array_new_handle (domain, mono_get_string_class (), scat->num_counters, error);
+		if (!is_ok (error)) {
+			res = NULL_HANDLE_ARRAY;
+			goto leave;
 		}
 
 		for (i = 0; i < scat->num_counters; ++i) {
-			MonoString *str = mono_string_new_checked (domain, p + 1, &error);
-			goto_if_nok (&error, leave);
-			mono_array_setref (res, i, str);
-			p += 2; /* skip counter type */
-			p += strlen (p) + 1; /* skip counter name */
-			p += strlen (p) + 1; /* skip counter help */
+			MonoStringHandle str;
+			SETUP_ICALL_FRAME;
+			str = mono_string_new_utf8_len (domain, counter->name, strlen (counter->name), error);
+			if (is_ok (error))
+				MONO_HANDLE_ARRAY_SETREF (res, i, str);
+			CLEAR_ICALL_FRAME;
+			goto_if_nok (error, leave);
+			counter = next_custom_category_counter (counter);
 		}
 	} else
-		res = mono_array_new_checked (domain, mono_get_string_class (), 0, &error);
+		res = mono_array_new_handle (domain, mono_get_string_class (), 0, error);
 leave:
 	perfctr_unlock ();
-	mono_error_set_pending_exception (&error);
 	return res;
 }
 
-static MonoArray*
+static MonoArrayHandle
 get_string_array (void **array, int count, gboolean is_process, MonoError *error)
 {
+	HANDLE_LOOP_PREPARE;
+
 	int i;
 	MonoDomain *domain = mono_domain_get ();
 	error_init (error);
-	MonoArray * res = mono_array_new_checked (mono_domain_get (), mono_get_string_class (), count, error);
-	return_val_if_nok (error, NULL);
+	MonoArrayHandle res = mono_array_new_handle (domain, mono_get_string_class (), count, error);
+	return_val_if_nok (error, NULL_HANDLE_ARRAY);
 	for (i = 0; i < count; ++i) {
 		char buf [128];
 		char *p;
@@ -1718,40 +1604,50 @@ get_string_array (void **array, int count, gboolean is_process, MonoError *error
 			sprintf (buf, "%d", GPOINTER_TO_INT (array [i]));
 			p = buf;
 		}
-		MonoString *str = mono_string_new_checked (domain, p, error);
+		MonoStringHandle str;
+		SETUP_ICALL_FRAME;
+		str = mono_string_new_utf8_len (domain, p, strlen (p), error);
 		if (p != buf)
 			g_free (p);
-		return_val_if_nok (error, NULL);
-		mono_array_setref (res, i, str);
+		if (is_ok (error))
+			MONO_HANDLE_ARRAY_SETREF (res, i, str);
+		CLEAR_ICALL_FRAME;
+		return_val_if_nok (error, NULL_HANDLE_ARRAY);
 	}
 	return res;
 }
 
-static MonoArray*
+static MonoArrayHandle
 get_string_array_of_strings (void **array, int count, MonoError *error)
 {
+	HANDLE_LOOP_PREPARE;
+
 	int i;
 	MonoDomain *domain = mono_domain_get ();
 	error_init (error);
-	MonoArray * res = mono_array_new_checked (mono_domain_get (), mono_get_string_class (), count, error);
-	return_val_if_nok (error, NULL);
+	MonoArrayHandle res = mono_array_new_handle (domain, mono_get_string_class (), count, error);
+	return_val_if_nok (error, NULL_HANDLE_ARRAY);
 	for (i = 0; i < count; ++i) {
-		char* p = (char *)array[i];
-		MonoString *str = mono_string_new_checked (domain, p, error);
-		return_val_if_nok (error, NULL);
-		mono_array_setref (res, i, str);
+		char* p = (char *)array [i];
+		MonoStringHandle str;
+		SETUP_ICALL_FRAME;
+		str = mono_string_new_utf8_len (domain, p, strlen (p), error);
+		if (is_ok (error))
+			MONO_HANDLE_ARRAY_SETREF (res, i, str);
+		CLEAR_ICALL_FRAME;
+		return_val_if_nok (error, NULL_HANDLE_ARRAY);
 	}
 
 	return res;
 }
 
-static MonoArray*
+static MonoArrayHandle
 get_mono_instances (MonoError *error)
 {
 	int count = 64;
 	int res;
 	void **buf = NULL;
-	MonoArray *array;
+	MonoArrayHandle array;
 	error_init (error);
 	do {
 		count *= 2;
@@ -1764,12 +1660,12 @@ get_mono_instances (MonoError *error)
 	return array;
 }
 
-static MonoArray*
+static MonoArrayHandle
 get_cpu_instances (MonoError *error)
 {
 	void **buf = NULL;
 	int i, count;
-	MonoArray *array;
+	MonoArrayHandle array;
 	error_init (error);
 	count = mono_cpu_count () + 1; /* +1 for "_Total" */
 	buf = g_new (void*, count);
@@ -1777,16 +1673,16 @@ get_cpu_instances (MonoError *error)
 		buf [i] = GINT_TO_POINTER (i - 1); /* -1 => _Total */
 	array = get_string_array (buf, count, FALSE, error);
 	g_free (buf);
-	MonoString *total = mono_string_new_checked (mono_domain_get (), "_Total", error);
-	return_val_if_nok (error, NULL);
-	mono_array_setref (array, 0, total);
+	MonoStringHandle total = mono_string_new_handle (mono_domain_get (), "_Total", error);
+	return_val_if_nok (error, NULL_HANDLE_ARRAY);
+	MONO_HANDLE_ARRAY_SETREF (array, 0, total);
 	return array;
 }
 
-static MonoArray*
+static MonoArrayHandle
 get_processes_instances (MonoError *error)
 {
-	MonoArray *array;
+	MonoArrayHandle array;
 	int count = 0;
 	void **buf = mono_process_list (&count);
 	error_init (error);
@@ -1797,10 +1693,10 @@ get_processes_instances (MonoError *error)
 	return array;
 }
 
-static MonoArray*
+static MonoArrayHandle
 get_networkinterface_instances (MonoError *error)
 {
-	MonoArray *array;
+	MonoArrayHandle array;
 	int count = 0;
 	error_init (error);
 	void **buf = mono_networkinterface_list (&count);
@@ -1811,9 +1707,11 @@ get_networkinterface_instances (MonoError *error)
 	return array;
 }
 
-static MonoArray*
-get_custom_instances (MonoString *category, MonoError *error)
+static MonoArrayHandle
+get_custom_instances (const gunichar2 *category, MonoError *error)
 {
+	HANDLE_LOOP_PREPARE;
+
 	SharedCategory *scat;
 	error_init (error);
 	scat = find_custom_category (category);
@@ -1821,63 +1719,60 @@ get_custom_instances (MonoString *category, MonoError *error)
 		GSList *list = get_custom_instances_list (scat);
 		GSList *tmp;
 		int i = 0;
-		MonoArray *array = mono_array_new_checked (mono_domain_get (), mono_get_string_class (), g_slist_length (list), error);
+		MonoArrayHandle array = mono_array_new_handle (mono_domain_get (), mono_get_string_class (), g_slist_length (list), error);
 		if (!is_ok (error)) {
-			g_slist_free (list);
-			return NULL;
+			array = NULL_HANDLE_ARRAY;
+			goto exit;
 		}
 		for (tmp = list; tmp; tmp = tmp->next) {
 			SharedInstance *inst = (SharedInstance *)tmp->data;
-			MonoString *str = mono_string_new_checked (mono_domain_get (), inst->instance_name, error);
+			MonoStringHandle str;
+			SETUP_ICALL_FRAME;
+			str = mono_string_new_utf8_len (mono_domain_get (), inst->instance_name, strlen (inst->instance_name), error);
+			if (is_ok (error))
+				MONO_HANDLE_ARRAY_SETREF (array, i, str);
+			CLEAR_ICALL_FRAME;
 			if (!is_ok (error)) {
-				g_slist_free (list);
-				return NULL;
+				array = NULL_HANDLE_ARRAY;
+				goto exit;
 			}
-			mono_array_setref (array, i, str);
 			i++;
 		}
+exit:
 		g_slist_free (list);
 		return array;
 	}
-	return mono_array_new_checked (mono_domain_get (), mono_get_string_class (), 0, error);
+	return mono_array_new_handle (mono_domain_get (), mono_get_string_class (), 0, error);
 }
 
-MonoArray*
-mono_perfcounter_instance_names (MonoString *category, MonoString *machine)
+MonoArrayHandle
+mono_perfcounter_instance_names (const gunichar2 *category, gint32 category_length, MonoError *error)
 {
-	MonoError error;
 	const CategoryDesc* cat;
-	MonoArray *result = NULL;
-	if (mono_string_compare_ascii (machine, ".")) {
-		result = mono_array_new_checked (mono_domain_get (), mono_get_string_class (), 0, &error);
-		mono_error_set_pending_exception (&error);
-		return result;
-	}
-	
-	cat = find_category (category);
+	MonoArrayHandle result = NULL_HANDLE_ARRAY;
+
+	cat = find_category (category, category_length);
 	if (!cat) {
-		MonoArray *result = get_custom_instances (category, &error);
-		mono_error_set_pending_exception (&error);
+		result = get_custom_instances (category, error);
 		return result;
 	}
 	switch (cat->instance_type) {
 	case MonoInstance:
-		result = get_mono_instances (&error);
+		result = get_mono_instances (error);
 		break;
 	case CPUInstance:
-		result = get_cpu_instances (&error);
+		result = get_cpu_instances (error);
 		break;
 	case ProcessInstance:
-		result = get_processes_instances (&error);
+		result = get_processes_instances (error);
 		break;
 	case NetworkInterfaceInstance:
-		result = get_networkinterface_instances (&error);
+		result = get_networkinterface_instances (error);
 		break;
-	case ThreadInstance:
+	case ThreadInstance: // fallthrough?
 	default:
-		result = mono_array_new_checked (mono_domain_get (), mono_get_string_class (), 0, &error);
+		result = mono_array_new_handle (mono_domain_get (), mono_get_string_class (), 0, error);
 	}
-	mono_error_set_pending_exception (&error);
 	return result;
 }
 
@@ -1890,8 +1785,6 @@ static gboolean
 mono_perfcounter_foreach_shared_item (SharedHeader *header, gpointer data)
 {
 	int i;
-	char *p, *name;
-	unsigned char type;
 	void *addr;
 	SharedCategory *cat;
 	SharedCounter *counter;
@@ -1900,26 +1793,15 @@ mono_perfcounter_foreach_shared_item (SharedHeader *header, gpointer data)
 
 	if (header->ftype == FTYPE_CATEGORY) {
 		cat = (SharedCategory*)header;
-
-		p = cat->name;
-		p += strlen (p) + 1; /* skip category name */
-		p += strlen (p) + 1; /* skip category help */
-
+		counter = custom_category_counters (cat);
 		for (i = 0; i < cat->num_counters; ++i) {
-			counter = (SharedCounter*) p;
-			type = (unsigned char)*p++;
-			/* seq_num = (int)* */ p++;
-			name = p;
-			p += strlen (p) + 1;
-			/* help = p; */
-			p += strlen (p) + 1;
-
-			inst = custom_get_instance (cat, counter, name);
+			inst = custom_get_instance (cat, counter, counter->name);
 			if (!inst)
 				return FALSE;
 			addr = custom_get_value_address (counter, inst);
-			if (!foreach_data->cb (cat->name, name, type, addr ? *(gint64*)addr : 0, foreach_data->data))
+			if (!foreach_data->cb (cat->name, counter->name, counter->type, addr ? *(gint64*)addr : 0, foreach_data->data))
 				return FALSE;
+			counter = next_custom_category_counter (counter);
 		}
 	}
 
@@ -1939,8 +1821,14 @@ mono_perfcounter_foreach (PerfCounterEnumCallback cb, gpointer data)
 }
 
 #else
+
+#ifndef ENABLE_NETCORE
+
 void*
-mono_perfcounter_get_impl (MonoString* category, MonoString* counter, MonoString* instance, MonoString* machine, int *type, MonoBoolean *custom)
+mono_perfcounter_get_impl (const gunichar2 *category, gint32 category_length,
+		const gunichar2 *counter, gint32 counter_length,
+		const gunichar2 *instance, gint32 instance_length,
+		gint32 *type, MonoBoolean *custom, MonoError *error)
 {
 	g_assert_not_reached ();
 }
@@ -1965,50 +1853,62 @@ mono_perfcounter_free_data (void *impl)
 
 /* Category icalls */
 MonoBoolean
-mono_perfcounter_category_del (MonoString *name)
+mono_perfcounter_category_del (const gunichar2 *name, gint32 name_length, MonoError *error)
 {
 	g_assert_not_reached ();
 }
 
-MonoString*
-mono_perfcounter_category_help (MonoString *category, MonoString *machine)
-{
-	g_assert_not_reached ();
-}
-
-MonoBoolean
-mono_perfcounter_category_exists (MonoString *counter, MonoString *category, MonoString *machine)
+MonoStringHandle
+mono_perfcounter_category_help (const gunichar2 *category, gint32 category_length, MonoError *error)
 {
 	g_assert_not_reached ();
 }
 
 MonoBoolean
-mono_perfcounter_create (MonoString *category, MonoString *help, int type, MonoArray *items)
+mono_perfcounter_category_exists (const gunichar2 *counter, gint32 counter_length, const gunichar2 *category,
+	gint32 category_length, MonoError *error)
 {
 	g_assert_not_reached ();
 }
 
-int
-mono_perfcounter_instance_exists (MonoString *instance, MonoString *category, MonoString *machine)
+MonoBoolean
+mono_perfcounter_create (const gunichar2 *category, gint32 category_length, const gunichar2 *help,
+	gint32 help_length, gint32 type, MonoArrayHandle items, MonoError *error)
 {
 	g_assert_not_reached ();
 }
 
-MonoArray*
-mono_perfcounter_category_names (MonoString *machine)
+MonoBoolean
+mono_perfcounter_instance_exists (const gunichar2 *instance, gint32 instance_length,
+	const gunichar2 *category, gint32 category_length, MonoError *error)
 {
 	g_assert_not_reached ();
 }
 
-MonoArray*
-mono_perfcounter_counter_names (MonoString *category, MonoString *machine)
+MonoArrayHandle
+mono_perfcounter_category_names (MonoError *error)
 {
 	g_assert_not_reached ();
 }
 
-MonoArray*
-mono_perfcounter_instance_names (MonoString *category, MonoString *machine)
+MonoArrayHandle
+mono_perfcounter_counter_names (const gunichar2 *category, gint32 category_length, MonoError *error)
 {
 	g_assert_not_reached ();
 }
+
+MonoArrayHandle
+mono_perfcounter_instance_names (const gunichar2 *category, gint32 category_length, MonoError *error)
+{
+	g_assert_not_reached ();
+}
+
+#endif /* ENABLE_NETCORE */
+
+void
+mono_perfcounter_foreach (PerfCounterEnumCallback cb, gpointer data)
+{
+	g_assert_not_reached ();
+}
+
 #endif

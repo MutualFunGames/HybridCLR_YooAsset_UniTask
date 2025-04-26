@@ -1,6 +1,6 @@
 #include "il2cpp-config.h"
 
-#if IL2CPP_TARGET_POSIX
+#if IL2CPP_TARGET_POSIX && !IL2CPP_USE_PLATFORM_SPECIFIC_CONSOLE
 
 #include "os/Console.h"
 #include "os/File.h"
@@ -22,7 +22,6 @@ namespace os
 {
 namespace Console
 {
-#if !RUNTIME_TINY
     static bool setupComplete = false;
     static int32_t s_terminalSize;
     static struct termios s_initialAttr;
@@ -331,8 +330,6 @@ namespace Console
 
         return true;
     }
-
-#endif
 
     const char* NewLine()
     {

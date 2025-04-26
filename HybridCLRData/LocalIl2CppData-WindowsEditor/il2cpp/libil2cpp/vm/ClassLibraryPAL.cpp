@@ -2,7 +2,7 @@
 #include "vm/ClassLibraryPAL.h"
 #include "os/ClassLibraryPAL/pal_mirror_structs.h"
 
-#if IL2CPP_DEBUG && !RUNTIME_TINY && !RUNTIME_NONE
+#if IL2CPP_DEBUG && !RUNTIME_NONE
 #define IL2CPP_ENABLE_PAL_MIRROR_CHECK 1
 #else
 #define IL2CPP_ENABLE_PAL_MIRROR_CHECK 0

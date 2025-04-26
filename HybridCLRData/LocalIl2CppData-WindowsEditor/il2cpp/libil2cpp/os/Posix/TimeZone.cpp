@@ -1,6 +1,6 @@
 #include "il2cpp-config.h"
 
-#if IL2CPP_TARGET_POSIX && !RUNTIME_TINY
+#if IL2CPP_TARGET_POSIX
 
 #include "os/TimeZone.h"
 
@@ -74,6 +74,21 @@ namespace os
         }
 
         *daylight_inverted = start.tm_isdst;
+
+#ifdef IL2CPP_TARGET_QNX
+        // If we got here then probably there is no tz database in the system.
+        // The default time zone is GMT which has no daylight saving time (same for UTC).
+
+        tt = *localtime(&t);
+        strftime(tzone, sizeof(tzone), "%Z", &tt);
+
+        if (tzone[0] == 0 || memcmp(tzone, "GMT", 3) == 0 || memcmp(tzone, "UTC", 3) == 0)
+        {
+            names[0] = tzone;
+            names[1] = tzone;
+            return true;
+        }
+#endif // IL2CPP_TARGET_QNX
 
         gmtoff = GMTOffset(&start, t);
         gmtoff_start = gmtoff;

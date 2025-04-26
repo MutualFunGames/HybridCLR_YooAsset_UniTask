@@ -73,7 +73,7 @@ mono_bitset_mem_new (gpointer mem, guint32 max_size, guint32 flags) {
  */
 void
 mono_bitset_free (MonoBitSet *set) {
-	if (!(set->flags & MONO_BITSET_DONT_FREE))
+	if (set && !(set->flags & MONO_BITSET_DONT_FREE))
 		g_free (set);
 }
 
@@ -201,14 +201,17 @@ mono_bitset_size (const MonoBitSet *set) {
  * \returns number of bits that are set.
  */
 guint32
-mono_bitset_count (const MonoBitSet *set) {
+mono_bitset_count (const MonoBitSet *set)
+{
 	guint32 i, count;
 	gsize d;
 
 	count = 0;
 	for (i = 0; i < set->size / BITS_PER_CHUNK; ++i) {
 		d = set->data [i];
-#ifdef __GNUC__
+#if defined (__GNUC__) && !defined (HOST_WIN32)
+// The builtins do work on Win32, but can cause a not worthwhile runtime dependency.
+// See https://github.com/mono/mono/pull/14248.
 		if (sizeof (gsize) == sizeof (unsigned int))
 			count += __builtin_popcount (d);
 		else
@@ -266,7 +269,7 @@ bitstart_mask [] = {
 
 #else
 
-static inline gint
+static gint
 my_g_bit_nth_lsf (gsize mask, gint nth_bit)
 {
 	nth_bit ++;
@@ -301,7 +304,7 @@ my_g_bit_nth_lsf (gsize mask, gint nth_bit)
 #endif
 }
 
-static inline gint
+static gint
 my_g_bit_nth_lsf_nomask (gsize mask)
 {
 	/* Mask is expected to be != 0 */
@@ -331,7 +334,7 @@ my_g_bit_nth_lsf_nomask (gsize mask)
 
 #endif
 
-static inline int
+static int
 my_g_bit_nth_msf (gsize mask,
 	       gint   nth_bit)
 {
@@ -642,6 +645,12 @@ mono_bitset_foreach (MonoBitSet *set, MonoBitSetFunc func, gpointer data)
 					func (j + i * BITS_PER_CHUNK, data);
 		}
 	}
+}
+
+gboolean
+mono_bitset_test_safe (const MonoBitSet *set, guint32 pos)
+{
+	return set && set->size > pos && mono_bitset_test (set, pos);
 }
 
 #ifdef TEST_BITSET

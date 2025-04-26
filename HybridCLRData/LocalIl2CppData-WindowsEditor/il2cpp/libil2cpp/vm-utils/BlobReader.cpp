@@ -1,7 +1,5 @@
 #include "il2cpp-config.h"
 
-#if !RUNTIME_TINY
-
 #include <stdint.h>
 #include "BlobReader.h"
 #include "gc/GarbageCollector.h"
@@ -15,8 +13,6 @@
 #include "utils/MemoryRead.h"
 #include "il2cpp-object-internals.h"
 
-#include "hybridclr/metadata/RawImage.h"
-
 const uint8_t kArrayTypeWithSameElements = 0;
 const uint8_t kArrayTypeWithDifferentElements = 1;
 
@@ -24,12 +20,12 @@ namespace il2cpp
 {
 namespace utils
 {
-    bool BlobReader::GetConstantValueFromBlob(const Il2CppImage* image, Il2CppTypeEnum type, const char* blob, void* value, void*, bool useInterpFormat)
+    bool BlobReader::GetConstantValueFromBlob(const Il2CppImage* image, Il2CppTypeEnum type, const char* blob, void* value)
     {
-        return GetConstantValueFromBlob(image, type, &blob, value, true, useInterpFormat);
+        return GetConstantValueFromBlob(image, type, &blob, value, true);
     }
 
-    bool BlobReader::GetConstantValueFromBlob(const Il2CppImage* image, Il2CppTypeEnum type, const char **blob, void *value, bool deserializeManagedObjects, bool useInterpFormat)
+    bool BlobReader::GetConstantValueFromBlob(const Il2CppImage* image, Il2CppTypeEnum type, const char **blob, void *value, bool deserializeManagedObjects)
     {
         switch (type)
         {
@@ -46,10 +42,10 @@ namespace utils
                 *(uint16_t*)value = Read16(blob);
                 break;
             case IL2CPP_TYPE_U4:
-                *(uint32_t*)value = useInterpFormat ? Read32(blob) : ReadCompressedUInt32(blob);
+                *(uint32_t*)value = ReadCompressedUInt32(blob);
                 break;
             case IL2CPP_TYPE_I4:
-                *(int32_t*)value = useInterpFormat ? (int32_t)Read32(blob) : ReadCompressedInt32(blob);
+                *(int32_t*)value = ReadCompressedInt32(blob);
                 break;
             case IL2CPP_TYPE_U8:
             case IL2CPP_TYPE_I8:
@@ -66,28 +62,18 @@ namespace utils
                 *(void**)value = NULL;
                 if (*blob != NULL)
                 {
-                    if (useInterpFormat)
-                    {
-                        // origin IL metadata use compress encode length
-                        hybridclr::metadata::BlobReader br = hybridclr::metadata::RawImage::DecodeBlob((const hybridclr::byte*)*blob);
-                        *(Il2CppString**)value = il2cpp::vm::String::NewUtf16((const Il2CppChar*)br.GetData(), br.GetLength() / 2);
-                        *blob = (const char*)(br.GetData() + br.GetLength());
-                    }
-                    else
-                    {
-                        // int32_t length followed by non-null terminated utf-8 byte stream
-                        int32_t length = ReadCompressedInt32(blob);
+                    // int32_t length followed by non-null terminated utf-8 byte stream
+                    int32_t length = ReadCompressedInt32(blob);
 
-                        // A length of -1 is a null string
-                        if (length != -1)
+                    // A length of -1 is a null string
+                    if (length != -1)
+                    {
+                        if (deserializeManagedObjects)
                         {
-                            if (deserializeManagedObjects)
-                            {
-                                *(Il2CppString**)value = il2cpp::vm::String::NewLen(*blob, length);
-                                il2cpp::gc::GarbageCollector::SetWriteBarrier((void**)value);
-                            }
-                            *blob += length;
+                            *(Il2CppString**)value = il2cpp::vm::String::NewLen(*blob, length);
+                            il2cpp::gc::GarbageCollector::SetWriteBarrier((void**)value);
                         }
+                        *blob += length;
                     }
                 }
                 break;
@@ -129,7 +115,7 @@ namespace utils
                     // Assumption: The array code is only called for custom attribute data
                     il2cpp::metadata::CustomAttributeDataStorage dataBuffer;
                     IL2CPP_ASSERT(arrayElementClass->element_size <= sizeof(il2cpp::metadata::CustomAttributeDataStorage));
-                    if (!GetConstantValueFromBlob(image, elementType, blob, &dataBuffer, deserializeManagedObjects, hybridclr::metadata::IsInterpreterImage(image)))
+                    if (!GetConstantValueFromBlob(image, elementType, blob, &dataBuffer, deserializeManagedObjects))
                         return false;
 
                     if (deserializeManagedObjects)
@@ -205,5 +191,3 @@ namespace utils
     }
 } /* utils */
 } /* il2cpp */
-
-#endif

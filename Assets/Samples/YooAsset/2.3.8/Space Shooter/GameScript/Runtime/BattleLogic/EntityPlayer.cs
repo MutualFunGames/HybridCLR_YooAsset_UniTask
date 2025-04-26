@@ -34,7 +34,7 @@ public class EntityPlayer : MonoBehaviour
         float moveVertical = Input.GetAxis("Vertical");
 
         Vector3 movement = new Vector3(moveHorizontal, 0.0f, moveVertical);
-        _rigidbody.velocity = movement * MoveSpeed;
+        _rigidbody.linearVelocity = movement * MoveSpeed;
         _rigidbody.position = new Vector3
         (
             Mathf.Clamp(GetComponent<Rigidbody>().position.x, Boundary.xMin, Boundary.xMax),
@@ -43,7 +43,7 @@ public class EntityPlayer : MonoBehaviour
         );
 
         float tilt = 5f;
-        _rigidbody.rotation = Quaternion.Euler(0.0f, 0.0f, _rigidbody.velocity.x * -tilt);
+        _rigidbody.rotation = Quaternion.Euler(0.0f, 0.0f, _rigidbody.linearVelocity.x * -tilt);
     }
     void OnTriggerEnter(Collider other)
     {

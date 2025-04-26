@@ -89,11 +89,6 @@ namespace gc
             return value;
         }
 
-        void Add(const Key& k, T value)
-        {
-            GetOrAdd(k, value);
-        }
-
         bool TryGetValue(const Key& k, T* value)
         {
             os::FastReaderReaderWriterAutoSharedLock readLock(&lock);

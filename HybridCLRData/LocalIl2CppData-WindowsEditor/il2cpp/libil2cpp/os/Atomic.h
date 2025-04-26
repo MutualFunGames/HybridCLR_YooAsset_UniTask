@@ -1,8 +1,12 @@
 #pragma once
 
+#include "c-api/il2cpp-config-platforms.h"
+
 #include <stdint.h>
 #include "utils/NonCopyable.h"
-#include "c-api/Atomic-c-api.h"
+
+#include "Baselib.h"
+#include "C/Baselib_Atomic_TypeSafe.h"
 
 namespace il2cpp
 {
@@ -19,12 +23,16 @@ namespace os
 
         static inline void FullMemoryBarrier()
         {
-            UnityPalFullMemoryBarrier();
+            Baselib_atomic_thread_fence_seq_cst();
         }
 
         static inline int32_t Add(int32_t* location1, int32_t value)
         {
-            return UnityPalAdd(location1, value);
+            int32_t result = Baselib_atomic_fetch_add_32_seq_cst(location1, value) + value;
+#if IL2CPP_TARGET_ARM64
+            Baselib_atomic_thread_fence_seq_cst();
+#endif
+            return result;
         }
 
         static inline uint32_t Add(uint32_t* location1, uint32_t value)
@@ -35,7 +43,11 @@ namespace os
 #if IL2CPP_ENABLE_INTERLOCKED_64_REQUIRED_ALIGNMENT
         static inline int64_t Add64(int64_t* location1, int64_t value)
         {
-            return UnityPalAdd64(location1, value);
+            int64_t result = Baselib_atomic_fetch_add_64_seq_cst(location1, value) + value;
+#if IL2CPP_TARGET_ARM64
+            Baselib_atomic_thread_fence_seq_cst();
+#endif
+            return result;
         }
 
 #endif
@@ -43,18 +55,30 @@ namespace os
         template<typename T>
         static inline T* CompareExchangePointer(T** dest, T* newValue, T* oldValue)
         {
-            return static_cast<T*>(UnityPalCompareExchangePointer((void**)dest, newValue, oldValue));
+            Baselib_atomic_compare_exchange_strong_ptr_seq_cst_seq_cst((intptr_t*)dest, (intptr_t*)&oldValue, (intptr_t)newValue);
+#if IL2CPP_TARGET_ARM64
+            Baselib_atomic_thread_fence_seq_cst();
+#endif
+            return static_cast<T*>(oldValue);
         }
 
         template<typename T>
-        static inline T* ExchangePointer(T** dest, T* newValue)
+        static inline T* ExchangePointer(T** dest, const T* newValue)
         {
-            return static_cast<T*>(UnityPalExchangePointer((void**)dest, newValue));
+            T* result = (T*)Baselib_atomic_exchange_ptr_seq_cst((intptr_t*)dest, (intptr_t)newValue);
+#if IL2CPP_TARGET_ARM64
+            Baselib_atomic_thread_fence_seq_cst();
+#endif
+            return result;
         }
 
         static inline int64_t Read64(int64_t* addr)
         {
-            return UnityPalRead64(addr);
+            int64_t result = Baselib_atomic_fetch_add_64_seq_cst(addr, 0);
+#if IL2CPP_TARGET_ARM64
+            Baselib_atomic_thread_fence_seq_cst();
+#endif
+            return result;
         }
 
         static inline uint64_t Read64(uint64_t* addr)
@@ -64,7 +88,7 @@ namespace os
 
         static inline int32_t LoadRelaxed(const int32_t* addr)
         {
-            return UnityPalLoadRelaxed(addr);
+            return Baselib_atomic_load_32_relaxed(addr);
         }
 
         template<typename T>
@@ -76,16 +100,23 @@ namespace os
         template<typename T>
         static inline T* ReadPointer(T** pointer)
         {
-        #if IL2CPP_SIZEOF_VOID_P == 4
-            return reinterpret_cast<T*>(Add(reinterpret_cast<int32_t*>(pointer), 0));
-        #else
-            return reinterpret_cast<T*>(Read64(reinterpret_cast<int64_t*>(pointer)));
-        #endif
+            return (T*)Baselib_atomic_load_ptr_relaxed((intptr_t*)pointer);
+        }
+
+        template<typename T>
+        static inline void PublishPointer(T** pointer, T* value)
+        {
+            Baselib_atomic_thread_fence_release();
+            Baselib_atomic_store_ptr_relaxed((intptr_t*)pointer, (intptr_t)value);
         }
 
         static inline int32_t Increment(int32_t* value)
         {
-            return UnityPalIncrement(value);
+            int32_t result = Baselib_atomic_fetch_add_32_seq_cst(value, 1) + 1;
+#if IL2CPP_TARGET_ARM64
+            Baselib_atomic_thread_fence_seq_cst();
+#endif
+            return result;
         }
 
         static inline uint32_t Increment(uint32_t* value)
@@ -96,7 +127,11 @@ namespace os
 #if IL2CPP_ENABLE_INTERLOCKED_64_REQUIRED_ALIGNMENT
         static inline int64_t Increment64(int64_t* value)
         {
-            return UnityPalIncrement64(value);
+            int64_t result = Baselib_atomic_fetch_add_64_seq_cst(value, 1) + 1;
+#if IL2CPP_TARGET_ARM64
+            Baselib_atomic_thread_fence_seq_cst();
+#endif
+            return result;
         }
 
         static inline uint64_t Increment64(uint64_t* value)
@@ -108,7 +143,11 @@ namespace os
 
         static inline int32_t Decrement(int32_t* value)
         {
-            return UnityPalDecrement(value);
+            int32_t result = Baselib_atomic_fetch_add_32_seq_cst(value, -1) - 1;
+#if IL2CPP_TARGET_ARM64
+            Baselib_atomic_thread_fence_seq_cst();
+#endif
+            return result;
         }
 
         static inline uint32_t Decrement(uint32_t* value)
@@ -119,7 +158,11 @@ namespace os
 #if IL2CPP_ENABLE_INTERLOCKED_64_REQUIRED_ALIGNMENT
         static inline int64_t Decrement64(int64_t* value)
         {
-            return UnityPalDecrement64(value);
+            int64_t result = Baselib_atomic_fetch_add_64_seq_cst(value, -1) - 1;
+#if IL2CPP_TARGET_ARM64
+            Baselib_atomic_thread_fence_seq_cst();
+#endif
+            return result;
         }
 
         static inline uint64_t Decrement64(uint64_t* value)
@@ -131,7 +174,11 @@ namespace os
 
         static inline int32_t CompareExchange(int32_t* dest, int32_t exchange, int32_t comparand)
         {
-            return UnityPalCompareExchange(dest, exchange, comparand);
+            Baselib_atomic_compare_exchange_strong_32_seq_cst_seq_cst(dest, &comparand, exchange);
+#if IL2CPP_TARGET_ARM64
+            Baselib_atomic_thread_fence_seq_cst();
+#endif
+            return comparand;
         }
 
         static inline uint32_t CompareExchange(uint32_t* value, uint32_t newValue, uint32_t oldValue)
@@ -141,7 +188,11 @@ namespace os
 
         static inline int64_t CompareExchange64(int64_t* dest, int64_t exchange, int64_t comparand)
         {
-            return UnityPalCompareExchange64(dest, exchange, comparand);
+            Baselib_atomic_compare_exchange_strong_64_seq_cst_seq_cst(dest, &comparand, exchange);
+#if IL2CPP_TARGET_ARM64
+            Baselib_atomic_thread_fence_seq_cst();
+#endif
+            return comparand;
         }
 
         static inline uint64_t CompareExchange64(uint64_t* value, uint64_t newValue, uint64_t oldValue)
@@ -149,9 +200,18 @@ namespace os
             return (uint64_t)CompareExchange64((int64_t*)value, newValue, oldValue);
         }
 
+        static inline bool Exchange(bool* dest, bool exchange)
+        {
+            return (bool)Baselib_atomic_exchange_8_seq_cst((int8_t*)dest, exchange);
+        }
+
         static inline int32_t Exchange(int32_t* dest, int32_t exchange)
         {
-            return UnityPalExchange(dest, exchange);
+            int32_t result = Baselib_atomic_exchange_32_seq_cst(dest, exchange);
+#if IL2CPP_TARGET_ARM64
+            Baselib_atomic_thread_fence_seq_cst();
+#endif
+            return result;
         }
 
         static inline uint32_t Exchange(uint32_t* value, uint32_t newValue)
@@ -162,7 +222,11 @@ namespace os
 #if IL2CPP_ENABLE_INTERLOCKED_64_REQUIRED_ALIGNMENT
         static inline int64_t Exchange64(int64_t* dest, int64_t exchange)
         {
-            return UnityPalExchange64(dest, exchange);
+            int64_t result = Baselib_atomic_exchange_64_seq_cst(dest, exchange);
+#if IL2CPP_TARGET_ARM64
+            Baselib_atomic_thread_fence_seq_cst();
+#endif
+            return result;
         }
 
         static inline uint64_t Exchange64(uint64_t* value, uint64_t newValue)
@@ -171,6 +235,14 @@ namespace os
         }
 
 #endif
+        static inline intptr_t ReadPtrVal(intptr_t* addr)
+        {
+            intptr_t result = Baselib_atomic_fetch_add_ptr_seq_cst(addr, 0);
+#if IL2CPP_TARGET_ARM64
+            Baselib_atomic_thread_fence_seq_cst();
+#endif
+            return result;
+        }
     };
 }
 }

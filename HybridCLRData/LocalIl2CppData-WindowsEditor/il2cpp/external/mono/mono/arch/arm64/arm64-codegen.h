@@ -170,7 +170,7 @@ arm_is_bl_disp (void *code, void *target)
 static G_GNUC_UNUSED inline unsigned int
 arm_get_disp (void *p, void *target)
 {
-	unsigned int disp = (unsigned int)(((char*)target - (char*)p) / 4);
+	unsigned int disp = ((char*)target - (char*)p) / 4;
 
 	if (target)
 		g_assert (arm_is_bl_disp (p, target));
@@ -196,7 +196,7 @@ arm_is_disp19 (void *code, void *target)
 static G_GNUC_UNUSED inline unsigned int
 arm_get_disp19 (void *p, void *target)
 {
-	unsigned int disp = (unsigned int)(((char*)target - (char*)p) / 4);
+	unsigned int disp = ((char*)target - (char*)p) / 4;
 
 	if (target)
 		g_assert (arm_is_disp19 (p, target));
@@ -224,7 +224,7 @@ arm_get_disp19 (void *p, void *target)
 static G_GNUC_UNUSED inline unsigned int
 arm_get_disp15 (void *p, void *target)
 {
-	unsigned int disp = (unsigned int)(((char*)target - (char*)p) / 4);
+	unsigned int disp = ((char*)target - (char*)p) / 4;
 	return (disp & 0x7fff);
 }
 
@@ -856,5 +856,63 @@ arm_encode_arith_imm (int imm, guint32 *shift)
 #define arm_format_mrs(p, sysreg, rt) arm_emit ((p), (0x354 << 22) | (0x1 << 21) | (0x1 << 20) | ((sysreg) << 5) | ((rt) << 0))
 
 #define arm_mrs(p, rt, sysreg) arm_format_mrs ((p), (sysreg), (rt))
+
+#ifdef MONO_ARCH_ILP32
+#define arm_strp arm_strw
+#define arm_ldrp arm_ldrw
+#define arm_cmpp arm_cmpw
+#else
+#define arm_strp arm_strx
+#define arm_ldrp arm_ldrx
+#define arm_cmpp arm_cmpx
+#endif
+
+/* ARM v8.3 */
+
+/* PACIA */
+
+#define arm_format_pacia(p, crm, op2) arm_emit ((p), (0b11010101000000110010000000011111 << 0) | ((crm) << 8) | ((op2) << 5))
+#define arm_paciasp(p) arm_format_pacia ((p), 0b0011, 0b001)
+
+/* PACIB */
+
+#define arm_format_pacib(p, crm, op2) arm_emit ((p), (0b11010101000000110010000000011111 << 0) | ((crm) << 8) | ((op2) << 5))
+#define arm_pacibsp(p) arm_format_pacib ((p), 0b0011, 0b011)
+
+/* RETA */
+#define arm_format_reta(p,key) arm_emit ((p), 0b11010110010111110000101111111111 + ((key) << 10))
+
+#define arm_retaa(p) arm_format_reta ((p),0)
+#define arm_retab(p) arm_format_reta ((p),1)
+
+/* BRA */
+
+#define arm_format_bra(p, z, m, rn, rm) arm_emit ((p), (0b1101011000011111000010 << 10) + ((z) << 24) + ((m) << 10) + ((rn) << 5) + ((rm) << 0))
+
+#define arm_braaz(p, rn) arm_format_bra ((p), 0, 0, (rn), 0b11111)
+#define arm_brabz(p, rn) arm_format_bra ((p), 0, 1, (rn), 0b11111)
+#define arm_braa(p, rn, rm) arm_format_bra ((p), 1, 0, (rn), (rm))
+#define arm_brab(p, rn, rm) arm_format_bra ((p), 1, 1, (rn), (rm))
+
+/* BLRA */
+
+#define arm_format_blra(p, z, m, rn, rm) arm_emit ((p), (0b1101011000111111000010 << 10) + ((z) << 24) + ((m) << 10) + ((rn) << 5) + ((rm) << 0))
+
+#define arm_blraaz(p, rn) arm_format_blra ((p), 0, 0, (rn), 0b11111)
+#define arm_blraa(p, rn, rm) arm_format_blra ((p), 1, 0, (rn), (rm))
+#define arm_blrabz(p, rn) arm_format_blra ((p), 0, 1, (rn), 0b11111)
+#define arm_blrab(p, rn, rm) arm_format_blra ((p), 1, 1, (rn), (rm))
+
+/* AUTIA */
+
+#define arm_format_autia(p, crm, op2) arm_emit ((p), (0b11010101000000110010000000011111 << 0) | ((crm) << 8) | ((op2) << 5))
+
+#define arm_autiasp(p) arm_format_autia ((p), 0b0011, 0b101)
+
+/* AUTIB */
+
+#define arm_format_autib(p, crm, op2) arm_emit ((p), (0b11010101000000110010000000011111 << 0) | ((crm) << 8) | ((op2) << 5))
+
+#define arm_autibsp(p) arm_format_autib ((p), 0b0011, 0b111)
 
 #endif /* __arm_CODEGEN_H__ */

@@ -9,13 +9,6 @@ namespace hybridclr
 
 namespace metadata
 {
-	struct ReversePInvokeInfo
-	{
-		int32_t index;
-		Il2CppMethodPointer methodPointer;
-		const MethodInfo* methodInfo;
-	};
-
 	class MetadataModule
 	{
 	public:
@@ -56,6 +49,9 @@ namespace metadata
 		{
 			return GetImage(DecodeImageIndex(encodedIndex));
 		}
+		
+		static Image* GetUnderlyingInterpreterImage(const MethodInfo* method);
+
 
 		static const char* GetStringFromEncodeIndex(StringIndex index)
 		{
@@ -225,6 +221,7 @@ namespace metadata
 			return GetImage(DecodeImageIndex(index))->GetFieldOrParameterDefalutValueByRawIndex(DecodeMetadataIndex(index));
 		}
 
+#if HYBRIDCLR_UNITY_2020
 		static bool HasAttribute(const Il2CppImage* image, uint32_t token, Il2CppClass* attribute)
 		{
 			return GetImage(image)->HasAttributeByToken(token, attribute);
@@ -234,6 +231,7 @@ namespace metadata
 		{
 			return GetImage(image)->GetCustomAttributeDataRange(token);
 		}
+#endif
 
 		static bool IsImplementedByInterpreter(MethodInfo* method)
 		{
@@ -248,34 +246,8 @@ namespace metadata
 				return strcmp(method->name, "Invoke") == 0;
 			}
 		}
-
-		static Il2CppMethodPointer GetReversePInvokeWrapper(const Il2CppImage* image, const MethodInfo* method);
-
-		static const MethodInfo* GetMethodInfoByReversePInvokeWrapperIndex(int32_t index)
-		{
-			return s_reverseInfos[index].methodInfo;
-		}
-
-		static const MethodInfo* GetMethodInfoByReversePInvokeWrapperMethodPointer(Il2CppMethodPointer methodPointer)
-		{
-			auto it = s_methodPointer2ReverseInfos.find(methodPointer);
-			return it != s_methodPointer2ReverseInfos.end() ? it->second->methodInfo : nullptr;
-		}
-
-		static int32_t GetWrapperIndexByReversePInvokeWrapperMethodPointer(Il2CppMethodPointer methodPointer)
-		{
-			auto it = s_methodPointer2ReverseInfos.find(methodPointer);
-			return it != s_methodPointer2ReverseInfos.end() ? it->second->index : -1;
-		}
-
-		static LoadImageErrorCode LoadMetadataForAOTAssembly(const void* dllBytes, uint32_t dllSize, HomologousImageMode mode);
 	private:
-		static void InitReversePInvokeInfo();
 
-		static std::unordered_map<const char*, int32_t, CStringHash, CStringEqualTo> s_methodSig2Indexs;
-		static std::unordered_map<const MethodInfo*, const ReversePInvokeInfo*> s_methodInfo2ReverseInfos;
-		static std::unordered_map<Il2CppMethodPointer, const ReversePInvokeInfo*> s_methodPointer2ReverseInfos;
-		static std::vector<ReversePInvokeInfo> s_reverseInfos;
 	};
 }
 

@@ -26,10 +26,11 @@
 #include <process.h>
 #include "mono-logger-internals.h"
 #include "mono-proclib.h"
+#include "mono-time.h"
 
 static FILE *logFile = NULL;
 static void *logUserData = NULL;
-static wchar_t *logFileName = L".//mono.log";
+static const wchar_t *logFileName = L".//mono.log"; // FIXME double slash
 
 /**
  * mapSyslogLevel:
@@ -37,8 +38,8 @@ static wchar_t *logFileName = L".//mono.log";
  * 	@level - GLogLevelFlags value
  * 	@returns The equivalent character identifier
  */
-static inline char 
-mapLogFileLevel(GLogLevelFlags level) 
+static char
+mapLogFileLevel (GLogLevelFlags level)
 {
 	if (level & G_LOG_LEVEL_ERROR)
 		return ('E');
@@ -96,14 +97,14 @@ mono_log_write_syslog(const char *domain, GLogLevelFlags level, mono_bool hdr, c
 	time(&t);
 	tod = localtime(&t);
 	pid = mono_process_current_pid ();
-	strftime(logTime, sizeof(logTime), "%F %T", tod);
+	strftime(logTime, sizeof(logTime), MONO_STRFTIME_F " " MONO_STRFTIME_T, tod);
 
 	fprintf (logFile, "%s level[%c] mono[%d]: %s\n", logTime, mapLogFileLevel (level), pid, message);
 
 	fflush(logFile);
 
 	if (level & G_LOG_LEVEL_ERROR)
-		abort();
+		g_assert_abort ();
 }
 
 /**
@@ -119,4 +120,11 @@ mono_log_close_syslog()
 		logFile = NULL;
 	}
 }
+
+#else
+
+#include <mono/utils/mono-compiler.h>
+
+MONO_EMPTY_SOURCE_FILE (mono_log_windows);
+
 #endif

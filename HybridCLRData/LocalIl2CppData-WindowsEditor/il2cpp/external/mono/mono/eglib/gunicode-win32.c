@@ -7,33 +7,46 @@
 #include <config.h>
 #include <glib.h>
 
-#if G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT | HAVE_XBOXONE_WINAPI_SUPPORT | HAVE_WINDOWS_GAMES_WINAPI_SUPPORT)
 #define CODESET 1
 #include <windows.h>
+#include "../utils/w32subset.h"
 
-extern const char *my_charset;
+#if HAVE_API_SUPPORT_WIN32_GET_ACP || HAVE_API_SUPPORT_WIN32_GET_CP_INFO_EX
+extern const char *eg_my_charset;
 static gboolean is_utf8;
 
 gboolean
 g_get_charset (G_CONST_RETURN char **charset)
 {
-	if (my_charset == NULL) {
+	if (eg_my_charset == NULL) {
 		static char buf [14];
+#if HAVE_API_SUPPORT_WIN32_GET_CP_INFO_EX
+		CPINFOEXW cp_info;
+		GetCPInfoExW (CP_ACP, 0, &cp_info);
+		sprintf (buf, "CP%u", cp_info.CodePage);
+#elif HAVE_API_SUPPORT_WIN32_GET_ACP
 		sprintf (buf, "CP%u", GetACP ());
-		my_charset = buf;
+#endif
+		eg_my_charset = buf;
 		is_utf8 = FALSE;
 	}
 	
 	if (charset != NULL)
-		*charset = my_charset;
+		*charset = eg_my_charset;
 
 	return is_utf8;
 }
-
-#else /* G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT | HAVE_XBOXONE_WINAPI_SUPPORT | HAVE_WINDOWS_GAMES_WINAPI_SUPPORT) */
-
+#elif !HAVE_EXTERN_DEFINED_WIN32_GET_ACP && !HAVE_EXTERN_DEFINED_WIN32_GET_CP_INFO_EX
+gboolean
+g_get_charset (G_CONST_RETURN char **charset)
+{
+	g_unsupported_api ("GetACP, GetCPInfoEx");
+	SetLastError (ERROR_NOT_SUPPORTED);
+	return FALSE;
+}
+#else
 #ifdef _MSC_VER
 // Quiet Visual Studio linker warning, LNK4221, in cases when this source file intentional ends up empty.
 void __mono_win32_mono_gunicode_win32_quiet_lnk4221(void) {}
 #endif
-#endif /* G_HAVE_API_SUPPORT(HAVE_CLASSIC_WINAPI_SUPPORT) */
+#endif /* HAVE_API_SUPPORT_WIN32_GET_ACP || HAVE_API_SUPPORT_WIN32_GET_CP_INFO_EX */

@@ -1,20 +1,33 @@
 #include "il2cpp-config.h"
 #include "Allocator.h"
 
-static allocate_func s_Allocator;
+static allocate_func s_AllocatorFunc;
+static free_func s_ReleaseFunc;
 
 extern "C"
 {
-    void register_allocator(allocate_func allocator)
+    void register_allocator(allocate_func allocator, free_func release)
     {
-        s_Allocator = allocator;
+        s_AllocatorFunc = allocator;
+        s_ReleaseFunc = release;
+    }
+
+    void free_memory(void* memory)
+    {
+        Allocator::Free(memory);
     }
 }
 
 void* Allocator::Allocate(size_t size)
 {
-    IL2CPP_ASSERT(s_Allocator);
-    return s_Allocator(size);
+    IL2CPP_ASSERT(s_AllocatorFunc);
+    return s_AllocatorFunc(size);
+}
+
+void Allocator::Free(void* memory)
+{
+    IL2CPP_ASSERT(s_ReleaseFunc);
+    s_ReleaseFunc(memory);
 }
 
 char* Allocator::CopyToAllocatedStringBuffer(const std::string& input)

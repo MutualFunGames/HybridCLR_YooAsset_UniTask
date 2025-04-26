@@ -41,8 +41,8 @@
 #include <mono/metadata/mono-config.h>
 #include <mono/metadata/threads-types.h>
 #include <mono/metadata/runtime.h>
-#include <metadata/threads.h>
-#include <metadata/profiler-private.h>
+#include <mono/metadata/threads.h>
+#include <mono/metadata/profiler-private.h>
 #include <mono/metadata/coree.h>
 
 static MonoJitInfoFindInAot jit_info_find_in_aot_func = NULL;
@@ -88,24 +88,28 @@ mono_jit_info_table_new (MonoDomain *domain)
 	return table;
 }
 
-void
-mono_jit_info_table_free (MonoJitInfoTable *table)
+static void
+jit_info_table_free (MonoJitInfoTable *table, gboolean duplicate)
 {
+	MONO_REQ_GC_UNSAFE_MODE;
+
 	int i;
 	int num_chunks = table->num_chunks;
 	MonoDomain *domain = table->domain;
 
 	mono_domain_lock (domain);
 
-	table->domain->num_jit_info_tables--;
-	if (table->domain->num_jit_info_tables <= 1) {
-		GSList *list;
+	if (duplicate) {
+		table->domain->num_jit_info_table_duplicates--;
+		if (!table->domain->num_jit_info_table_duplicates) {
+			GSList *list;
 
-		for (list = table->domain->jit_info_free_queue; list; list = list->next)
-			g_free (list->data);
+			for (list = table->domain->jit_info_free_queue; list; list = list->next)
+				g_free (list->data);
 
-		g_slist_free (table->domain->jit_info_free_queue);
-		table->domain->jit_info_free_queue = NULL;
+			g_slist_free (table->domain->jit_info_free_queue);
+			table->domain->jit_info_free_queue = NULL;
+		}
 	}
 
 	/* At this point we assume that there are no other threads
@@ -131,6 +135,18 @@ mono_jit_info_table_free (MonoJitInfoTable *table)
 	mono_domain_unlock (domain);
 
 	g_free (table);
+}
+
+static void
+jit_info_table_free_duplicate (MonoJitInfoTable *table)
+{
+	jit_info_table_free (table, TRUE);
+}
+
+void
+mono_jit_info_table_free (MonoJitInfoTable *table)
+{
+	jit_info_table_free (table, FALSE);
 }
 
 /* The jit_info_table is sorted in ascending order by the end
@@ -260,7 +276,7 @@ jit_info_table_find (MonoJitInfoTable *table, MonoThreadHazardPointers *hp, gint
  * mono_jit_info_get_method () could fail.
  */
 MonoJitInfo*
-mono_jit_info_table_find_internal (MonoDomain *domain, char *addr, gboolean try_aot, gboolean allow_trampolines)
+mono_jit_info_table_find_internal (MonoDomain *domain, gpointer addr, gboolean try_aot, gboolean allow_trampolines)
 {
 	MonoJitInfoTable *table;
 	MonoJitInfo *ji, *module_ji;
@@ -318,9 +334,36 @@ mono_jit_info_table_find_internal (MonoDomain *domain, char *addr, gboolean try_
  * code or a trampoline) or a valid pointer to a \c MonoJitInfo* .
  */
 MonoJitInfo*
-mono_jit_info_table_find (MonoDomain *domain, char *addr)
+mono_jit_info_table_find (MonoDomain *domain, gpointer addr)
 {
 	return mono_jit_info_table_find_internal (domain, addr, TRUE, FALSE);
+}
+
+void
+mono_jit_info_table_foreach_internal (MonoDomain *domain, MonoJitInfoFunc func, gpointer user_data)
+{
+	MonoJitInfoTable *table;
+	MonoJitInfo *ji;
+	MonoThreadHazardPointers *hp = mono_hazard_pointer_get ();
+
+	table = (MonoJitInfoTable *)mono_get_hazardous_pointer ((gpointer volatile*)&domain->jit_info_table, hp, JIT_INFO_TABLE_HAZARD_INDEX);
+	if (table) {
+		for (int chunk_index = 0; chunk_index < table->num_chunks; ++chunk_index) {
+			MonoJitInfoTableChunk *chunk = table->chunks [chunk_index];
+			for (int jit_info_index = 0; jit_info_index < chunk->num_elements; ++jit_info_index) {
+
+				ji = (MonoJitInfo *)mono_get_hazardous_pointer ((gpointer volatile*)&chunk->data [jit_info_index], hp, JIT_INFO_HAZARD_INDEX);
+
+				if (func && !IS_JIT_INFO_TOMBSTONE (ji))
+					func (domain, ji->d.method, ji, user_data);
+
+				mono_hazard_pointer_clear (hp, JIT_INFO_HAZARD_INDEX);
+			}
+		}
+	}
+
+	if (hp)
+		mono_hazard_pointer_clear (hp, JIT_INFO_TABLE_HAZARD_INDEX);
 }
 
 static G_GNUC_UNUSED void
@@ -606,8 +649,8 @@ jit_info_table_add (MonoDomain *domain, MonoJitInfoTable *volatile *table_ptr, M
 
 		*table_ptr = new_table;
 		mono_memory_barrier ();
-		domain->num_jit_info_tables++;
-		mono_thread_hazardous_try_free (table, (MonoHazardousFreeFunc)mono_jit_info_table_free);
+		domain->num_jit_info_table_duplicates++;
+		mono_thread_hazardous_try_free (table, (MonoHazardousFreeFunc)jit_info_table_free_duplicate);
 		table = new_table;
 
 		goto restart;
@@ -684,13 +727,20 @@ mono_jit_info_make_tombstone (MonoJitInfoTableChunk *chunk, MonoJitInfo *ji)
 static void
 mono_jit_info_free_or_queue (MonoDomain *domain, MonoJitInfo *ji)
 {
-	if (domain->num_jit_info_tables <= 1) {
-		/* Can it actually happen that we only have one table
-		   but ji is still hazardous? */
+	/*
+	 * When we run out of space in a jit info table and we reallocate it, a
+	 * ji structure can be temporary present in multiple tables. If the ji
+	 * structure is freed while another thread is doing a jit lookup and still
+	 * accessing the old table, it might be accessing this jit info (which
+	 * would have been removed and freed only from the new table). The hazard
+	 * pointer doesn't stop this since the jinfo would have been freed before
+	 * we get to set the hazard pointer for ji. Delay the free-ing for when
+	 * there are no jit info table duplicates.
+	 */
+	if (!domain->num_jit_info_table_duplicates)
 		mono_thread_hazardous_try_free (ji, g_free);
-	} else {
+	else
 		domain->jit_info_free_queue = g_slist_prepend (domain->jit_info_free_queue, ji);
-	}
 }
 
 static void
@@ -750,6 +800,11 @@ mono_jit_info_table_remove (MonoDomain *domain, MonoJitInfo *ji)
 	mono_domain_unlock (domain);
 }
 
+/*
+ * mono_jit_info_add_aot_module:
+ *
+ *   Associate the AOT code range [start, end) with IMAGE in the JIT info table.
+ */
 void
 mono_jit_info_add_aot_module (MonoImage *image, gpointer start, gpointer end)
 {
@@ -763,10 +818,8 @@ mono_jit_info_add_aot_module (MonoImage *image, gpointer start, gpointer end)
 	 * We reuse MonoJitInfoTable to store AOT module info,
 	 * this gives us async-safe lookup.
 	 */
-	if (!domain->aot_modules) {
-		domain->num_jit_info_tables ++;
+	if (!domain->aot_modules)
 		domain->aot_modules = mono_jit_info_table_new (domain);
-	}
 
 	ji = g_new0 (MonoJitInfo, 1);
 	ji->d.image = image;

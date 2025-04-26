@@ -16,6 +16,7 @@
 
 // Creates a reentrant lock synchronization primitive.
 //
+// Use Baselib_ReentrantLock_Free to free the lock
 // If there are not enough system resources to create a lock, process abort is triggered.
 //
 // For optimal performance, the returned Baselib_ReentrantLock should be stored at a cache aligned memory location.
@@ -23,6 +24,13 @@
 // \returns         A struct representing a lock instance. Use Baselib_ReentrantLock_Free to free the lock.
 BASELIB_INLINE_API Baselib_ReentrantLock Baselib_ReentrantLock_Create(void);
 
+// Creates a reentrant lock synchronization primitive in-place with memory provided by caller.
+//
+// Use Baselib_ReentrantLock_FreeInplace to free the lock
+// If there are not enough system resources to create a lock, process abort is triggered.
+//
+// For optimal performance, the Baselib_ReentrantLock should be stored at a cache aligned memory location.
+BASELIB_INLINE_API void Baselib_ReentrantLock_CreateInplace(Baselib_ReentrantLock* lockData);
 
 // Try to acquire lock and return immediately.
 // If lock is already acquired by the current thread this function increase the lock count so that an equal number of calls to Baselib_ReentrantLock_Release needs
@@ -32,7 +40,24 @@ BASELIB_INLINE_API Baselib_ReentrantLock Baselib_ReentrantLock_Create(void);
 //
 // \returns         true if lock was acquired.
 COMPILER_WARN_UNUSED_RESULT
-BASELIB_INLINE_API bool Baselib_ReentrantLock_TryAcquire(Baselib_ReentrantLock* lock);
+BASELIB_FORCEINLINE_API bool Baselib_ReentrantLock_TryAcquire(Baselib_ReentrantLock* lock)
+{
+    return Baselib_ReentrantLock_TrySpinAcquire(lock, 0);
+}
+
+// Try to acquire lock.
+//
+// If lock is already acquired by the current thread this function increase the lock count so that an equal number of calls to Baselib_ReentrantLock_Release needs
+// to be made before the lock is released.
+//
+// When lock is acquired this function is guaranteed to emit an acquire barrier.
+//
+// \param maxSpinCount  Max number of times to spin in user space before falling back to the kernel. The actual number
+//                      may differ depending on the underlying implementation but will never exceed the maxSpinCount
+//                      value.
+// \returns         true if lock was acquired.
+COMPILER_WARN_UNUSED_RESULT
+BASELIB_INLINE_API bool Baselib_ReentrantLock_TrySpinAcquire(Baselib_ReentrantLock* lock, uint32_t maxSpinCount);
 
 // Acquire lock.
 //
@@ -74,3 +99,9 @@ BASELIB_INLINE_API void Baselib_ReentrantLock_Release(Baselib_ReentrantLock* loc
 // If threads are waiting on the lock, calling free may trigger an assert and may cause process abort.
 // Calling this function with a nullptr result in a no-op
 BASELIB_INLINE_API void Baselib_ReentrantLock_Free(Baselib_ReentrantLock* lock);
+
+// Reclaim resources and memory held by lock. Caller is responsible for freeing memory pointed to by lock.
+//
+// If threads are waiting on the lock, calling free may trigger an assert and may cause process abort.
+// Calling this function with a nullptr result in a no-op
+BASELIB_INLINE_API void Baselib_ReentrantLock_FreeInplace(Baselib_ReentrantLock* lock);

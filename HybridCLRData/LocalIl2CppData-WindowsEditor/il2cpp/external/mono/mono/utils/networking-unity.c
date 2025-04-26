@@ -7,6 +7,7 @@
 #if defined(PLATFORM_UNITY) && defined(UNITY_USE_PLATFORM_STUBS)
 
 #include "Socket-c-api.h"
+#include "Allocator.h"
 
 static void
 add_hostent(MonoAddressInfo *info, int flags, const char* name, gint family, char** aliases, void** addresses, int32_t addressSize)
@@ -47,11 +48,11 @@ static void free_null_terminated_array (void** array)
         int i = 0;
         while (array[i] != NULL)
         {
-            g_free(array[i]);
+            free_memory(array[i]);
             i++;
         }
     }
-    g_free(array);
+    free_memory(array);
 }
 
 int
@@ -69,7 +70,7 @@ mono_get_address_info(const char *hostname, int port, int flags, MonoAddressInfo
     if (UnityPalGetHostByName(hostname, &name, &family, &aliases, &addresses, &addressSize) == kWaitStatusSuccess)
         add_hostent(addr_info, flags, name, family, aliases, addresses, addressSize);
 
-    g_free(name);
+    free_memory(name);
     free_null_terminated_array(aliases);
     free_null_terminated_array(addresses);
 

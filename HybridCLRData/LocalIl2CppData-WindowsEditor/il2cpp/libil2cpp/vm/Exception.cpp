@@ -30,8 +30,6 @@ namespace vm
 {
     void Exception::PrepareExceptionForThrow(Il2CppException* ex, MethodInfo* lastManagedFrame)
     {
-#if !IL2CPP_TINY
-
 #if IL2CPP_MONO_DEBUGGER
         il2cpp::utils::Debugger::HandleException(ex);
 #endif
@@ -106,7 +104,6 @@ namespace vm
             IL2CPP_OBJECT_SETREF(ex, trace_ips, ips);
             IL2CPP_OBJECT_SETREF(ex, native_trace_ips, raw_ips);
         }
-#endif // !IL2CPP_TINY
     }
 
     NORETURN void Exception::Raise(Il2CppException* ex, MethodInfo* lastManagedFrame)

@@ -8,6 +8,10 @@
 #include "utils/NonCopyable.h"
 
 #include "WindowsHeaders.h"
+#include "os/Generic/WaitObject.h"
+#include "Baselib.h"
+#include "Cpp/CappedSemaphore.h"
+#include "Cpp/Atomic.h"
 
 #define IL2CPP_DEFAULT_STACK_SIZE ( 1 * 1024 * 1024)            // default .NET stacksize is 1mb
 
@@ -20,6 +24,9 @@ namespace os
     public:
         ThreadImpl();
         ~ThreadImpl();
+
+        static void AllocateStaticData();
+        static void FreeStaticData();
 
         size_t Id();
         ErrorCode Run(Thread::StartFunc func, void* arg, int64_t affinityMask);
@@ -39,6 +46,12 @@ namespace os
             m_StackSize = newsize;
         }
 
+        void CheckForUserAPCAndHandle();
+        void SetWaitObject(WaitObject* waitObject);
+        void ReleaseSemaphore() {m_ConditionSemaphore.Release(1);}
+        void AcquireSemaphore() {m_ConditionSemaphore.Acquire();}
+        bool TryTimedAcquireSemaphore(uint32_t timeout) { return m_ConditionSemaphore.TryTimedAcquire(baselib::timeout_ms(timeout));}
+
         static int GetMaxStackSize();
 
         void QueueUserAPC(Thread::APCFunc func, void* context);
@@ -51,6 +64,7 @@ namespace os
         static void Sleep(uint32_t ms, bool interruptible);
         static size_t CurrentThreadId();
         static ThreadImpl* CreateForCurrentThread();
+        static ThreadImpl* GetCurrentThread();
 
         static bool YieldInternal();
 
@@ -60,6 +74,22 @@ namespace os
         static void UnregisterCurrentThreadForCleanup();
         static void OnCurrentThreadExiting();
 #endif
+
+        baselib::atomic<WaitObject*> m_CurrentWaitObject;
+        struct APCRequest
+        {
+            Thread::APCFunc callback;
+            void* context;
+
+            APCRequest(Thread::APCFunc callback, void* context) :
+                callback(callback), context(context)
+            {
+            }
+        };
+
+        baselib::Lock m_PendingAPCsMutex;
+        std::vector<APCRequest> m_PendingAPCs;
+        baselib::CappedSemaphore m_ConditionSemaphore;
 
     private:
         HANDLE m_ThreadHandle;

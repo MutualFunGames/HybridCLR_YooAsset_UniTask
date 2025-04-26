@@ -20,6 +20,15 @@ static volatile guint32 stat_gc_handles_allocated = 0;
 static volatile guint32 stat_gc_handles_max_allocated = 0;
 #endif
 
+
+typedef struct {
+        size_t num_handles [HANDLE_TYPE_MAX];
+} GCHandleClassEntry;
+
+static gboolean do_gchandle_stats = FALSE;
+
+static SgenHashTable gchandle_class_hash_table = SGEN_HASH_TABLE_INIT (INTERNAL_MEM_STATISTICS, INTERNAL_MEM_STAT_GCHANDLE_CLASS, sizeof (GCHandleClassEntry), g_str_hash, g_str_equal);
+
 /*
  * A table of GC handle data, implementing a simple lock-free bitmap allocator.
  *
@@ -48,15 +57,15 @@ protocol_gchandle_update (int handle_type, gpointer link, gpointer old_value, gp
 		return;
 
 	if (!old && new_)
-		binary_protocol_dislink_add (link, MONO_GC_REVEAL_POINTER (new_value, TRUE), track);
+		sgen_binary_protocol_dislink_add (link, MONO_GC_REVEAL_POINTER (new_value, TRUE), track);
 	else if (old && !new_)
-		binary_protocol_dislink_remove (link, track);
+		sgen_binary_protocol_dislink_remove (link, track);
 	else if (old && new_ && old_value != new_value)
-		binary_protocol_dislink_update (link, MONO_GC_REVEAL_POINTER (new_value, TRUE), track);
+		sgen_binary_protocol_dislink_update (link, MONO_GC_REVEAL_POINTER (new_value, TRUE), track);
 }
 
 /* Returns the new value in the slot, or NULL if the CAS failed. */
-static inline gpointer
+static gpointer
 try_set_slot (volatile gpointer *slot, GCObject *obj, gpointer old, GCHandleType type)
 {
 	gpointer new_;
@@ -72,7 +81,7 @@ try_set_slot (volatile gpointer *slot, GCObject *obj, gpointer old, GCHandleType
 	return NULL;
 }
 
-static inline gboolean
+static gboolean
 is_slot_set (volatile gpointer *slot)
 {
 	gpointer entry = *slot;
@@ -82,7 +91,7 @@ is_slot_set (volatile gpointer *slot)
 }
 
 /* Try to claim a slot by setting its occupied bit. */
-static inline gboolean
+static gboolean
 try_occupy_slot (volatile gpointer *slot, gpointer obj, int data)
 {
 	if (is_slot_set (slot))
@@ -155,7 +164,7 @@ sgen_gc_handles_report_roots (SgenUserReportRootFunc report_func, void *gc_data)
 		revealed = MONO_GC_REVEAL_POINTER (hidden, FALSE);
 
 		if (MONO_GC_HANDLE_IS_OBJECT_POINTER (hidden))
-			report_func ((void*)slot, revealed, gc_data);
+			report_func ((void*)slot, (GCObject*)revealed, gc_data);
 	} SGEN_ARRAY_LIST_END_FOREACH_SLOT;
 }
 
@@ -186,7 +195,7 @@ alloc_handle (HandleData *handles, GCObject *obj, gboolean track)
 	/* Ensure that a GC handle cannot be given to another thread without the slot having been set. */
 	mono_memory_write_barrier ();
 	res = MONO_GC_HANDLE (index, handles->type);
-	sgen_client_gchandle_created (handles->type, obj, res);
+	sgen_client_gchandle_created ((GCHandleType)handles->type, obj, res);
 	return res;
 }
 
@@ -365,6 +374,9 @@ sgen_gchandle_get_metadata (guint32 gchandle)
 void
 sgen_gchandle_free (guint32 gchandle)
 {
+	if (!gchandle)
+		return;
+
 	guint32 index = MONO_GC_HANDLE_SLOT (gchandle);
 	GCHandleType type = MONO_GC_HANDLE_TYPE (gchandle);
 	HandleData *handles = gc_handles_for_type (type);
@@ -383,7 +395,7 @@ sgen_gchandle_free (guint32 gchandle)
 	} else {
 		/* print a warning? */
 	}
-	sgen_client_gchandle_destroyed (handles->type, gchandle);
+	sgen_client_gchandle_destroyed ((GCHandleType)handles->type, gchandle);
 }
 
 /*
@@ -406,7 +418,7 @@ null_link_if_necessary (gpointer hidden, GCHandleType handle_type, int max_gener
 	if (object_older_than (obj, max_generation))
 		return hidden;
 
-	if (major_collector.is_object_live (obj))
+	if (sgen_major_collector.is_object_live (obj))
 		return hidden;
 
 	/* Clear link if object is ready for finalization. This check may be redundant wrt is_object_live(). */
@@ -432,7 +444,7 @@ scan_for_weak (gpointer hidden, GCHandleType handle_type, int max_generation, gp
 	GCObject *obj = (GCObject *)MONO_GC_REVEAL_POINTER (hidden, is_weak);
 
 	/* If the object is dead we free the gc handle */
-	if (!sgen_is_object_alive (obj))
+	if (!sgen_is_object_alive_for_current_gen (obj))
 		return NULL;
 
 	/* Relocate it */
@@ -446,7 +458,7 @@ scan_for_weak (gpointer hidden, GCHandleType handle_type, int max_generation, gp
 			GCObject *field = *addr;
 
 			/* if the object in the weak field is alive, we relocate it */
-			if (field && sgen_is_object_alive (field))
+			if (field && sgen_is_object_alive_for_current_gen (field))
 				ctx->ops->copy_or_mark_object (addr, ctx->queue);
 			else
 				*addr = NULL;
@@ -510,6 +522,82 @@ sgen_register_obj_with_weak_fields (GCObject *obj)
 	//
 	alloc_handle (gc_handles_for_type (HANDLE_WEAK_FIELDS), obj, FALSE);
 }
+
+#ifndef DISABLE_SGEN_DEBUG_HELPERS
+void
+sgen_gchandle_stats_enable (void)
+{
+	do_gchandle_stats = TRUE;
+}
+
+static void
+sgen_gchandle_stats_register_vtable (GCVTable vtable, int handle_type)
+{
+	GCHandleClassEntry *entry;
+
+	char *name = g_strdup_printf ("%s.%s", sgen_client_vtable_get_namespace (vtable), sgen_client_vtable_get_name (vtable));
+	entry = (GCHandleClassEntry*) sgen_hash_table_lookup (&gchandle_class_hash_table, name);
+
+	if (entry) {
+		g_free (name);
+	} else {
+		// Create the entry for this class and get the address of it
+		GCHandleClassEntry empty_entry;
+		memset (&empty_entry, 0, sizeof (GCHandleClassEntry));
+		sgen_hash_table_replace (&gchandle_class_hash_table, name, &empty_entry, NULL);
+		entry = (GCHandleClassEntry*) sgen_hash_table_lookup (&gchandle_class_hash_table, name);
+	}
+
+	entry->num_handles [handle_type]++;
+}
+
+static void
+sgen_gchandle_stats_count (void)
+{
+	int i;
+
+	sgen_hash_table_clean (&gchandle_class_hash_table);
+
+	for (i = HANDLE_TYPE_MIN; i < HANDLE_TYPE_MAX; i++) {
+		HandleData *handles = gc_handles_for_type ((GCHandleType)i);
+		SgenArrayList *array = &handles->entries_array;
+		volatile gpointer *slot;
+		gpointer hidden, revealed;
+
+		SGEN_ARRAY_LIST_FOREACH_SLOT (array, slot) {
+			hidden = *slot;
+			revealed = MONO_GC_REVEAL_POINTER (hidden, MONO_GC_HANDLE_TYPE_IS_WEAK (i));
+
+			if (MONO_GC_HANDLE_IS_OBJECT_POINTER (hidden))
+				sgen_gchandle_stats_register_vtable (SGEN_LOAD_VTABLE (revealed), i);
+		} SGEN_ARRAY_LIST_END_FOREACH_SLOT;
+	}
+}
+
+void
+sgen_gchandle_stats_report (void)
+{
+	char *name;
+	GCHandleClassEntry *gchandle_entry;
+
+	if (!do_gchandle_stats)
+		return;
+
+	sgen_gchandle_stats_count ();
+
+	mono_gc_printf (sgen_gc_debug_file, "\n%-60s  %10s  %10s  %10s\n", "Class", "Normal", "Weak", "Pinned");
+	SGEN_HASH_TABLE_FOREACH (&gchandle_class_hash_table, char *, name, GCHandleClassEntry *, gchandle_entry) {
+		mono_gc_printf (sgen_gc_debug_file, "%-60s", name);
+		mono_gc_printf (sgen_gc_debug_file, "  %10ld", (long)gchandle_entry->num_handles [HANDLE_NORMAL]);
+		size_t weak_handles = gchandle_entry->num_handles [HANDLE_WEAK] +
+				gchandle_entry->num_handles [HANDLE_WEAK_TRACK] +
+				gchandle_entry->num_handles [HANDLE_WEAK_FIELDS];
+		mono_gc_printf (sgen_gc_debug_file, "  %10ld", (long)weak_handles);
+		mono_gc_printf (sgen_gc_debug_file, "  %10ld", (long)gchandle_entry->num_handles [HANDLE_PINNED]);
+		mono_gc_printf (sgen_gc_debug_file, "\n");
+	} SGEN_HASH_TABLE_FOREACH_END;
+}
+#endif
 
 void
 sgen_init_gchandles (void)

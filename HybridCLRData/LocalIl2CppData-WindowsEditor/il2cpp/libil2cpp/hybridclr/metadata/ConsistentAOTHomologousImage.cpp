@@ -22,12 +22,12 @@ namespace metadata
 
 	void ConsistentAOTHomologousImage::InitTypes()
 	{
-		const Table& typeDefTb = _rawImage.GetTable(TableType::TYPEDEF);
+		const Table& typeDefTb = _rawImage->GetTable(TableType::TYPEDEF);
 		uint32_t typeCount = typeDefTb.rowNum;
 		_il2cppTypeForTypeDefs.resize(typeCount);
 		_typeDefs.resize(typeCount);
 
-		Il2CppImage* image = _aotAssembly->image;
+		Il2CppImage* image = _targetAssembly->image;
 		//if (image->typeCount != typeCount)
 		//{
 		//	RaiseExecutionEngineException("image metadata not match");
@@ -41,19 +41,19 @@ namespace metadata
 			{
 				continue;
 			}
-			TbTypeDef data = _rawImage.ReadTypeDef(rowIndex);
+			TbTypeDef data = _rawImage->ReadTypeDef(rowIndex);
 			uint32_t typeIndex = rowIndex - 1;
 			_typeDefs[typeIndex] = typeDef;
 			const Il2CppType* il2cppType = il2cpp::vm::GlobalMetadata::GetIl2CppTypeFromIndex(typeDef->byvalTypeIndex);
 			_il2cppTypeForTypeDefs[typeIndex] = il2cppType;
 
-			const char* name1 = _rawImage.GetStringFromRawIndex(data.typeName);
+			const char* name1 = _rawImage->GetStringFromRawIndex(data.typeName);
 			const char* name2 = il2cpp::vm::GlobalMetadata::GetStringFromIndex(typeDef->nameIndex);
 			if (std::strcmp(name1, name2))
 			{
 				RaiseExecutionEngineException("metadata type not match");
 			}
-			const char* namespaze1 = _rawImage.GetStringFromRawIndex(data.typeNamespace);
+			const char* namespaze1 = _rawImage->GetStringFromRawIndex(data.typeNamespace);
 			const char* namespaze2 = il2cpp::vm::GlobalMetadata::GetStringFromIndex(typeDef->namespaceIndex);
 			if (std::strcmp(namespaze1, namespaze2))
 			{
@@ -64,7 +64,7 @@ namespace metadata
 
 	void ConsistentAOTHomologousImage::InitMethods()
 	{
-		const Table& methodTb = _rawImage.GetTable(TableType::METHOD);
+		const Table& methodTb = _rawImage->GetTable(TableType::METHOD);
 		_methodDefs.resize(methodTb.rowNum);
 
 		for (Il2CppTypeDefinition* type : _typeDefs)
@@ -78,8 +78,8 @@ namespace metadata
 				IL2CPP_ASSERT(_methodDefs[methodIndex] == nullptr);
 				_methodDefs[methodIndex] = methodDef;
 
-				TbMethod methodData = _rawImage.ReadMethod(rowIndex);
-				const char* name1 = _rawImage.GetStringFromRawIndex(methodData.name);
+				TbMethod methodData = _rawImage->ReadMethod(rowIndex);
+				const char* name1 = _rawImage->GetStringFromRawIndex(methodData.name);
 				const char* name2 = il2cpp::vm::GlobalMetadata::GetStringFromIndex(methodDef->nameIndex);
 				if (std::strcmp(name1, name2))
 				{
@@ -91,7 +91,7 @@ namespace metadata
 
 	void ConsistentAOTHomologousImage::InitFields()
 	{
-		const Table& fieldTb = _rawImage.GetTable(TableType::FIELD);
+		const Table& fieldTb = _rawImage->GetTable(TableType::FIELD);
 		_fields.resize(fieldTb.rowNum);
 
 		for (size_t i = 0; i < _typeDefs.size(); i++)
@@ -110,8 +110,8 @@ namespace metadata
 				}
 				_fields[fieldIndex] = { (uint32_t)i, fieldDef };
 
-				TbField fieldData = _rawImage.ReadField(rowIndex);
-				const char* name1 = _rawImage.GetStringFromRawIndex(fieldData.name);
+				TbField fieldData = _rawImage->ReadField(rowIndex);
+				const char* name1 = _rawImage->GetStringFromRawIndex(fieldData.name);
 				const char* name2 = il2cpp::vm::GlobalMetadata::GetStringFromIndex(fieldDef->nameIndex);
 				if (std::strcmp(name1, name2))
 				{
@@ -123,17 +123,11 @@ namespace metadata
 
 	MethodBody* ConsistentAOTHomologousImage::GetMethodBody(uint32_t token)
 	{
-		auto it = _token2MethodBodies.find(token);
-		if (it != _token2MethodBodies.end())
-		{
-			return it->second;
-		}
 		uint32_t rowIndex = DecodeTokenRowIndex(token);
 		IL2CPP_ASSERT(rowIndex > 0);
-		TbMethod methodData = _rawImage.ReadMethod(rowIndex);
-		MethodBody* body = new (IL2CPP_MALLOC_ZERO(sizeof(MethodBody))) MethodBody();
+		TbMethod methodData = _rawImage->ReadMethod(rowIndex);
+		MethodBody* body = new (HYBRIDCLR_MALLOC_ZERO(sizeof(MethodBody))) MethodBody();
 		ReadMethodBody(*_methodDefs[rowIndex - 1], methodData, *body);
-		_token2MethodBodies.insert({ token, body });
 		return body;
 	}
 
@@ -164,7 +158,7 @@ namespace metadata
 	{
 		IL2CPP_ASSERT(rowIndex > 0);
 		AOTFieldData& fd = _fields[rowIndex - 1];
-		ret.containerType = *_il2cppTypeForTypeDefs[fd.typeDefIndex];
+		ret.containerType = _il2cppTypeForTypeDefs[fd.typeDefIndex];
 		ret.field = fd.fieldDef;
 	}
 }

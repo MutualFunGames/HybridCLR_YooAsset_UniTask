@@ -12,7 +12,7 @@ public class EntityAsteroid : MonoBehaviour
     void Awake()
     {
         _rigidbody = this.transform.GetComponent<Rigidbody>();
-        _rigidbody.velocity = this.transform.forward * MoveSpeed;
+        _rigidbody.linearVelocity = this.transform.forward * MoveSpeed;
         _rigidbody.angularVelocity = Random.insideUnitSphere * Tumble;
     }
     void OnTriggerEnter(Collider other)

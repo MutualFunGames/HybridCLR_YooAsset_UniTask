@@ -5,11 +5,8 @@
 #include "Math.h"
 #include "vm/Exception.h"
 
-#if RUNTIME_TINY
-namespace tiny
-#else
+
 namespace il2cpp
-#endif
 {
 namespace icalls
 {
@@ -245,14 +242,6 @@ namespace System
         else
             return std::rint(value * p) / p;
     }
-
-#if IL2CPP_TINY
-    double Math::SplitFractionDouble(double* value)
-    {
-        return modf(*value, value);
-    }
-
-#endif
 } /*namespace System */
 } /* namespace mscorlib */
 } /* namespace icalls */

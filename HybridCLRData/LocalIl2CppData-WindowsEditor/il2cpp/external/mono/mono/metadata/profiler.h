@@ -1,7 +1,6 @@
 /*
  * Licensed to the .NET Foundation under one or more agreements.
  * The .NET Foundation licenses this file to you under the MIT license.
- * See the LICENSE file in the project root for more information.
  */
 
 #ifndef __MONO_PROFILER_H__
@@ -17,8 +16,21 @@ MONO_BEGIN_DECLS
  * This value will be incremented whenever breaking changes to the profiler API
  * are made. This macro is intended for use in profiler modules that wish to
  * support older versions of the profiler API.
+ *
+ * Version 2:
+ * - Major overhaul of the profiler API.
+ * Version 3:
+ * - Added mono_profiler_enable_clauses (). This must now be called to enable
+ *   raising exception_clause events.
+ * - The exception argument to exception_clause events can now be NULL for
+ *   finally clauses invoked in the non-exceptional case.
+ * - The type argument to exception_clause events will now correctly indicate
+ *   that the catch portion of the clause is being executed in the case of
+ *   try-filter-catch clauses.
+ * - Removed the iomap_report event.
+ * - Removed the old gc_event event and renamed gc_event2 to gc_event.
  */
-#define MONO_PROFILER_API_VERSION 2
+#define MONO_PROFILER_API_VERSION 3
 
 typedef struct _MonoProfiler MonoProfiler;
 typedef struct _MonoProfilerDesc *MonoProfilerHandle;
@@ -38,6 +50,8 @@ typedef struct {
 	uint32_t column;
 } MonoProfilerCoverageData;
 
+typedef struct _MonoDomainCoverage MonoDomainCoverage;
+
 typedef mono_bool (*MonoProfilerCoverageFilterCallback) (MonoProfiler *prof, MonoMethod *method);
 typedef void (*MonoProfilerCoverageCallback) (MonoProfiler *prof, const MonoProfilerCoverageData *data);
 
@@ -45,6 +59,11 @@ MONO_API mono_bool mono_profiler_enable_coverage (void);
 MONO_API void mono_profiler_set_coverage_filter_callback (MonoProfilerHandle handle, MonoProfilerCoverageFilterCallback cb);
 #ifndef RUNTIME_IL2CPP
 MONO_API mono_bool mono_profiler_get_coverage_data (MonoProfilerHandle handle, MonoMethod *method, MonoProfilerCoverageCallback cb);
+
+MONO_API mono_bool mono_profiler_get_all_coverage_data (MonoProfilerHandle handle, MonoProfilerCoverageCallback cb);
+
+MONO_API mono_bool mono_profiler_reset_coverage (MonoMethod* method);
+MONO_API void mono_profiler_reset_all_coverage (void);
 #endif
 
 typedef enum {
@@ -70,7 +89,7 @@ MONO_API mono_bool mono_profiler_set_sample_mode (MonoProfilerHandle handle, Mon
 MONO_API mono_bool mono_profiler_get_sample_mode (MonoProfilerHandle handle, MonoProfilerSampleMode *mode, uint32_t *freq);
 
 MONO_API mono_bool mono_profiler_enable_allocations (void);
-MONO_API mono_bool mono_profiler_enable_fileio (void);
+MONO_API mono_bool mono_profiler_enable_clauses (void);
 
 typedef struct _MonoProfilerCallContext MonoProfilerCallContext;
 
@@ -120,7 +139,13 @@ typedef enum {
 	 * The \c data parameter is a \c MonoMethod pointer.
 	 */
 	MONO_PROFILER_CODE_BUFFER_METHOD = 0,
+	/**
+	 * \deprecated No longer used.
+	 */
 	MONO_PROFILER_CODE_BUFFER_METHOD_TRAMPOLINE = 1,
+	/**
+	 * The \c data parameter is a \c MonoMethod pointer.
+	 */
 	MONO_PROFILER_CODE_BUFFER_UNBOX_TRAMPOLINE = 2,
 	MONO_PROFILER_CODE_BUFFER_IMT_TRAMPOLINE = 3,
 	MONO_PROFILER_CODE_BUFFER_GENERICS_TRAMPOLINE = 4,
@@ -129,6 +154,9 @@ typedef enum {
 	 */
 	MONO_PROFILER_CODE_BUFFER_SPECIFIC_TRAMPOLINE = 5,
 	MONO_PROFILER_CODE_BUFFER_HELPER = 6,
+	/**
+	 * \deprecated No longer used.
+	 */
 	MONO_PROFILER_CODE_BUFFER_MONITOR = 7,
 	MONO_PROFILER_CODE_BUFFER_DELEGATE_INVOKE = 8,
 	MONO_PROFILER_CODE_BUFFER_EXCEPTION_HANDLING = 9,

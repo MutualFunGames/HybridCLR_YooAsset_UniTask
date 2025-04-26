@@ -1,9 +1,11 @@
 #pragma once
+#include <utility>
 
 struct Il2CppGuid;
 struct Il2CppIUnknown;
 struct Il2CppObject;
 struct Il2CppThread;
+struct Il2CppInternalThread;
 
 namespace il2cpp
 {
@@ -33,9 +35,9 @@ namespace gc
         static void AddMemoryPressure(int64_t value);
         static int32_t GetMaxGeneration();
         static int32_t GetGeneration(void* addr);
-#if !RUNTIME_TINY
         static void InitializeFinalizer();
         static bool IsFinalizerThread(Il2CppThread* thread);
+        static bool IsFinalizerInternalThread(Il2CppInternalThread* thread);
         static void UninitializeFinalizers();
         static void NotifyFinalizers();
         static void RunFinalizer(void *obj, void *data);
@@ -44,7 +46,6 @@ namespace gc
         static void SuppressFinalizer(Il2CppObject* obj);
         static void WaitForPendingFinalizers();
         static Il2CppIUnknown* GetOrCreateCCW(Il2CppObject* obj, const Il2CppGuid& iid);
-#endif
 
         // functions implemented in a GC specific manner
         static void Initialize();
@@ -69,24 +70,21 @@ namespace gc
         static int64_t GetAllocatedHeapSize();
 
         static void* MakeDescriptorForObject(size_t *bitmap, int numbits);
+        static void* MakeEmptyDescriptor();
         static void* MakeDescriptorForString();
         static void* MakeDescriptorForArray();
 
-#if RUNTIME_TINY
         static void* Allocate(size_t size);
         static void* AllocateObject(size_t size, void* type);
-#endif
 
         static void* AllocateFixed(size_t size, void *descr);
         static void FreeFixed(void* addr);
 
-        static bool RegisterThread(void *baseptr);
+        static void RegisterThread();
         static bool UnregisterThread();
 
-#if !RUNTIME_TINY
         static bool HasPendingFinalizers();
         static int32_t InvokeFinalizers();
-#endif
 
         static void AddWeakLink(void **link_addr, Il2CppObject *obj, bool track);
         static void RemoveWeakLink(void **link_addr);
@@ -105,6 +103,10 @@ namespace gc
 
         static void RegisterRoot(char *start, size_t size);
         static void UnregisterRoot(char* start);
+
+        typedef std::pair<char*, size_t> (*GetDynamicRootDataProc)(void* root);
+        static void RegisterDynamicRoot(void* root, GetDynamicRootDataProc getRootDataFunc);
+        static void UnregisterDynamicRoot(void* root);
 
         static void SetSkipThread(bool skip);
 

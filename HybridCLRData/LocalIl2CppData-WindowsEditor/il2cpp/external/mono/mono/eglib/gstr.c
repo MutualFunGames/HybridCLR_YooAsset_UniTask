@@ -205,6 +205,13 @@ Last this was checked was June-2017.
 
 Apple is at 106.
 Android is at 133.
+
+Haiku starts numbering at 0x8000_7000 (like HRESULT on Win32) for POSIX errno,
+but errors from BeAPI or custom user libraries could be lower or higher.
+(Technically, this is C and old POSIX compliant, but not new POSIX compliant.)
+The big problem with this is that it effectively means errors start at a
+negative offset. As such, disable the whole strerror caching mechanism.
+
 */
 #define MONO_ERRNO_MAX 200
 #define str(s) #s
@@ -213,6 +220,14 @@ Android is at 133.
 static pthread_mutex_t strerror_lock = PTHREAD_MUTEX_INITIALIZER;
 #endif
 
+#if defined(__HAIKU__)
+const gchar *
+g_strerror (gint errnum)
+{
+	/* returns a const char* on Haiku */
+	return strerror(errnum);
+}
+#else
 static char *error_messages [MONO_ERRNO_MAX];
 
 const gchar *
@@ -271,31 +286,34 @@ g_strerror (gint errnum)
 	}
 	return error_messages [errnum];
 }
+#endif
 
 gchar *
 g_strconcat (const gchar *first, ...)
 {
 	va_list args;
-	size_t total = 0;
 	char *s, *ret;
 	g_return_val_if_fail (first != NULL, NULL);
 
-	total += strlen (first);
+	size_t len = strlen (first);
 	va_start (args, first);
 	for (s = va_arg (args, char *); s != NULL; s = va_arg(args, char *)){
-		total += strlen (s);
+		len += strlen (s);
 	}
 	va_end (args);
 	
-	ret = g_malloc (total + 1);
+	ret = (char*)g_malloc (len + 1);
 	if (ret == NULL)
 		return NULL;
 
-	ret [total] = 0;
-	strcpy (ret, first);
+	ret [len] = 0;
+	len = strlen (first);
+	memcpy (ret, first, len);
 	va_start (args, first);
+	first = ret; // repurpose first as cursor
 	for (s = va_arg (args, char *); s != NULL; s = va_arg(args, char *)){
-		strcat (ret, s);
+		first += len;
+		memcpy ((char*)first, s, len = strlen (s));
 	}
 	va_end (args);
 
@@ -512,7 +530,7 @@ g_strjoin (const gchar *separator, ...)
 	if (slen > 0 && len > 0)
 		len -= slen;
 
-	res = g_malloc (len + 1);
+	res = (char*)g_malloc (len + 1);
 	va_start (args, separator);
 	s = va_arg (args, char *);
 	r = g_stpcpy (res, s);
@@ -593,19 +611,6 @@ g_strchomp (gchar *str)
 }
 
 gint
-g_printf(gchar const *format, ...)
-{
-	va_list args;
-	gint ret;
-
-	va_start(args, format);
-	ret = vprintf(format, args);
-	va_end(args);
-
-	return ret;
-}
-
-gint
 g_fprintf(FILE *file, gchar const *format, ...)
 {
 	va_list args;
@@ -662,7 +667,7 @@ char_needs_encoding (char c)
 }
 
 gchar *
-g_filename_to_uri (const gchar *filename, const gchar *hostname, GError **error)
+g_filename_to_uri (const gchar *filename, const gchar *hostname, GError **gerror)
 {
 	size_t n;
 	char *ret, *rp;
@@ -679,8 +684,8 @@ g_filename_to_uri (const gchar *filename, const gchar *hostname, GError **error)
 		g_warning ("%s", "eglib: g_filename_to_uri: hostname not handled");
 
 	if (!g_path_is_absolute (filename)){
-		if (error != NULL)
-			*error = g_error_new (NULL, 2, "Not an absolute filename");
+		if (gerror != NULL)
+			*gerror = g_error_new (NULL, 2, "Not an absolute filename");
 		
 		return NULL;
 	}
@@ -724,15 +729,15 @@ decode (char p)
 	if (p >= '0' && p <= '9')
 		return p - '0';
 	if (p >= 'A' && p <= 'F')
-		return p - 'A';
+		return (p - 'A') + 10;
 	if (p >= 'a' && p <= 'f')
-		return p - 'a';
+		return (p - 'a') + 10;
 	g_assert_not_reached ();
 	return 0;
 }
 
 gchar *
-g_filename_from_uri (const gchar *uri, gchar **hostname, GError **error)
+g_filename_from_uri (const gchar *uri, gchar **hostname, GError **gerror)
 {
 	const char *p;
 	char *r, *result;
@@ -744,8 +749,8 @@ g_filename_from_uri (const gchar *uri, gchar **hostname, GError **error)
 		g_warning ("%s", "eglib: g_filename_from_uri: hostname not handled");
 
 	if (strncmp (uri, "file:///", 8) != 0){
-		if (error != NULL)
-			*error = g_error_new (NULL, 2, "URI does not start with the file: scheme");
+		if (gerror != NULL)
+			*gerror = g_error_new (NULL, 2, "URI does not start with the file: scheme");
 		return NULL;
 	}
 
@@ -754,8 +759,8 @@ g_filename_from_uri (const gchar *uri, gchar **hostname, GError **error)
 			if (p [1] && p [2] && isxdigit (p [1]) && isxdigit (p [2])){
 				p += 2;
 			} else {
-				if (error != NULL)
-					*error = g_error_new (NULL, 2, "URI contains an invalid escape sequence");
+				if (gerror != NULL)
+					*gerror = g_error_new (NULL, 2, "URI contains an invalid escape sequence");
 				return NULL;
 			}
 		} 
@@ -803,11 +808,20 @@ g_ascii_tolower (gchar c)
 	return c >= 'A' && c <= 'Z' ? c + ('a' - 'A') : c;
 }
 
+void
+g_ascii_strdown_no_alloc (char* dst, const char* src, gsize len)
+{
+	// dst can equal src. no_alloc means this function does no
+	// allocation; caller may very well.
+
+	for (gsize i = 0; i < len; ++i)
+		dst [i] = g_ascii_tolower (src [i]);
+}
+
 gchar *
 g_ascii_strdown (const gchar *str, gssize len)
 {
 	char *ret;
-	int i;
 	
 	g_return_val_if_fail  (str != NULL, NULL);
 
@@ -815,9 +829,8 @@ g_ascii_strdown (const gchar *str, gssize len)
 		len = strlen (str);
 	
 	ret = g_malloc (len + 1);
-	for (i = 0; i < len; i++)
-		ret [i] = (guchar) g_ascii_tolower (str [i]);
-	ret [i] = 0;
+	g_ascii_strdown_no_alloc (ret, str, len);
+	ret [len] = 0;
 	
 	return ret;
 }
@@ -841,26 +854,50 @@ g_ascii_strup (const gchar *str, gssize len)
 	
 	ret = g_malloc (len + 1);
 	for (i = 0; i < len; i++)
-		ret [i] = (guchar) g_ascii_toupper (str [i]);
+		ret [i] = g_ascii_toupper (str [i]);
 	ret [i] = 0;
 	
 	return ret;
 }
 
+static
+int
+g_ascii_charcmp (char c1, char c2)
+{
+	// Do not subtract, to avoid overflow.
+	// Use unsigned to mimic strcmp, and so
+	// shorter strings compare as less.
+
+	const guchar u1 = (guchar)c1;
+	const guchar u2 = (guchar)c2;
+	return (u1 < u2) ? -1 : (u1 > u2) ? 1 : 0;
+}
+
+static
+int
+g_ascii_charcasecmp (char c1, char c2)
+{
+	return g_ascii_charcmp (g_ascii_tolower (c1), g_ascii_tolower (c2));
+}
+
 gint
 g_ascii_strncasecmp (const gchar *s1, const gchar *s2, gsize n)
 {
+	// Unlike strncmp etc. this function does not stop at nul,
+	// unless there is a mismatch.
+
+	if (s1 == s2)
+		return 0;
+
 	gsize i;
-	
+
 	g_return_val_if_fail (s1 != NULL, 0);
 	g_return_val_if_fail (s2 != NULL, 0);
 
 	for (i = 0; i < n; i++) {
-		gchar c1 = g_ascii_tolower (*s1++);
-		gchar c2 = g_ascii_tolower (*s2++);
-		
-		if (c1 != c2)
-			return c1 - c2;
+		const int j = g_ascii_charcasecmp (*s1++, *s2++);
+		if (j)
+			return j;
 	}
 	
 	return 0;
@@ -869,44 +906,71 @@ g_ascii_strncasecmp (const gchar *s1, const gchar *s2, gsize n)
 gint
 g_ascii_strcasecmp (const gchar *s1, const gchar *s2)
 {
-	const char *sp1 = s1;
-	const char *sp2 = s2;
-	
+	if (s1 == s2)
+		return 0;
+
 	g_return_val_if_fail (s1 != NULL, 0);
 	g_return_val_if_fail (s2 != NULL, 0);
-	
-	while (*sp1 != '\0') {
-		char c1 = g_ascii_tolower (*sp1++);
-		char c2 = g_ascii_tolower (*sp2++);
-		
-		if (c1 != c2)
-			return c1 - c2;
+
+	char c1;
+
+	while ((c1 = *s1)) {
+		++s1;
+		const int j = g_ascii_charcasecmp (c1, *s2++);
+		if (j)
+			return j;
 	}
-	
-	return (*sp1) - (*sp2);
+
+	return g_ascii_charcmp (0, *s2);
 }
 
-gchar *
-g_strdelimit (gchar *string, const gchar *delimiters, gchar new_delimiter)
+gboolean
+g_utf16_ascii_equal (const gunichar2 *utf16, size_t ulen, const char *ascii, size_t alen)
+{
+	size_t i;
+	if (ulen != alen)
+		return FALSE;
+	for (i = 0; i < ulen; ++i) {
+		if (utf16[i] != ascii[i])
+			return FALSE;
+	}
+	return TRUE;
+}
+
+gboolean
+g_utf16_asciiz_equal (const gunichar2 *utf16, const char *ascii)
+// z for zero means null terminated
+{
+	while (1)
+	{
+		char a = *ascii++;
+		gunichar2 u = *utf16++;
+		if (a != u)
+			return FALSE;
+		if (a == 0)
+			return TRUE;
+	}
+}
+
+void
+g_strdelimit (gchar *string, gchar delimiter, gchar new_delimiter)
 {
 	gchar *ptr;
 
-	g_return_val_if_fail (string != NULL, NULL);
-
-	if (delimiters == NULL)
-		delimiters = G_STR_DELIMITERS;
+	g_return_if_fail (string != NULL);
 
 	for (ptr = string; *ptr; ptr++) {
-		if (strchr (delimiters, *ptr))
+		if (delimiter == *ptr)
 			*ptr = new_delimiter;
 	}
-	
-	return string;
 }
 
 gsize 
 g_strlcpy (gchar *dest, const gchar *src, gsize dest_size)
 {
+	g_assert (src);
+	g_assert (dest);
+
 #ifdef HAVE_STRLCPY
 	return strlcpy (dest, src, dest_size);
 #else
@@ -914,9 +978,6 @@ g_strlcpy (gchar *dest, const gchar *src, gsize dest_size)
 	const gchar *s;
 	gchar c;
 	gsize len;
-	
-	g_return_val_if_fail (src != NULL, 0);
-	g_return_val_if_fail (dest != NULL, 0);
 
 	len = dest_size;
 	if (len == 0)
@@ -1033,3 +1094,59 @@ g_strnfill (gsize length, gchar fill_char)
 	ret [length] = 0;
 	return ret;
 }
+
+size_t
+g_utf16_len (const gunichar2 *a)
+{
+#ifdef G_OS_WIN32
+	return wcslen (a);
+#else
+	size_t length = 0;
+	while (a [length])
+		++length;
+	return length;
+#endif
+}
+
+gsize
+g_strnlen (const char* s, gsize n)
+{
+	gsize i;
+	for (i = 0; i < n && s [i]; ++i) ;
+	return i;
+}
+
+// This does not link on Xbox One - no lseek or read
+#ifndef RUNTIME_IL2CPP
+/**
+ * Loads a chunk of data from the file pointed to by the
+ * @fd starting at the file offset @offset for @size bytes
+ * and returns an allocated version of that string, or NULL
+ * on error.
+ */
+char *
+g_str_from_file_region (int fd, guint64 offset, gsize size)
+{
+	char *buffer;
+	off_t loc;
+	int status;
+	
+	do {
+		loc = lseek (fd, offset, SEEK_SET);
+	} while (loc == -1 && errno == EINTR);
+	if (loc == -1)
+		return NULL;
+	buffer = (char *)g_malloc (size + 1);
+	if (buffer == NULL)
+		return NULL;
+	buffer [size] = 0;
+	do {
+		status = read (fd, buffer, size);
+	} while (status == -1 && errno == EINTR);
+	if (status == -1){
+		g_free (buffer);
+		return NULL;
+	}
+	return buffer;
+}
+#endif // !RUNTIME_IL2CPP

@@ -39,8 +39,13 @@ namespace baselib
             Thread() = default;
 
             // Generic Constructor
+            template<class FunctionType , class ... Args, typename std::enable_if<std::is_convertible<FunctionType, size_t>::value == false, bool>::type = 0>
+            Thread(FunctionType && f, Args && ... args) : Thread(0, f, args ...)
+            {
+            }
+
             template<class FunctionType , class ... Args>
-            Thread(FunctionType && f, Args && ... args)
+            Thread(const size_t stackSize, FunctionType && f, Args && ... args)
             {
             #if COMPILER_SUPPORTS_GENERIC_LAMBDA_EXPRESSIONS
                 // This generates cleaner and nicer-to-debug code
@@ -65,12 +70,12 @@ namespace baselib
                     // We have to move it to pointer, otherwise wrapped destructor will be called
                     new(buf) Container(std::move(wrapped));
 
-                    thread = CreateThread(ThreadProxySmallObject<Container>, smallObject);
+                    thread = CreateThread(ThreadProxySmallObject<Container>, smallObject, stackSize);
                 }
                 else
                 {
                     std::unique_ptr<Container> ptr(new Container(std::move(wrapped)));
-                    thread = CreateThread(ThreadProxyHeap<Container>, ptr.get());
+                    thread = CreateThread(ThreadProxyHeap<Container>, ptr.get(), stackSize);
                     if (thread)
                         ptr.release();
                 }
@@ -114,7 +119,7 @@ namespace baselib
         private:
             Baselib_Thread* thread = nullptr;
 
-            static Baselib_Thread* CreateThread(Baselib_Thread_EntryPointFunction function, void* arg);
+            static Baselib_Thread* CreateThread(Baselib_Thread_EntryPointFunction function, void* arg, size_t stackSize);
 
             template<class T>
             static void ThreadProxyHeap(void* data)

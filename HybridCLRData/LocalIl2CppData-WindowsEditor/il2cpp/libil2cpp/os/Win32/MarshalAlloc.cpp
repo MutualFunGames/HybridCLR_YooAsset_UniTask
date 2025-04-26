@@ -1,6 +1,6 @@
 #include "il2cpp-config.h"
 
-#if IL2CPP_TARGET_WINDOWS && !(IL2CPP_TARGET_WINRT || IL2CPP_TARGET_XBOXONE)
+#if IL2CPP_TARGET_WINDOWS
 
 #include "os/MarshalAlloc.h"
 

@@ -22,9 +22,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#ifdef HAVE_SIGNAL_H
 #include <signal.h>
-#endif
 #include <sys/time.h>
 #include <fcntl.h>
 #ifdef HAVE_SYS_PARAM_H
@@ -47,6 +45,20 @@
 #include <utime.h>
 #endif
 
+#if defined (HAVE_FORK) && defined (HAVE_EXECVE)
+// For close_my_fds
+#if defined (_AIX)
+#include <procinfo.h>
+#elif defined (__FreeBSD__)
+#include <sys/sysctl.h>
+#include <sys/user.h>
+#include <libutil.h>
+#elif defined(__linux__)
+#include <dirent.h>
+#endif
+#endif
+
+#include <mono/metadata/object-internals.h>
 #include <mono/metadata/w32process.h>
 #include <mono/metadata/w32process-internals.h>
 #include <mono/metadata/w32process-unix-internals.h>
@@ -54,7 +66,6 @@
 #include <mono/metadata/class.h>
 #include <mono/metadata/class-internals.h>
 #include <mono/metadata/object.h>
-#include <mono/metadata/object-internals.h>
 #include <mono/metadata/metadata.h>
 #include <mono/metadata/metadata-internals.h>
 #include <mono/metadata/exception.h>
@@ -62,6 +73,7 @@
 #include <mono/metadata/w32file.h>
 #include <mono/utils/mono-membar.h>
 #include <mono/utils/mono-logger-internals.h>
+#include <mono/utils/strenc-internals.h>
 #include <mono/utils/strenc.h>
 #include <mono/utils/mono-proclib.h>
 #include <mono/utils/mono-path.h>
@@ -72,6 +84,14 @@
 #include <mono/utils/strenc.h>
 #include <mono/utils/mono-io-portability.h>
 #include <mono/utils/w32api.h>
+#include <mono/utils/mono-errno.h>
+#include <mono/utils/mono-once.h>
+#include <mono/utils/mono-error-internals.h>
+#include <mono/utils/mono-threads-coop.h>
+#include "object-internals.h"
+#include "icall-decl.h"
+
+#if !defined(ENABLE_NETCORE) && !defined(DISABLE_PROCESSES)
 
 #ifndef MAXPATHLEN
 #define MAXPATHLEN 242
@@ -83,20 +103,26 @@
 /* define LOGDEBUG(...) g_message(__VA_ARGS__)  */
 
 /* The process' environment strings */
+#if defined (HAVE_FORK) && defined (HAVE_EXECVE)
 #if defined(__APPLE__)
 #if defined (TARGET_OSX)
 /* Apple defines this in crt_externs.h but doesn't provide that header for 
  * arm-apple-darwin9.  We'll manually define the symbol on Apple as it does
  * in fact exist on all implementations (so far) 
  */
+G_BEGIN_DECLS
 gchar ***_NSGetEnviron(void);
+G_END_DECLS
 #define environ (*_NSGetEnviron())
 #else
 static char *mono_environ[1] = { NULL };
 #define environ mono_environ
 #endif /* defined (TARGET_OSX) */
 #else
+G_BEGIN_DECLS
 extern char **environ;
+G_END_DECLS
+#endif
 #endif
 
 typedef enum {
@@ -236,245 +262,6 @@ typedef struct {
 #define VS_FFI_STRUCVERSION	0x00010000
 #endif
 
-#define IMAGE_NUMBEROF_DIRECTORY_ENTRIES 16
-
-#define IMAGE_DIRECTORY_ENTRY_EXPORT	0
-#define IMAGE_DIRECTORY_ENTRY_IMPORT	1
-#define IMAGE_DIRECTORY_ENTRY_RESOURCE	2
-
-#define IMAGE_SIZEOF_SHORT_NAME	8
-
-#if G_BYTE_ORDER != G_LITTLE_ENDIAN
-#define IMAGE_DOS_SIGNATURE	0x4d5a
-#define IMAGE_NT_SIGNATURE	0x50450000
-#define IMAGE_NT_OPTIONAL_HDR32_MAGIC	0xb10
-#define IMAGE_NT_OPTIONAL_HDR64_MAGIC	0xb20
-#else
-#define IMAGE_DOS_SIGNATURE	0x5a4d
-#define IMAGE_NT_SIGNATURE	0x00004550
-#define IMAGE_NT_OPTIONAL_HDR32_MAGIC	0x10b
-#define IMAGE_NT_OPTIONAL_HDR64_MAGIC	0x20b
-#endif
-
-typedef struct {
-	guint16 e_magic;
-	guint16 e_cblp;
-	guint16 e_cp;
-	guint16 e_crlc;
-	guint16 e_cparhdr;
-	guint16 e_minalloc;
-	guint16 e_maxalloc;
-	guint16 e_ss;
-	guint16 e_sp;
-	guint16 e_csum;
-	guint16 e_ip;
-	guint16 e_cs;
-	guint16 e_lfarlc;
-	guint16 e_ovno;
-	guint16 e_res[4];
-	guint16 e_oemid;
-	guint16 e_oeminfo;
-	guint16 e_res2[10];
-	guint32 e_lfanew;
-} IMAGE_DOS_HEADER;
-
-typedef struct {
-	guint16 Machine;
-	guint16 NumberOfSections;
-	guint32 TimeDateStamp;
-	guint32 PointerToSymbolTable;
-	guint32 NumberOfSymbols;
-	guint16 SizeOfOptionalHeader;
-	guint16 Characteristics;
-} IMAGE_FILE_HEADER;
-
-typedef struct {
-	guint32 VirtualAddress;
-	guint32 Size;
-} IMAGE_DATA_DIRECTORY;
-
-typedef struct {
-	guint16 Magic;
-	guint8 MajorLinkerVersion;
-	guint8 MinorLinkerVersion;
-	guint32 SizeOfCode;
-	guint32 SizeOfInitializedData;
-	guint32 SizeOfUninitializedData;
-	guint32 AddressOfEntryPoint;
-	guint32 BaseOfCode;
-	guint32 BaseOfData;
-	guint32 ImageBase;
-	guint32 SectionAlignment;
-	guint32 FileAlignment;
-	guint16 MajorOperatingSystemVersion;
-	guint16 MinorOperatingSystemVersion;
-	guint16 MajorImageVersion;
-	guint16 MinorImageVersion;
-	guint16 MajorSubsystemVersion;
-	guint16 MinorSubsystemVersion;
-	guint32 Win32VersionValue;
-	guint32 SizeOfImage;
-	guint32 SizeOfHeaders;
-	guint32 CheckSum;
-	guint16 Subsystem;
-	guint16 DllCharacteristics;
-	guint32 SizeOfStackReserve;
-	guint32 SizeOfStackCommit;
-	guint32 SizeOfHeapReserve;
-	guint32 SizeOfHeapCommit;
-	guint32 LoaderFlags;
-	guint32 NumberOfRvaAndSizes;
-	IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
-} IMAGE_OPTIONAL_HEADER32;
-
-typedef struct {
-	guint16 Magic;
-	guint8 MajorLinkerVersion;
-	guint8 MinorLinkerVersion;
-	guint32 SizeOfCode;
-	guint32 SizeOfInitializedData;
-	guint32 SizeOfUninitializedData;
-	guint32 AddressOfEntryPoint;
-	guint32 BaseOfCode;
-	guint64 ImageBase;
-	guint32 SectionAlignment;
-	guint32 FileAlignment;
-	guint16 MajorOperatingSystemVersion;
-	guint16 MinorOperatingSystemVersion;
-	guint16 MajorImageVersion;
-	guint16 MinorImageVersion;
-	guint16 MajorSubsystemVersion;
-	guint16 MinorSubsystemVersion;
-	guint32 Win32VersionValue;
-	guint32 SizeOfImage;
-	guint32 SizeOfHeaders;
-	guint32 CheckSum;
-	guint16 Subsystem;
-	guint16 DllCharacteristics;
-	guint64 SizeOfStackReserve;
-	guint64 SizeOfStackCommit;
-	guint64 SizeOfHeapReserve;
-	guint64 SizeOfHeapCommit;
-	guint32 LoaderFlags;
-	guint32 NumberOfRvaAndSizes;
-	IMAGE_DATA_DIRECTORY DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
-} IMAGE_OPTIONAL_HEADER64;
-
-#if SIZEOF_VOID_P == 8
-typedef IMAGE_OPTIONAL_HEADER64 IMAGE_OPTIONAL_HEADER;
-#else
-typedef IMAGE_OPTIONAL_HEADER32 IMAGE_OPTIONAL_HEADER;
-#endif
-
-typedef struct {
-	guint32 Signature;
-	IMAGE_FILE_HEADER FileHeader;
-	IMAGE_OPTIONAL_HEADER32 OptionalHeader;
-} IMAGE_NT_HEADERS32;
-
-typedef struct {
-	guint32 Signature;
-	IMAGE_FILE_HEADER FileHeader;
-	IMAGE_OPTIONAL_HEADER64 OptionalHeader;
-} IMAGE_NT_HEADERS64;
-
-#if SIZEOF_VOID_P == 8
-typedef IMAGE_NT_HEADERS64 IMAGE_NT_HEADERS;
-#else
-typedef IMAGE_NT_HEADERS32 IMAGE_NT_HEADERS;
-#endif
-
-typedef struct {
-	guint8 Name[IMAGE_SIZEOF_SHORT_NAME];
-	union {
-		guint32 PhysicalAddress;
-		guint32 VirtualSize;
-	} Misc;
-	guint32 VirtualAddress;
-	guint32 SizeOfRawData;
-	guint32 PointerToRawData;
-	guint32 PointerToRelocations;
-	guint32 PointerToLinenumbers;
-	guint16 NumberOfRelocations;
-	guint16 NumberOfLinenumbers;
-	guint32 Characteristics;
-} IMAGE_SECTION_HEADER;
-
-#define IMAGE_FIRST_SECTION32(header) ((IMAGE_SECTION_HEADER *)((gsize)(header) + G_STRUCT_OFFSET (IMAGE_NT_HEADERS32, OptionalHeader) + GUINT16_FROM_LE (((IMAGE_NT_HEADERS32 *)(header))->FileHeader.SizeOfOptionalHeader)))
-
-#define RT_CURSOR	0x01
-#define RT_BITMAP	0x02
-#define RT_ICON		0x03
-#define RT_MENU		0x04
-#define RT_DIALOG	0x05
-#define RT_STRING	0x06
-#define RT_FONTDIR	0x07
-#define RT_FONT		0x08
-#define RT_ACCELERATOR	0x09
-#define RT_RCDATA	0x0a
-#define RT_MESSAGETABLE	0x0b
-#define RT_GROUP_CURSOR	0x0c
-#define RT_GROUP_ICON	0x0e
-#define RT_VERSION	0x10
-#define RT_DLGINCLUDE	0x11
-#define RT_PLUGPLAY	0x13
-#define RT_VXD		0x14
-#define RT_ANICURSOR	0x15
-#define RT_ANIICON	0x16
-#define RT_HTML		0x17
-#define RT_MANIFEST	0x18
-
-typedef struct {
-	guint32 Characteristics;
-	guint32 TimeDateStamp;
-	guint16 MajorVersion;
-	guint16 MinorVersion;
-	guint16 NumberOfNamedEntries;
-	guint16 NumberOfIdEntries;
-} IMAGE_RESOURCE_DIRECTORY;
-
-typedef struct {
-	union {
-		struct {
-#if G_BYTE_ORDER == G_BIG_ENDIAN
-			guint32 NameIsString:1;
-			guint32 NameOffset:31;
-#else
-			guint32 NameOffset:31;
-			guint32 NameIsString:1;
-#endif
-		};
-		guint32 Name;
-#if G_BYTE_ORDER == G_BIG_ENDIAN
-		struct {
-			guint16 __wapi_big_endian_padding;
-			guint16 Id;
-		};
-#else
-		guint16 Id;
-#endif
-	};
-	union {
-		guint32 OffsetToData;
-		struct {
-#if G_BYTE_ORDER == G_BIG_ENDIAN
-			guint32 DataIsDirectory:1;
-			guint32 OffsetToDirectory:31;
-#else
-			guint32 OffsetToDirectory:31;
-			guint32 DataIsDirectory:1;
-#endif
-		};
-	};
-} IMAGE_RESOURCE_DIRECTORY_ENTRY;
-
-typedef struct {
-	guint32 OffsetToData;
-	guint32 Size;
-	guint32 CodePage;
-	guint32 Reserved;
-} IMAGE_RESOURCE_DATA_ENTRY;
-
 #define VOS_UNKNOWN		0x00000000
 #define VOS_DOS			0x00010000
 #define VOS_OS216		0x00020000
@@ -533,10 +320,11 @@ static MonoCoopMutex processes_mutex;
 static pid_t current_pid;
 static gpointer current_process;
 
-static const gunichar2 utf16_space_bytes [2] = { 0x20, 0 };
-static const gunichar2 *utf16_space = utf16_space_bytes;
-static const gunichar2 utf16_quote_bytes [2] = { 0x22, 0 };
-static const gunichar2 *utf16_quote = utf16_quote_bytes;
+static const gunichar2 utf16_space [2] = { 0x20, 0 };
+static const gunichar2 utf16_quote [2] = { 0x22, 0 };
+
+static MonoBoolean
+mono_get_exit_code_process (gpointer handle, gint32 *exitcode);
 
 /* Check if a pid is valid - i.e. if a process exists with this pid. */
 static gboolean
@@ -544,7 +332,7 @@ process_is_alive (pid_t pid)
 {
 #if defined(HOST_WATCHOS)
 	return TRUE; // TODO: Rewrite using sysctl
-#elif defined(HOST_DARWIN) || defined(__OpenBSD__) || defined(__FreeBSD__)
+#elif defined(HOST_DARWIN) || defined(__OpenBSD__) || defined(__FreeBSD__) || defined(_AIX)
 	if (pid == 0)
 		return FALSE;
 	if (kill (pid, 0) == 0)
@@ -751,7 +539,7 @@ processes_cleanup (void)
 }
 
 static void
-process_close (gpointer handle, gpointer data)
+process_close (gpointer data)
 {
 	MonoW32HandleProcess *process_handle;
 
@@ -765,7 +553,7 @@ process_close (gpointer handle, gpointer data)
 	processes_cleanup ();
 }
 
-static MonoW32HandleOps process_ops = {
+static const MonoW32HandleOps process_ops = {
 	process_close,		/* close_shared */
 	NULL,				/* signal */
 	NULL,				/* own */
@@ -807,6 +595,8 @@ process_set_name (MonoW32HandleProcess *process_handle)
 	}
 }
 
+static mono_once_t init_state = MONO_ONCE_INIT;
+
 void
 mono_w32process_init (void)
 {
@@ -828,6 +618,7 @@ mono_w32process_init (void)
 	g_assert (current_process != INVALID_HANDLE_VALUE);
 
 	mono_coop_mutex_init (&processes_mutex);
+	mono_once (&init_state, &mono_w32process_platform_init_once);
 }
 
 void
@@ -944,7 +735,7 @@ get_process_foreach_callback (MonoW32Handle *handle_data, gpointer user_data)
 }
 
 HANDLE
-ves_icall_System_Diagnostics_Process_GetProcess_internal (guint32 pid)
+ves_icall_System_Diagnostics_Process_GetProcess_internal (guint32 pid, MonoError *error)
 {
 	GetProcessForeachData foreach_data;
 	gpointer handle;
@@ -982,6 +773,13 @@ ves_icall_System_Diagnostics_Process_GetProcess_internal (guint32 pid)
 	mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: Can't find pid %d", __func__, pid);
 
 	mono_w32error_set_last (ERROR_PROC_NOT_FOUND);
+	return NULL;
+}
+
+HANDLE
+ves_icall_System_Diagnostics_Process_MainWindowHandle_internal (guint32 pid, MonoError *error)
+{
+	/*TODO: Implement for unix*/
 	return NULL;
 }
 
@@ -1124,82 +922,78 @@ mono_w32process_try_get_modules (gpointer handle, gpointer *modules, guint32 siz
 	return TRUE;
 }
 
-guint32
-mono_w32process_module_get_filename (gpointer handle, gpointer module, gunichar2 *basename, guint32 size)
+gboolean
+mono_w32process_module_get_filename (gpointer handle, gpointer module, gunichar2 **str, guint32 *len)
 {
-	gint pid, len;
-	gsize bytes;
+	gint pid;
+	gsize bytes = 0;
 	gchar *path;
 	gunichar2 *proc_path;
 
-	size *= sizeof (gunichar2); /* adjust for unicode characters */
+	mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: Getting module file name, process handle %p module %p " G_GUINT32_FORMAT,
+	            __func__, handle, module);
 
-	if (basename == NULL || size == 0)
-		return 0;
+	if (str == NULL || len == NULL)
+		return FALSE;
+
+	*str = NULL;
+	*len = 0;
 
 	pid = mono_w32process_get_pid (handle);
+	if (pid == 0)
+		return FALSE;
 
 	path = mono_w32process_get_path (pid);
 	if (path == NULL)
-		return 0;
+		return FALSE;
 
 	proc_path = mono_unicode_from_external (path, &bytes);
-	g_free (path);
 
-	if (proc_path == NULL)
-		return 0;
-
-	len = (bytes / 2);
-
-	/* Add the terminator */
-	bytes += 2;
-
-	if (size < bytes) {
-		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: Size %" G_GUINT32_FORMAT " smaller than needed (%zd); truncating", __func__, size, bytes);
-		memcpy (basename, proc_path, size);
-	} else {
-		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: Size %" G_GUINT32_FORMAT " larger than needed (%zd)", __func__, size, bytes);
-		memcpy (basename, proc_path, bytes);
+	if (proc_path == NULL) {
+		g_free (path);
+		return FALSE;
 	}
 
-	g_free (proc_path);
+	*str = mono_unicode_from_external (path, &bytes);
+	*len = bytes / sizeof (gunichar2);
 
-	return len;
+	g_free (path);
+	return TRUE;
 }
 
-guint32
-mono_w32process_module_get_name (gpointer handle, gpointer module, gunichar2 *basename, guint32 size)
+gboolean
+mono_w32process_module_get_name (gpointer handle, gpointer module, gunichar2 **str, guint32 *len)
 {
 	MonoW32Handle *handle_data;
 	MonoW32HandleProcess *process_handle;
 	pid_t pid;
 	gunichar2 *procname;
 	char *procname_ext = NULL;
-	glong len;
-	gsize bytes;
+	gsize bytes = 0;
 	GSList *mods = NULL, *mods_iter;
 	MonoW32ProcessModule *found_module;
 	char *pname = NULL;
 
-	mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: Getting module base name, process handle %p module %p basename %p size %" G_GUINT32_FORMAT,
-		   __func__, handle, module, basename, size);
+	mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: Getting module base name, process handle %p module %p " G_GUINT32_FORMAT,
+		   __func__, handle, module);
 
-	size = size * sizeof (gunichar2); /* adjust for unicode characters */
+	if (str == NULL || len == NULL)
+		return FALSE;
 
-	if (basename == NULL || size == 0)
-		return 0;
+	*str = NULL;
+	*len = 0;
 
 	if (!mono_w32handle_lookup_and_ref (handle, &handle_data)) {
 		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: unknown handle %p", __func__, handle);
 		mono_w32error_set_last (ERROR_INVALID_HANDLE);
-		return 0;
+		return FALSE;
 	}
 
 	if (handle_data->type != MONO_W32TYPE_PROCESS) {
 		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: unknown process handle %p", __func__, handle);
 		mono_w32error_set_last (ERROR_INVALID_HANDLE);
 		mono_w32handle_unref (handle_data);
-		return 0;
+		return FALSE;
 	}
 
 	process_handle = (MonoW32HandleProcess*) handle_data->specific;
@@ -1212,7 +1006,7 @@ mono_w32process_module_get_name (gpointer handle, gpointer module, gunichar2 *ba
 		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: Can't get modules %p", __func__, handle);
 		g_free (pname);
 		mono_w32handle_unref (handle_data);
-		return 0;
+		return FALSE;
 	}
 
 	/* If module != NULL compare the address.
@@ -1251,42 +1045,26 @@ mono_w32process_module_get_name (gpointer handle, gpointer module, gunichar2 *ba
 		procname = mono_unicode_from_external (procname_ext, &bytes);
 		if (procname == NULL) {
 			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: Can't get procname %p", __func__, handle);
-			/* bugger */
 			g_free (procname_ext);
 			mono_w32handle_unref (handle_data);
-			return 0;
+			return FALSE;
 		}
 
-		len = (bytes / 2);
+		*str = procname;
+		*len = bytes / sizeof (gunichar2);
 
-		/* Add the terminator */
-		bytes += 2;
-
-		if (size < bytes) {
-			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: Size %" G_GUINT32_FORMAT " smaller than needed (%zd); truncating", __func__, size, bytes);
-
-			memcpy (basename, procname, size);
-		} else {
-			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: Size %" G_GUINT32_FORMAT " larger than needed (%zd)",
-				   __func__, size, bytes);
-
-			memcpy (basename, procname, bytes);
-		}
-
-		g_free (procname);
 		g_free (procname_ext);
-
 		mono_w32handle_unref (handle_data);
-		return len;
+		return TRUE;
 	}
 
 	mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: Can't find procname_ext %p", __func__, handle);
 	mono_w32handle_unref (handle_data);
-	return 0;
+	return FALSE;
 }
 
 gboolean
-mono_w32process_module_get_information (gpointer handle, gpointer module, MODULEINFO *modinfo, guint32 size)
+mono_w32process_module_get_information (gpointer handle, gpointer module, gpointer modinfo, guint32 size)
 {
 	MonoW32Handle *handle_data;
 	MonoW32HandleProcess *process_handle;
@@ -1336,9 +1114,9 @@ mono_w32process_module_get_information (gpointer handle, gpointer module, MODULE
 			if (ret == FALSE &&
 				((module == NULL && match_procname_to_modulename (pname, found_module->filename)) ||
 				 (module != NULL && found_module->address_start == module))) {
-				modinfo->lpBaseOfDll = found_module->address_start;
-				modinfo->SizeOfImage = (gsize)(found_module->address_end) - (gsize)(found_module->address_start);
-				modinfo->EntryPoint = found_module->address_offset;
+				((MODULEINFO *)modinfo)->lpBaseOfDll = found_module->address_start;
+				((MODULEINFO *)modinfo)->SizeOfImage = (gsize)(found_module->address_end) - (gsize)(found_module->address_start);
+				((MODULEINFO *)modinfo)->EntryPoint = found_module->address_offset;
 				ret = TRUE;
 			}
 
@@ -1349,19 +1127,6 @@ mono_w32process_module_get_information (gpointer handle, gpointer module, MODULE
 	g_free (pname);
 	mono_w32handle_unref (handle_data);
 	return ret;
-}
-
-static void
-switch_dir_separators (char *path)
-{
-	size_t i, pathLength = strlen(path);
-	
-	/* Turn all the slashes round the right way, except for \' */
-	/* There are probably other characters that need to be excluded as well. */
-	for (i = 0; i < pathLength; i++) {
-		if (path[i] == '\\' && i < pathLength - 1 && path[i+1] != '\'' )
-			path[i] = '/';
-	}
 }
 
 #if HAVE_SIGACTION
@@ -1376,7 +1141,7 @@ MONO_SIGNAL_HANDLER_FUNC (static, mono_sigchld_signal_handler, (int _dummy, sigi
 
 	mono_gc_finalize_notify ();
 
-	errno = old_errno;
+	mono_set_errno (old_errno);
 }
 
 static void
@@ -1432,6 +1197,20 @@ mono_w32process_signal_finished (void)
 	mono_coop_mutex_unlock (&processes_mutex);
 }
 
+#if defined (HAVE_FORK) && defined (HAVE_EXECVE)
+static void
+switch_dir_separators (char *path)
+{
+	size_t i, pathLength = strlen (path);
+
+	/* Turn all the slashes round the right way, except for \' */
+	/* There are probably other characters that need to be excluded as well. */
+	for (i = 0; i < pathLength; i++) {
+		if (path[i] == '\\' && i < pathLength - 1 && path[i + 1] != '\'')
+			path[i] = '/';
+	}
+}
+
 static gboolean
 is_readable_or_executable (const char *prog)
 {
@@ -1482,7 +1261,7 @@ is_managed_binary (const char *filename)
 	 * probably wouldn't be able to open it anyway.
 	 */
 	if (file < 0) {
-		errno = original_errno;
+		mono_set_errno (original_errno);
 		return FALSE;
 	}
 
@@ -1585,9 +1364,129 @@ is_managed_binary (const char *filename)
 
 leave:
 	close (file);
-	errno = original_errno;
+	mono_set_errno (original_errno);
 	return managed;
 }
+
+/**
+ * Gets the biggest numbered file descriptor for the current process; failing
+ * that, the system's file descriptor limit. This is called by the fork child
+ * in close_my_fds.
+ */
+static guint32
+max_fd_count (void)
+{
+#if defined (_AIX)
+	struct procentry64 pe;
+	pid_t p;
+	p = getpid ();
+	if (getprocs64 (&pe, sizeof (pe), NULL, 0, &p, 1) != -1) {
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS,
+			   "%s: maximum returned fd in child is %u",
+			   __func__, pe.pi_maxofile);
+		return pe.pi_maxofile; // biggest + 1
+	}
+#endif
+	// fallback to user/system limit if unsupported/error
+	return eg_getdtablesize ();
+}
+
+/**
+ * Closes all of the process' opened file descriptors, applying a strategy
+ * appropriate for the target system. This is called by the fork child in
+ * process_create.
+ */
+static void
+close_my_fds (void)
+{
+// TODO: Other platforms.
+//       * On macOS, use proc_pidinfo + PROC_PIDLISTFDS? See:
+//         http://blog.palominolabs.com/2012/06/19/getting-the-files-being-used-by-a-process-on-mac-os-x/
+//         (I have no idea how this plays out on i/watch/tvOS.)
+//       * On the other BSDs, there's likely a sysctl for this.
+//       * On Solaris, there exists posix_spawn_file_actions_addclosefrom_np,
+//         but that assumes we're using posix_spawn; we aren't, as we do some
+//         complex stuff between fork and exec. There's likely a way to get
+//         the FD list/count though (maybe look at addclosefrom source in
+//         illumos?) or just walk /proc/pid/fd like Linux?
+#if defined (__linux__)
+	/* Walk the file descriptors in /proc/self/fd/. Linux has no other API,
+	 * as far as I'm aware. Opening a directory won't create an FD. */
+	struct dirent *dp;
+	DIR *d;
+	int fd;
+	d = opendir ("/proc/self/fd/");
+	if (d) {
+		while ((dp = readdir (d)) != NULL) {
+			if (dp->d_name [0] == '.')
+				continue;
+			fd = atoi (dp->d_name);
+			if (fd > 2)
+				close (fd);
+		}
+		closedir (d);
+		return;
+	} else {
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS,
+			   "%s: opening fd dir failed, using fallback",
+			   __func__);
+	}
+#elif defined (__FreeBSD__)
+	/* FreeBSD lets us get a list of FDs. There's a MIB to access them
+	 * directly, but it uses a lot of nasty variable length structures. The
+	 * system library libutil provides a nicer way to get a fixed length
+	 * version instead. */
+	struct kinfo_file *kif;
+	int count, i;
+	/* this is malloced but we won't need to free once we exec/exit */
+	kif = kinfo_getfile (getpid (), &count);
+	if (kif) {
+		for (i = 0; i < count; i++) {
+			/* negative FDs look to be used by the OS */
+			if (kif [i].kf_fd > 2) /* no neg + no stdio */
+				close (kif [i].kf_fd);
+		}
+		return;
+	} else {
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS,
+			   "%s: kinfo_getfile failed, using fallback",
+			   __func__);
+	}
+#elif defined (_AIX)
+	struct procentry64 pe;
+	/* this array struct is 1 MB, we're NOT putting it on the stack.
+	 * likewise no need to free; getprocs will fail if we use the smalller
+	 * versions if we have a lot of FDs (is it worth it?)
+	 */
+	struct fdsinfo_100K *fds;
+	pid_t p;
+	p = getpid ();
+	fds = (struct fdsinfo_100K *) g_malloc0 (sizeof (struct fdsinfo_100K));
+	if (!fds) {
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS,
+			   "%s: fdsinfo alloc failed, using fallback",
+			   __func__);
+		goto fallback;
+	}
+
+	if (getprocs64 (&pe, sizeof (pe), fds, sizeof (struct fdsinfo_100K), &p, 1) != -1) {
+		for (int i = 3; i < pe.pi_maxofile; i++) {
+			if (fds->pi_ufd [i].fp != 0)
+				close (fds->pi_ufd [i].fp);
+		}
+		return;
+	} else {
+		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS,
+			   "%s: getprocs64 failed, using fallback",
+			   __func__);
+	}
+fallback:
+#endif
+	/* Fallback: Close FDs blindly, according to an FD limit */
+	for (guint32 i = max_fd_count () - 1; i > 2; i--)
+		close (i);
+}
+#endif
 
 static gboolean
 process_create (const gunichar2 *appname, const gunichar2 *cmdline,
@@ -1605,6 +1504,7 @@ process_create (const gunichar2 *appname, const gunichar2 *cmdline,
 	int startup_pipe [2] = {-1, -1};
 	int dummy;
 	Process *process;
+	ERROR_DECL (error);
 
 #if HAVE_SIGACTION
 	mono_lazy_initialize (&process_sig_chld_once, process_add_sigchld_handler);
@@ -1632,16 +1532,15 @@ process_create (const gunichar2 *appname, const gunichar2 *cmdline,
 	 * 5) $PATH
 	 *
 	 * Just to make things more interesting, tokens can contain
-	 * white space if they are surrounded by quotation marks.  I'm
-	 * beginning to understand just why windows apps are generally
-	 * so crap, with an API like this :-(
+	 * white space if they are surrounded by quotation marks.
 	 */
 	if (appname != NULL) {
-		cmd = mono_unicode_to_external (appname);
+		cmd = mono_unicode_to_external_checked (appname, error);
 		if (cmd == NULL) {
-			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: unicode conversion returned NULL",
-				   __func__);
+			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: unicode conversion returned NULL; %s",
+				   __func__, mono_error_get_message (error));
 
+			mono_error_cleanup (error);
 			mono_w32error_set_last (ERROR_PATH_NOT_FOUND);
 			goto free_strings;
 		}
@@ -1650,20 +1549,22 @@ process_create (const gunichar2 *appname, const gunichar2 *cmdline,
 	}
 
 	if (cmdline != NULL) {
-		args = mono_unicode_to_external (cmdline);
+		args = mono_unicode_to_external_checked (cmdline, error);
 		if (args == NULL) {
-			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: unicode conversion returned NULL", __func__);
+			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: unicode conversion returned NULL; %s", __func__, mono_error_get_message (error));
 
+			mono_error_cleanup (error);
 			mono_w32error_set_last (ERROR_PATH_NOT_FOUND);
 			goto free_strings;
 		}
 	}
 
 	if (cwd != NULL) {
-		dir = mono_unicode_to_external (cwd);
+		dir = mono_unicode_to_external_checked (cwd, error);
 		if (dir == NULL) {
-			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: unicode conversion returned NULL", __func__);
+			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: unicode conversion returned NULL; %s", __func__, mono_error_get_message (error));
 
+			mono_error_cleanup (error);
 			mono_w32error_set_last (ERROR_PATH_NOT_FOUND);
 			goto free_strings;
 		}
@@ -1852,9 +1753,9 @@ process_create (const gunichar2 *appname, const gunichar2 *cmdline,
 		newapp = mono_unicode_from_external (cli_launcher ? cli_launcher : "mono", &bytes_ignored);
 		if (newapp) {
 			if (appname)
-				newcmd = utf16_concat (utf16_quote, newapp, utf16_quote, utf16_space, appname, utf16_space, cmdline, NULL);
+				newcmd = utf16_concat (utf16_quote, newapp, utf16_quote, utf16_space, appname, utf16_space, cmdline, (const gunichar2 *)NULL);
 			else
-				newcmd = utf16_concat (utf16_quote, newapp, utf16_quote, utf16_space, cmdline, NULL);
+				newcmd = utf16_concat (utf16_quote, newapp, utf16_quote, utf16_space, cmdline, (const gunichar2 *)NULL);
 
 			g_free (newapp);
 
@@ -1878,7 +1779,7 @@ process_create (const gunichar2 *appname, const gunichar2 *cmdline,
 		char *qprog;
 
 		qprog = g_shell_quote (prog);
-		full_prog = g_strconcat (qprog, " ", args_after_prog, NULL);
+		full_prog = g_strconcat (qprog, " ", args_after_prog, (const char*)NULL);
 		g_free (qprog);
 	} else {
 		full_prog = g_shell_quote (prog);
@@ -1910,43 +1811,28 @@ process_create (const gunichar2 *appname, const gunichar2 *cmdline,
 	 * new process inherits the same environment.
 	 */
 	if (process_info->env_variables) {
-		gint i, str_length, var_length;
-		MonoString *var;
-		gunichar2 *str;
+		MonoArrayHandle array = MONO_HANDLE_NEW (MonoArray, process_info->env_variables);
+		MonoStringHandle var = MONO_HANDLE_NEW (MonoString, NULL);
+		gsize const array_length = mono_array_handle_length (array);
 
 		/* +2: one for the process handle value, and the last one is NULL */
-		env_strings = g_new0 (gchar*, mono_array_length (process_info->env_variables) + 2);
-
-		str = NULL;
-		str_length = 0;
+		// What "process handle value"?
+		env_strings = g_new0 (gchar*, array_length + 2);
 
 		/* Copy each environ string into 'strings' turning it into utf8 (or the requested encoding) at the same time */
-		for (i = 0; i < mono_array_length (process_info->env_variables); ++i) {
-			var = mono_array_get (process_info->env_variables, MonoString*, i);
-			var_length = mono_string_length (var);
-
-			/* str is a null-terminated copy of var */
-
-			if (var_length + 1 > str_length) {
-				str_length = var_length + 1;
-				str = g_renew (gunichar2, str, str_length);
-			}
-
-			memcpy (str, mono_string_chars (var), var_length * sizeof (gunichar2));
-			str [var_length] = '\0';
-
-			env_strings [i] = mono_unicode_to_external (str);
+		for (gsize i = 0; i < array_length; ++i) {
+			MONO_HANDLE_ARRAY_GETREF (var, array, i);
+			MonoGCHandle gchandle = NULL;
+			env_strings [i] = mono_unicode_to_external (mono_string_handle_pin_chars (var, &gchandle));
+			mono_gchandle_free_internal (gchandle);
 		}
-
-		g_free (str);
 	} else {
-		guint32 env_count;
-
-		env_count = 0;
+		gsize env_count = 0;
 		for (i = 0; environ[i] != NULL; i++)
 			env_count++;
 
 		/* +2: one for the process handle value, and the last one is NULL */
+		// What "process handle value"?
 		env_strings = g_new0 (gchar*, env_count + 2);
 
 		/* Copy each environ string into 'strings' turning it into utf8 (or the requested encoding) at the same time */
@@ -1985,9 +1871,8 @@ process_create (const gunichar2 *appname, const gunichar2 *cmdline,
 		dup2 (out_fd, 1);
 		dup2 (err_fd, 2);
 
-		/* Close all file descriptors */
-		for (i = eg_getdtablesize() - 1; i > 2; i--)
-			close (i);
+		/* Close this child's file handles. */
+		close_my_fds ();
 
 #ifdef DEBUG_ENABLED
 		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: exec()ing [%s] in dir [%s]", __func__, cmd,
@@ -2078,20 +1963,13 @@ process_create (const gunichar2 *appname, const gunichar2 *cmdline,
 	}
 
 free_strings:
-	if (cmd)
-		g_free (cmd);
-	if (full_prog)
-		g_free (full_prog);
-	if (prog)
-		g_free (prog);
-	if (args)
-		g_free (args);
-	if (dir)
-		g_free (dir);
-	if (env_strings)
-		g_strfreev (env_strings);
-	if (argv)
-		g_strfreev (argv);
+	g_free (cmd);
+	g_free (full_prog);
+	g_free (prog);
+	g_free (args);
+	g_free (dir);
+	g_strfreev (env_strings);
+	g_strfreev (argv);
 
 	mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: returning handle %p for pid %d", __func__, handle, pid);
 
@@ -2106,32 +1984,34 @@ free_strings:
 }
 
 MonoBoolean
-ves_icall_System_Diagnostics_Process_ShellExecuteEx_internal (MonoW32ProcessStartInfo *proc_start_info, MonoW32ProcessInfo *process_info)
+ves_icall_System_Diagnostics_Process_ShellExecuteEx_internal (MonoW32ProcessStartInfoHandle proc_start_info, MonoW32ProcessInfo *process_info, MonoError *error)
 {
-	const gunichar2 *lpFile;
-	const gunichar2 *lpParameters;
-	const gunichar2 *lpDirectory;
-	gunichar2 *args;
+	MonoCreateProcessCoop coop;
+	mono_createprocess_coop_init (&coop, proc_start_info, process_info);
+
 	gboolean ret;
 	gboolean handler_needswait = FALSE;
 
-	if (!proc_start_info->filename) {
+	if (!coop.filename) {
 		/* w2k returns TRUE for this, for some reason. */
 		ret = TRUE;
 		goto done;
 	}
 
-	lpFile = proc_start_info->filename ? mono_string_chars (proc_start_info->filename) : NULL;
-	lpParameters = proc_start_info->arguments ? mono_string_chars (proc_start_info->arguments) : NULL;
-	lpDirectory = proc_start_info->working_directory && mono_string_length (proc_start_info->working_directory) != 0 ?
-		mono_string_chars (proc_start_info->working_directory) : NULL;
+	const gunichar2 *lpFile;
+	lpFile = coop.filename;
+	const gunichar2 *lpParameters;
+	lpParameters = coop.arguments;
+	const gunichar2 *lpDirectory;
+	lpDirectory = coop.length.working_directory ? coop.working_directory : NULL;
 
 	/* Put both executable and parameters into the second argument
 	 * to process_create (), so it searches $PATH.  The conversion
 	 * into and back out of utf8 is because there is no
 	 * g_strdup_printf () equivalent for gunichar2 :-(
 	 */
-	args = utf16_concat (utf16_quote, lpFile, utf16_quote, lpParameters == NULL ? NULL : utf16_space, lpParameters, NULL);
+	gunichar2 *args;
+	args = utf16_concat (utf16_quote, lpFile, utf16_quote, lpParameters ? utf16_space : NULL, lpParameters, (const gunichar2 *)NULL);
 	if (args == NULL) {
 		mono_w32error_set_last (ERROR_INVALID_DATA);
 		ret = FALSE;
@@ -2144,8 +2024,17 @@ ves_icall_System_Diagnostics_Process_ShellExecuteEx_internal (MonoW32ProcessStar
 		goto done;
 
 	if (!ret) {
+
+#if defined(TARGET_IOS) || defined(TARGET_ANDROID)
+		// don't try the "open" handlers on iOS/Android, they don't exist there anyway
+		goto done;
+#endif
+
 		static char *handler;
 		static gunichar2 *handler_utf16;
+#ifndef HOST_DARWIN
+		gboolean finished = FALSE;
+#endif
 
 		if (handler_utf16 == (gunichar2 *)-1) {
 			ret = FALSE;
@@ -2160,24 +2049,30 @@ ves_icall_System_Diagnostics_Process_ShellExecuteEx_internal (MonoW32ProcessStar
 		 * On Linux, try: xdg-open, the FreeDesktop standard way of doing it,
 		 * if that fails, try to use gnome-open, then kfmclient
 		 */
+		MONO_ENTER_GC_SAFE;
 		handler = g_find_program_in_path ("xdg-open");
-		if (handler == NULL){
+		if (handler != NULL)
+			handler_needswait = TRUE;
+		else {
 			handler = g_find_program_in_path ("gnome-open");
 			if (handler == NULL){
 				handler = g_find_program_in_path ("kfmclient");
 				if (handler == NULL){
 					handler_utf16 = (gunichar2 *) -1;
 					ret = FALSE;
-					goto done;
+					finished = TRUE;
 				} else {
 					/* kfmclient needs exec argument */
 					char *old = handler;
 					handler = g_strconcat (old, " exec",
-							       NULL);
+							       (const char*)NULL);
 					g_free (old);
 				}
 			}
 		}
+		MONO_EXIT_GC_SAFE;
+		if (finished)
+			goto done;
 #endif
 		handler_utf16 = g_utf8_to_utf16 (handler, -1, NULL, NULL, NULL);
 		g_free (handler);
@@ -2189,7 +2084,7 @@ ves_icall_System_Diagnostics_Process_ShellExecuteEx_internal (MonoW32ProcessStar
 		 * 371567.
 		 */
 		args = utf16_concat (handler_utf16, utf16_space, utf16_quote, lpFile, utf16_quote,
-			lpParameters == NULL ? NULL : utf16_space, lpParameters, NULL);
+			lpParameters ? utf16_space : NULL, lpParameters, (const gunichar2 *)NULL);
 		if (args == NULL) {
 			mono_w32error_set_last (ERROR_INVALID_DATA);
 			ret = FALSE;
@@ -2207,8 +2102,9 @@ ves_icall_System_Diagnostics_Process_ShellExecuteEx_internal (MonoW32ProcessStar
 		if (handler_needswait) {
 			gint32 exitcode;
 			MonoW32HandleWaitRet waitret;
-			waitret = process_wait (process_info->process_handle, MONO_INFINITE_WAIT, NULL);
-			ves_icall_Microsoft_Win32_NativeMethods_GetExitCodeProcess (process_info->process_handle, &exitcode);
+			waitret = process_wait ((MonoW32Handle*)process_info->process_handle, MONO_INFINITE_WAIT, NULL);
+			(void)waitret;
+			mono_get_exit_code_process (process_info->process_handle, &exitcode);
 			if (exitcode != 0)
 				ret = FALSE;
 		}
@@ -2228,6 +2124,8 @@ done:
 #endif
 	}
 
+	mono_createprocess_coop_cleanup (&coop);
+
 	return ret;
 }
 
@@ -2235,44 +2133,46 @@ done:
 static gboolean
 process_get_complete_path (const gunichar2 *appname, gchar **completed)
 {
-	gchar *utf8app;
-	gchar *found;
+	char *found = NULL;
+	gboolean result = FALSE;
 
-	utf8app = g_utf16_to_utf8 (appname, -1, NULL, NULL, NULL);
+	char *utf8app = g_utf16_to_utf8 (appname, -1, NULL, NULL, NULL);
 
 	if (g_path_is_absolute (utf8app)) {
 		*completed = g_shell_quote (utf8app);
-		g_free (utf8app);
-		return TRUE;
+		result = TRUE;
+		goto exit;
 	}
 
 	if (g_file_test (utf8app, G_FILE_TEST_IS_EXECUTABLE) && !g_file_test (utf8app, G_FILE_TEST_IS_DIR)) {
 		*completed = g_shell_quote (utf8app);
-		g_free (utf8app);
-		return TRUE;
+		result = TRUE;
+		goto exit;
 	}
 	
 	found = g_find_program_in_path (utf8app);
 	if (found == NULL) {
 		*completed = NULL;
-		g_free (utf8app);
-		return FALSE;
+		result = FALSE;
+		goto exit;
 	}
 
 	*completed = g_shell_quote (found);
+	result = TRUE;
+exit:
 	g_free (found);
 	g_free (utf8app);
-	return TRUE;
+	return result;
 }
 
 static gboolean
-process_get_shell_arguments (MonoW32ProcessStartInfo *proc_start_info, gunichar2 **shell_path)
+process_get_shell_arguments (MonoCreateProcessCoop *coop, gunichar2 **shell_path)
 {
 	gchar *complete_path = NULL;
 
 	*shell_path = NULL;
 
-	if (process_get_complete_path (mono_string_chars (proc_start_info->filename), &complete_path)) {
+	if (process_get_complete_path (coop->filename, &complete_path)) {
 		*shell_path = g_utf8_to_utf16 (complete_path, -1, NULL, NULL, NULL);
 		g_free (complete_path);
 	}
@@ -2281,70 +2181,84 @@ process_get_shell_arguments (MonoW32ProcessStartInfo *proc_start_info, gunichar2
 }
 
 MonoBoolean
-ves_icall_System_Diagnostics_Process_CreateProcess_internal (MonoW32ProcessStartInfo *proc_start_info,
-	HANDLE stdin_handle, HANDLE stdout_handle, HANDLE stderr_handle, MonoW32ProcessInfo *process_info)
+ves_icall_System_Diagnostics_Process_CreateProcess_internal (MonoW32ProcessStartInfoHandle proc_start_info,
+	HANDLE stdin_handle, HANDLE stdout_handle, HANDLE stderr_handle, MonoW32ProcessInfo *process_info, MonoError *error)
 {
+	MonoCreateProcessCoop coop;
+	mono_createprocess_coop_init (&coop, proc_start_info, process_info);
+
 	gboolean ret;
-	gunichar2 *dir;
 	StartupHandles startup_handles;
 	gunichar2 *shell_path = NULL;
-	gunichar2 *args = NULL;
 
 	memset (&startup_handles, 0, sizeof (startup_handles));
 	startup_handles.input = stdin_handle;
 	startup_handles.output = stdout_handle;
 	startup_handles.error = stderr_handle;
 
-	if (!process_get_shell_arguments (proc_start_info, &shell_path)) {
+	if (!process_get_shell_arguments (&coop, &shell_path)) {
 		process_info->pid = -ERROR_FILE_NOT_FOUND;
-		return FALSE;
+		ret = FALSE;
+		goto exit;
 	}
 
-	args = proc_start_info->arguments && mono_string_length (proc_start_info->arguments) > 0 ?
-			mono_string_chars (proc_start_info->arguments): NULL;
+	gunichar2 *args;
+	args = coop.length.arguments ? coop.arguments : NULL;
 
 	/* The default dir name is "".  Turn that into NULL to mean "current directory" */
-	dir = proc_start_info->working_directory && mono_string_length (proc_start_info->working_directory) > 0 ?
-			mono_string_chars (proc_start_info->working_directory) : NULL;
+	gunichar2 *dir;
+	dir = coop.length.working_directory ? coop.working_directory : NULL;
 
 	ret = process_create (shell_path, args, dir, &startup_handles, process_info);
-
-	if (shell_path != NULL)
-		g_free (shell_path);
 
 	if (!ret)
 		process_info->pid = -mono_w32error_get_last ();
 
+exit:
+	g_free (shell_path);
+	mono_createprocess_coop_cleanup (&coop);
 	return ret;
 }
 
 /* Returns an array of pids */
-MonoArray *
-ves_icall_System_Diagnostics_Process_GetProcesses_internal (void)
+MonoArrayHandle
+ves_icall_System_Diagnostics_Process_GetProcesses_internal (MonoError *error)
 {
-	MonoError error;
-	MonoArray *procs;
-	gpointer *pidarray;
-	int i, count;
+	int count = 0;
+	guint32 *raw = 0;
+	gpointer *pidarray = 0;
+	MonoArrayHandle procs = NULL_HANDLE_ARRAY;
 
+	// FIXME mono_process_list should probably return array of int
+	// as all of the users of the elements truncate to that.
+
+	MONO_ENTER_GC_SAFE;
 	pidarray = mono_process_list (&count);
+	MONO_EXIT_GC_SAFE;
 	if (!pidarray) {
-		mono_set_pending_exception (mono_get_exception_not_supported ("This system does not support EnumProcesses"));
-		return NULL;
+		mono_error_set_not_supported (error, "This system does not support EnumProcesses");
+		goto exit;
 	}
-	procs = mono_array_new_checked (mono_domain_get (), mono_get_int32_class (), count, &error);
-	if (mono_error_set_pending_exception (&error)) {
-		g_free (pidarray);
-		return NULL;
+	procs = mono_array_new_handle (mono_domain_get (), mono_get_int32_class (), count, error);
+	if (!is_ok (error)) {
+		procs = NULL_HANDLE_ARRAY;
+		goto exit;
 	}
-	if (sizeof (guint32) == sizeof (gpointer)) {
-		memcpy (mono_array_addr (procs, guint32, 0), pidarray, count * sizeof (gint32));
-	} else {
-		for (i = 0; i < count; ++i)
-			*(mono_array_addr (procs, guint32, i)) = GPOINTER_TO_UINT (pidarray [i]);
-	}
-	g_free (pidarray);
 
+	MONO_ENTER_NO_SAFEPOINTS;
+
+	raw = mono_array_addr_internal (MONO_HANDLE_RAW (procs), guint32, 0);
+	if (sizeof (guint32) == sizeof (gpointer)) {
+		memcpy (raw, pidarray, count * sizeof (gint32));
+	} else {
+		for (int i = 0; i < count; ++i)
+			raw [i] = GPOINTER_TO_UINT (pidarray [i]);
+	}
+
+	MONO_EXIT_NO_SAFEPOINTS;
+
+exit:
+	g_free (pidarray);
 	return procs;
 }
 
@@ -2363,6 +2277,12 @@ ves_icall_Microsoft_Win32_NativeMethods_GetCurrentProcess (void)
 
 MonoBoolean
 ves_icall_Microsoft_Win32_NativeMethods_GetExitCodeProcess (gpointer handle, gint32 *exitcode)
+{
+	return mono_get_exit_code_process (handle, exitcode);
+}
+
+static MonoBoolean
+mono_get_exit_code_process (gpointer handle, gint32 *exitcode)
 {
 	MonoW32Handle *handle_data;
 	MonoW32HandleProcess *process_handle;
@@ -2546,7 +2466,7 @@ ves_icall_Microsoft_Win32_NativeMethods_GetPriorityClass (gpointer handle)
 
 	pid = ((MonoW32HandleProcess*) handle_data->specific)->pid;
 
-	errno = 0;
+	mono_set_errno (0);
 	res = getpriority (PRIO_PROCESS, pid);
 	if (res == -1 && errno != 0) {
 		switch (errno) {
@@ -3009,107 +2929,6 @@ find_pe_file_resources (gpointer file_map, guint32 map_size, guint32 res_id, gui
 	}
 }
 
-static gpointer
-map_pe_file (gunichar2 *filename, gint32 *map_size, void **handle)
-{
-	gchar *filename_ext;
-	int fd;
-	struct stat statbuf;
-	gpointer file_map;
-
-	/* According to the MSDN docs, a search path is applied to
-	 * filename.  FIXME: implement this, for now just pass it
-	 * straight to fopen
-	 */
-
-	filename_ext = mono_unicode_to_external (filename);
-	if (filename_ext == NULL) {
-		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: unicode conversion returned NULL", __func__);
-
-		mono_w32error_set_last (ERROR_INVALID_NAME);
-		return(NULL);
-	}
-
-	fd = open (filename_ext, O_RDONLY, 0);
-	if (fd == -1 && (errno == ENOENT || errno == ENOTDIR) && IS_PORTABILITY_SET) {
-		gint saved_errno;
-		gchar *located_filename;
-
-		saved_errno = errno;
-
-		located_filename = mono_portability_find_file (filename_ext, TRUE);
-		if (!located_filename) {
-			errno = saved_errno;
-
-			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: Error opening file %s (1): %s", __func__, filename_ext, strerror (errno));
-
-			g_free (filename_ext);
-
-			mono_w32error_set_last (mono_w32error_unix_to_win32 (errno));
-			return NULL;
-		}
-
-		fd = open (located_filename, O_RDONLY, 0);
-		if (fd == -1) {
-			mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: Error opening file %s (2): %s", __func__, filename_ext, strerror (errno));
-
-			g_free (filename_ext);
-			g_free (located_filename);
-
-			mono_w32error_set_last (mono_w32error_unix_to_win32 (errno));
-			return NULL;
-		}
-
-		g_free (located_filename);
-	}
-
-	if (fstat (fd, &statbuf) == -1) {
-		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: Error stat()ing file %s: %s", __func__, filename_ext, strerror (errno));
-
-		mono_w32error_set_last (mono_w32error_unix_to_win32 (errno));
-		g_free (filename_ext);
-		close (fd);
-		return(NULL);
-	}
-	*map_size = statbuf.st_size;
-
-	/* Check basic file size */
-	if (statbuf.st_size < sizeof(IMAGE_DOS_HEADER)) {
-		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: File %s is too small: %lld", __func__, filename_ext, (long long) statbuf.st_size);
-
-		mono_w32error_set_last (ERROR_BAD_LENGTH);
-		g_free (filename_ext);
-		close (fd);
-		return(NULL);
-	}
-
-	file_map = mono_file_map (statbuf.st_size, MONO_MMAP_READ | MONO_MMAP_PRIVATE, fd, 0, handle);
-	if (file_map == NULL) {
-		mono_trace (G_LOG_LEVEL_DEBUG, MONO_TRACE_IO_LAYER_PROCESS, "%s: Error mmap()int file %s: %s", __func__, filename_ext, strerror (errno));
-
-		mono_w32error_set_last (mono_w32error_unix_to_win32 (errno));
-		g_free (filename_ext);
-		close (fd);
-		return(NULL);
-	}
-
-	/* Don't need the fd any more */
-	close (fd);
-	g_free (filename_ext);
-
-	return(file_map);
-}
-
-static void
-unmap_pe_file (gpointer file_map, void *handle)
-{
-	gint res;
-
-	res = mono_file_unmap (file_map, handle);
-	if (G_UNLIKELY (res != 0))
-		g_error ("%s: mono_file_unmap failed, error: \"%s\" (%d)", __func__, g_strerror (errno), errno);
-}
-
 static guint32
 unicode_chars (const gunichar2 *str)
 {
@@ -3384,7 +3203,7 @@ big_up_string_block (gconstpointer data_ptr, version_data *block)
 		g_free (big_value);
 
 		big_value = g_convert ((gchar *)data_ptr,
-				       unicode_chars (data_ptr) * 2,
+				       unicode_chars ((const gunichar2*)data_ptr) * 2,
 				       "UTF-16BE", "UTF-16LE", NULL, NULL,
 				       NULL);
 		if (big_value == NULL) {
@@ -3392,7 +3211,7 @@ big_up_string_block (gconstpointer data_ptr, version_data *block)
 			return(NULL);
 		}
 		memcpy ((gpointer)data_ptr, big_value,
-			unicode_chars (data_ptr) * 2);
+			unicode_chars ((const gunichar2*)data_ptr) * sizeof(gunichar2));
 		g_free (big_value);
 
 		data_ptr = ((gunichar2 *)data_ptr) + block->value_len;
@@ -3530,24 +3349,24 @@ big_up (gconstpointer datablock, guint32 size)
 #endif
 
 gboolean
-mono_w32process_get_fileversion_info (gunichar2 *filename, gpointer *data)
+mono_w32process_get_fileversion_info (const gunichar2 *filename, gpointer *data)
 {
 	gpointer file_map;
 	gpointer versioninfo;
 	void *map_handle;
-	gint32 map_size;
+	guint32 map_size;
 	gsize datasize;
 
 	g_assert (data);
 	*data = NULL;
 
-	file_map = map_pe_file (filename, &map_size, &map_handle);
+	file_map = mono_pe_file_map (filename, &map_size, &map_handle);
 	if (!file_map)
 		return FALSE;
 
 	versioninfo = find_pe_file_resources (file_map, map_size, RT_VERSION, 0, &datasize);
 	if (!versioninfo) {
-		unmap_pe_file (file_map, map_handle);
+		mono_pe_file_unmap (file_map, map_handle);
 		return FALSE;
 	}
 
@@ -3561,7 +3380,7 @@ mono_w32process_get_fileversion_info (gunichar2 *filename, gpointer *data)
 	big_up (*data, datasize);
 #endif
 
-	unmap_pe_file (file_map, map_handle);
+	mono_pe_file_unmap (file_map, map_handle);
 
 	return TRUE;
 }
@@ -3681,783 +3500,50 @@ mono_w32process_ver_query_value (gconstpointer datablock, const gunichar2 *subbl
 	return(ret);
 }
 
-static guint32
-copy_lang (gunichar2 *lang_out, guint32 lang_len, const gchar *text)
+#else /* ENABLE_NETCORE && DISABLE_PROCESSES */
+
+void
+mono_w32process_init (void)
 {
-	gunichar2 *unitext;
-	int chars = strlen (text);
-	int ret;
+}
 
-	unitext = g_utf8_to_utf16 (text, -1, NULL, NULL, NULL);
-	g_assert (unitext != NULL);
+void
+mono_w32process_cleanup (void)
+{
+}
 
-	if (chars < (lang_len - 1)) {
-		memcpy (lang_out, (gpointer)unitext, chars * 2);
-		lang_out[chars] = '\0';
-		ret = chars;
-	} else {
-		memcpy (lang_out, (gpointer)unitext, (lang_len - 1) * 2);
-		lang_out[lang_len] = '\0';
-		ret = lang_len;
-	}
+void
+mono_w32process_set_cli_launcher (gchar *path)
+{
+}
 
-	g_free (unitext);
-
-	return(ret);
+void
+mono_w32process_signal_finished (void)
+{
 }
 
 guint32
 mono_w32process_ver_language_name (guint32 lang, gunichar2 *lang_out, guint32 lang_len)
 {
-	int primary, secondary;
-	const char *name = NULL;
-
-	primary = lang & 0x3FF;
-	secondary = (lang >> 10) & 0x3F;
-
-	switch(primary) {
-	case 0x00:
-		switch (secondary) {
-		case 0x01: name = "Process Default Language"; break;
-		}
-		break;
-	case 0x01:
-		switch (secondary) {
-		case 0x00:
-		case 0x01: name = "Arabic (Saudi Arabia)"; break;
-		case 0x02: name = "Arabic (Iraq)"; break;
-		case 0x03: name = "Arabic (Egypt)"; break;
-		case 0x04: name = "Arabic (Libya)"; break;
-		case 0x05: name = "Arabic (Algeria)"; break;
-		case 0x06: name = "Arabic (Morocco)"; break;
-		case 0x07: name = "Arabic (Tunisia)"; break;
-		case 0x08: name = "Arabic (Oman)"; break;
-		case 0x09: name = "Arabic (Yemen)"; break;
-		case 0x0a: name = "Arabic (Syria)"; break;
-		case 0x0b: name = "Arabic (Jordan)"; break;
-		case 0x0c: name = "Arabic (Lebanon)"; break;
-		case 0x0d: name = "Arabic (Kuwait)"; break;
-		case 0x0e: name = "Arabic (U.A.E.)"; break;
-		case 0x0f: name = "Arabic (Bahrain)"; break;
-		case 0x10: name = "Arabic (Qatar)"; break;
-		}
-		break;
-	case 0x02:
-		switch (secondary) {
-		case 0x00: name = "Bulgarian (Bulgaria)"; break;
-		case 0x01: name = "Bulgarian"; break;
-		}
-		break;
-	case 0x03:
-		switch (secondary) {
-		case 0x00: name = "Catalan (Spain)"; break;
-		case 0x01: name = "Catalan"; break;
-		}
-		break;
-	case 0x04:
-		switch (secondary) {
-		case 0x00:
-		case 0x01: name = "Chinese (Taiwan)"; break;
-		case 0x02: name = "Chinese (PRC)"; break;
-		case 0x03: name = "Chinese (Hong Kong S.A.R.)"; break;
-		case 0x04: name = "Chinese (Singapore)"; break;
-		case 0x05: name = "Chinese (Macau S.A.R.)"; break;
-		}
-		break;
-	case 0x05:
-		switch (secondary) {
-		case 0x00: name = "Czech (Czech Republic)"; break;
-		case 0x01: name = "Czech"; break;
-		}
-		break;
-	case 0x06:
-		switch (secondary) {
-		case 0x00: name = "Danish (Denmark)"; break;
-		case 0x01: name = "Danish"; break;
-		}
-		break;
-	case 0x07:
-		switch (secondary) {
-		case 0x00:
-		case 0x01: name = "German (Germany)"; break;
-		case 0x02: name = "German (Switzerland)"; break;
-		case 0x03: name = "German (Austria)"; break;
-		case 0x04: name = "German (Luxembourg)"; break;
-		case 0x05: name = "German (Liechtenstein)"; break;
-		}
-		break;
-	case 0x08:
-		switch (secondary) {
-		case 0x00: name = "Greek (Greece)"; break;
-		case 0x01: name = "Greek"; break;
-		}
-		break;
-	case 0x09:
-		switch (secondary) {
-		case 0x00:
-		case 0x01: name = "English (United States)"; break;
-		case 0x02: name = "English (United Kingdom)"; break;
-		case 0x03: name = "English (Australia)"; break;
-		case 0x04: name = "English (Canada)"; break;
-		case 0x05: name = "English (New Zealand)"; break;
-		case 0x06: name = "English (Ireland)"; break;
-		case 0x07: name = "English (South Africa)"; break;
-		case 0x08: name = "English (Jamaica)"; break;
-		case 0x09: name = "English (Caribbean)"; break;
-		case 0x0a: name = "English (Belize)"; break;
-		case 0x0b: name = "English (Trinidad and Tobago)"; break;
-		case 0x0c: name = "English (Zimbabwe)"; break;
-		case 0x0d: name = "English (Philippines)"; break;
-		case 0x10: name = "English (India)"; break;
-		case 0x11: name = "English (Malaysia)"; break;
-		case 0x12: name = "English (Singapore)"; break;
-		}
-		break;
-	case 0x0a:
-		switch (secondary) {
-		case 0x00: name = "Spanish (Spain)"; break;
-		case 0x01: name = "Spanish (Traditional Sort)"; break;
-		case 0x02: name = "Spanish (Mexico)"; break;
-		case 0x03: name = "Spanish (International Sort)"; break;
-		case 0x04: name = "Spanish (Guatemala)"; break;
-		case 0x05: name = "Spanish (Costa Rica)"; break;
-		case 0x06: name = "Spanish (Panama)"; break;
-		case 0x07: name = "Spanish (Dominican Republic)"; break;
-		case 0x08: name = "Spanish (Venezuela)"; break;
-		case 0x09: name = "Spanish (Colombia)"; break;
-		case 0x0a: name = "Spanish (Peru)"; break;
-		case 0x0b: name = "Spanish (Argentina)"; break;
-		case 0x0c: name = "Spanish (Ecuador)"; break;
-		case 0x0d: name = "Spanish (Chile)"; break;
-		case 0x0e: name = "Spanish (Uruguay)"; break;
-		case 0x0f: name = "Spanish (Paraguay)"; break;
-		case 0x10: name = "Spanish (Bolivia)"; break;
-		case 0x11: name = "Spanish (El Salvador)"; break;
-		case 0x12: name = "Spanish (Honduras)"; break;
-		case 0x13: name = "Spanish (Nicaragua)"; break;
-		case 0x14: name = "Spanish (Puerto Rico)"; break;
-		case 0x15: name = "Spanish (United States)"; break;
-		}
-		break;
-	case 0x0b:
-		switch (secondary) {
-		case 0x00: name = "Finnish (Finland)"; break;
-		case 0x01: name = "Finnish"; break;
-		}
-		break;
-	case 0x0c:
-		switch (secondary) {
-		case 0x00:
-		case 0x01: name = "French (France)"; break;
-		case 0x02: name = "French (Belgium)"; break;
-		case 0x03: name = "French (Canada)"; break;
-		case 0x04: name = "French (Switzerland)"; break;
-		case 0x05: name = "French (Luxembourg)"; break;
-		case 0x06: name = "French (Monaco)"; break;
-		}
-		break;
-	case 0x0d:
-		switch (secondary) {
-		case 0x00: name = "Hebrew (Israel)"; break;
-		case 0x01: name = "Hebrew"; break;
-		}
-		break;
-	case 0x0e:
-		switch (secondary) {
-		case 0x00: name = "Hungarian (Hungary)"; break;
-		case 0x01: name = "Hungarian"; break;
-		}
-		break;
-	case 0x0f:
-		switch (secondary) {
-		case 0x00: name = "Icelandic (Iceland)"; break;
-		case 0x01: name = "Icelandic"; break;
-		}
-		break;
-	case 0x10:
-		switch (secondary) {
-		case 0x00:
-		case 0x01: name = "Italian (Italy)"; break;
-		case 0x02: name = "Italian (Switzerland)"; break;
-		}
-		break;
-	case 0x11:
-		switch (secondary) {
-		case 0x00: name = "Japanese (Japan)"; break;
-		case 0x01: name = "Japanese"; break;
-		}
-		break;
-	case 0x12:
-		switch (secondary) {
-		case 0x00: name = "Korean (Korea)"; break;
-		case 0x01: name = "Korean"; break;
-		}
-		break;
-	case 0x13:
-		switch (secondary) {
-		case 0x00:
-		case 0x01: name = "Dutch (Netherlands)"; break;
-		case 0x02: name = "Dutch (Belgium)"; break;
-		}
-		break;
-	case 0x14:
-		switch (secondary) {
-		case 0x00:
-		case 0x01: name = "Norwegian (Bokmal)"; break;
-		case 0x02: name = "Norwegian (Nynorsk)"; break;
-		}
-		break;
-	case 0x15:
-		switch (secondary) {
-		case 0x00: name = "Polish (Poland)"; break;
-		case 0x01: name = "Polish"; break;
-		}
-		break;
-	case 0x16:
-		switch (secondary) {
-		case 0x00:
-		case 0x01: name = "Portuguese (Brazil)"; break;
-		case 0x02: name = "Portuguese (Portugal)"; break;
-		}
-		break;
-	case 0x17:
-		switch (secondary) {
-		case 0x01: name = "Romansh (Switzerland)"; break;
-		}
-		break;
-	case 0x18:
-		switch (secondary) {
-		case 0x00: name = "Romanian (Romania)"; break;
-		case 0x01: name = "Romanian"; break;
-		}
-		break;
-	case 0x19:
-		switch (secondary) {
-		case 0x00: name = "Russian (Russia)"; break;
-		case 0x01: name = "Russian"; break;
-		}
-		break;
-	case 0x1a:
-		switch (secondary) {
-		case 0x00: name = "Croatian (Croatia)"; break;
-		case 0x01: name = "Croatian"; break;
-		case 0x02: name = "Serbian (Latin)"; break;
-		case 0x03: name = "Serbian (Cyrillic)"; break;
-		case 0x04: name = "Croatian (Bosnia and Herzegovina)"; break;
-		case 0x05: name = "Bosnian (Latin, Bosnia and Herzegovina)"; break;
-		case 0x06: name = "Serbian (Latin, Bosnia and Herzegovina)"; break;
-		case 0x07: name = "Serbian (Cyrillic, Bosnia and Herzegovina)"; break;
-		case 0x08: name = "Bosnian (Cyrillic, Bosnia and Herzegovina)"; break;
-		}
-		break;
-	case 0x1b:
-		switch (secondary) {
-		case 0x00: name = "Slovak (Slovakia)"; break;
-		case 0x01: name = "Slovak"; break;
-		}
-		break;
-	case 0x1c:
-		switch (secondary) {
-		case 0x00: name = "Albanian (Albania)"; break;
-		case 0x01: name = "Albanian"; break;
-		}
-		break;
-	case 0x1d:
-		switch (secondary) {
-		case 0x00: name = "Swedish (Sweden)"; break;
-		case 0x01: name = "Swedish"; break;
-		case 0x02: name = "Swedish (Finland)"; break;
-		}
-		break;
-	case 0x1e:
-		switch (secondary) {
-		case 0x00: name = "Thai (Thailand)"; break;
-		case 0x01: name = "Thai"; break;
-		}
-		break;
-	case 0x1f:
-		switch (secondary) {
-		case 0x00: name = "Turkish (Turkey)"; break;
-		case 0x01: name = "Turkish"; break;
-		}
-		break;
-	case 0x20:
-		switch (secondary) {
-		case 0x00: name = "Urdu (Islamic Republic of Pakistan)"; break;
-		case 0x01: name = "Urdu"; break;
-		}
-		break;
-	case 0x21:
-		switch (secondary) {
-		case 0x00: name = "Indonesian (Indonesia)"; break;
-		case 0x01: name = "Indonesian"; break;
-		}
-		break;
-	case 0x22:
-		switch (secondary) {
-		case 0x00: name = "Ukrainian (Ukraine)"; break;
-		case 0x01: name = "Ukrainian"; break;
-		}
-		break;
-	case 0x23:
-		switch (secondary) {
-		case 0x00: name = "Belarusian (Belarus)"; break;
-		case 0x01: name = "Belarusian"; break;
-		}
-		break;
-	case 0x24:
-		switch (secondary) {
-		case 0x00: name = "Slovenian (Slovenia)"; break;
-		case 0x01: name = "Slovenian"; break;
-		}
-		break;
-	case 0x25:
-		switch (secondary) {
-		case 0x00: name = "Estonian (Estonia)"; break;
-		case 0x01: name = "Estonian"; break;
-		}
-		break;
-	case 0x26:
-		switch (secondary) {
-		case 0x00: name = "Latvian (Latvia)"; break;
-		case 0x01: name = "Latvian"; break;
-		}
-		break;
-	case 0x27:
-		switch (secondary) {
-		case 0x00: name = "Lithuanian (Lithuania)"; break;
-		case 0x01: name = "Lithuanian"; break;
-		}
-		break;
-	case 0x28:
-		switch (secondary) {
-		case 0x01: name = "Tajik (Tajikistan)"; break;
-		}
-		break;
-	case 0x29:
-		switch (secondary) {
-		case 0x00: name = "Farsi (Iran)"; break;
-		case 0x01: name = "Farsi"; break;
-		}
-		break;
-	case 0x2a:
-		switch (secondary) {
-		case 0x00: name = "Vietnamese (Viet Nam)"; break;
-		case 0x01: name = "Vietnamese"; break;
-		}
-		break;
-	case 0x2b:
-		switch (secondary) {
-		case 0x00: name = "Armenian (Armenia)"; break;
-		case 0x01: name = "Armenian"; break;
-		}
-		break;
-	case 0x2c:
-		switch (secondary) {
-		case 0x00: name = "Azeri (Latin) (Azerbaijan)"; break;
-		case 0x01: name = "Azeri (Latin)"; break;
-		case 0x02: name = "Azeri (Cyrillic)"; break;
-		}
-		break;
-	case 0x2d:
-		switch (secondary) {
-		case 0x00: name = "Basque (Spain)"; break;
-		case 0x01: name = "Basque"; break;
-		}
-		break;
-	case 0x2e:
-		switch (secondary) {
-		case 0x01: name = "Upper Sorbian (Germany)"; break;
-		case 0x02: name = "Lower Sorbian (Germany)"; break;
-		}
-		break;
-	case 0x2f:
-		switch (secondary) {
-		case 0x00: name = "FYRO Macedonian (Former Yugoslav Republic of Macedonia)"; break;
-		case 0x01: name = "FYRO Macedonian"; break;
-		}
-		break;
-	case 0x32:
-		switch (secondary) {
-		case 0x00: name = "Tswana (South Africa)"; break;
-		case 0x01: name = "Tswana"; break;
-		}
-		break;
-	case 0x34:
-		switch (secondary) {
-		case 0x00: name = "Xhosa (South Africa)"; break;
-		case 0x01: name = "Xhosa"; break;
-		}
-		break;
-	case 0x35:
-		switch (secondary) {
-		case 0x00: name = "Zulu (South Africa)"; break;
-		case 0x01: name = "Zulu"; break;
-		}
-		break;
-	case 0x36:
-		switch (secondary) {
-		case 0x00: name = "Afrikaans (South Africa)"; break;
-		case 0x01: name = "Afrikaans"; break;
-		}
-		break;
-	case 0x37:
-		switch (secondary) {
-		case 0x00: name = "Georgian (Georgia)"; break;
-		case 0x01: name = "Georgian"; break;
-		}
-		break;
-	case 0x38:
-		switch (secondary) {
-		case 0x00: name = "Faroese (Faroe Islands)"; break;
-		case 0x01: name = "Faroese"; break;
-		}
-		break;
-	case 0x39:
-		switch (secondary) {
-		case 0x00: name = "Hindi (India)"; break;
-		case 0x01: name = "Hindi"; break;
-		}
-		break;
-	case 0x3a:
-		switch (secondary) {
-		case 0x00: name = "Maltese (Malta)"; break;
-		case 0x01: name = "Maltese"; break;
-		}
-		break;
-	case 0x3b:
-		switch (secondary) {
-		case 0x00: name = "Sami (Northern) (Norway)"; break;
-		case 0x01: name = "Sami, Northern (Norway)"; break;
-		case 0x02: name = "Sami, Northern (Sweden)"; break;
-		case 0x03: name = "Sami, Northern (Finland)"; break;
-		case 0x04: name = "Sami, Lule (Norway)"; break;
-		case 0x05: name = "Sami, Lule (Sweden)"; break;
-		case 0x06: name = "Sami, Southern (Norway)"; break;
-		case 0x07: name = "Sami, Southern (Sweden)"; break;
-		case 0x08: name = "Sami, Skolt (Finland)"; break;
-		case 0x09: name = "Sami, Inari (Finland)"; break;
-		}
-		break;
-	case 0x3c:
-		switch (secondary) {
-		case 0x02: name = "Irish (Ireland)"; break;
-		}
-		break;
-	case 0x3e:
-		switch (secondary) {
-		case 0x00:
-		case 0x01: name = "Malay (Malaysia)"; break;
-		case 0x02: name = "Malay (Brunei Darussalam)"; break;
-		}
-		break;
-	case 0x3f:
-		switch (secondary) {
-		case 0x00: name = "Kazakh (Kazakhstan)"; break;
-		case 0x01: name = "Kazakh"; break;
-		}
-		break;
-	case 0x40:
-		switch (secondary) {
-		case 0x00: name = "Kyrgyz (Kyrgyzstan)"; break;
-		case 0x01: name = "Kyrgyz (Cyrillic)"; break;
-		}
-		break;
-	case 0x41:
-		switch (secondary) {
-		case 0x00: name = "Swahili (Kenya)"; break;
-		case 0x01: name = "Swahili"; break;
-		}
-		break;
-	case 0x42:
-		switch (secondary) {
-		case 0x01: name = "Turkmen (Turkmenistan)"; break;
-		}
-		break;
-	case 0x43:
-		switch (secondary) {
-		case 0x00: name = "Uzbek (Latin) (Uzbekistan)"; break;
-		case 0x01: name = "Uzbek (Latin)"; break;
-		case 0x02: name = "Uzbek (Cyrillic)"; break;
-		}
-		break;
-	case 0x44:
-		switch (secondary) {
-		case 0x00: name = "Tatar (Russia)"; break;
-		case 0x01: name = "Tatar"; break;
-		}
-		break;
-	case 0x45:
-		switch (secondary) {
-		case 0x00:
-		case 0x01: name = "Bengali (India)"; break;
-		}
-		break;
-	case 0x46:
-		switch (secondary) {
-		case 0x00: name = "Punjabi (India)"; break;
-		case 0x01: name = "Punjabi"; break;
-		}
-		break;
-	case 0x47:
-		switch (secondary) {
-		case 0x00: name = "Gujarati (India)"; break;
-		case 0x01: name = "Gujarati"; break;
-		}
-		break;
-	case 0x49:
-		switch (secondary) {
-		case 0x00: name = "Tamil (India)"; break;
-		case 0x01: name = "Tamil"; break;
-		}
-		break;
-	case 0x4a:
-		switch (secondary) {
-		case 0x00: name = "Telugu (India)"; break;
-		case 0x01: name = "Telugu"; break;
-		}
-		break;
-	case 0x4b:
-		switch (secondary) {
-		case 0x00: name = "Kannada (India)"; break;
-		case 0x01: name = "Kannada"; break;
-		}
-		break;
-	case 0x4c:
-		switch (secondary) {
-		case 0x00:
-		case 0x01: name = "Malayalam (India)"; break;
-		}
-		break;
-	case 0x4d:
-		switch (secondary) {
-		case 0x01: name = "Assamese (India)"; break;
-		}
-		break;
-	case 0x4e:
-		switch (secondary) {
-		case 0x00: name = "Marathi (India)"; break;
-		case 0x01: name = "Marathi"; break;
-		}
-		break;
-	case 0x4f:
-		switch (secondary) {
-		case 0x00: name = "Sanskrit (India)"; break;
-		case 0x01: name = "Sanskrit"; break;
-		}
-		break;
-	case 0x50:
-		switch (secondary) {
-		case 0x00: name = "Mongolian (Mongolia)"; break;
-		case 0x01: name = "Mongolian (Cyrillic)"; break;
-		case 0x02: name = "Mongolian (PRC)"; break;
-		}
-		break;
-	case 0x51:
-		switch (secondary) {
-		case 0x01: name = "Tibetan (PRC)"; break;
-		case 0x02: name = "Tibetan (Bhutan)"; break;
-		}
-		break;
-	case 0x52:
-		switch (secondary) {
-		case 0x00: name = "Welsh (United Kingdom)"; break;
-		case 0x01: name = "Welsh"; break;
-		}
-		break;
-	case 0x53:
-		switch (secondary) {
-		case 0x01: name = "Khmer (Cambodia)"; break;
-		}
-		break;
-	case 0x54:
-		switch (secondary) {
-		case 0x01: name = "Lao (Lao PDR)"; break;
-		}
-		break;
-	case 0x56:
-		switch (secondary) {
-		case 0x00: name = "Galician (Spain)"; break;
-		case 0x01: name = "Galician"; break;
-		}
-		break;
-	case 0x57:
-		switch (secondary) {
-		case 0x00: name = "Konkani (India)"; break;
-		case 0x01: name = "Konkani"; break;
-		}
-		break;
-	case 0x5a:
-		switch (secondary) {
-		case 0x00: name = "Syriac (Syria)"; break;
-		case 0x01: name = "Syriac"; break;
-		}
-		break;
-	case 0x5b:
-		switch (secondary) {
-		case 0x01: name = "Sinhala (Sri Lanka)"; break;
-		}
-		break;
-	case 0x5d:
-		switch (secondary) {
-		case 0x01: name = "Inuktitut (Syllabics, Canada)"; break;
-		case 0x02: name = "Inuktitut (Latin, Canada)"; break;
-		}
-		break;
-	case 0x5e:
-		switch (secondary) {
-		case 0x01: name = "Amharic (Ethiopia)"; break;
-		}
-		break;
-	case 0x5f:
-		switch (secondary) {
-		case 0x02: name = "Tamazight (Algeria, Latin)"; break;
-		}
-		break;
-	case 0x61:
-		switch (secondary) {
-		case 0x01: name = "Nepali (Nepal)"; break;
-		}
-		break;
-	case 0x62:
-		switch (secondary) {
-		case 0x01: name = "Frisian (Netherlands)"; break;
-		}
-		break;
-	case 0x63:
-		switch (secondary) {
-		case 0x01: name = "Pashto (Afghanistan)"; break;
-		}
-		break;
-	case 0x64:
-		switch (secondary) {
-		case 0x01: name = "Filipino (Philippines)"; break;
-		}
-		break;
-	case 0x65:
-		switch (secondary) {
-		case 0x00: name = "Divehi (Maldives)"; break;
-		case 0x01: name = "Divehi"; break;
-		}
-		break;
-	case 0x68:
-		switch (secondary) {
-		case 0x01: name = "Hausa (Nigeria, Latin)"; break;
-		}
-		break;
-	case 0x6a:
-		switch (secondary) {
-		case 0x01: name = "Yoruba (Nigeria)"; break;
-		}
-		break;
-	case 0x6b:
-		switch (secondary) {
-		case 0x00:
-		case 0x01: name = "Quechua (Bolivia)"; break;
-		case 0x02: name = "Quechua (Ecuador)"; break;
-		case 0x03: name = "Quechua (Peru)"; break;
-		}
-		break;
-	case 0x6c:
-		switch (secondary) {
-		case 0x00: name = "Northern Sotho (South Africa)"; break;
-		case 0x01: name = "Northern Sotho"; break;
-		}
-		break;
-	case 0x6d:
-		switch (secondary) {
-		case 0x01: name = "Bashkir (Russia)"; break;
-		}
-		break;
-	case 0x6e:
-		switch (secondary) {
-		case 0x01: name = "Luxembourgish (Luxembourg)"; break;
-		}
-		break;
-	case 0x6f:
-		switch (secondary) {
-		case 0x01: name = "Greenlandic (Greenland)"; break;
-		}
-		break;
-	case 0x78:
-		switch (secondary) {
-		case 0x01: name = "Yi (PRC)"; break;
-		}
-		break;
-	case 0x7a:
-		switch (secondary) {
-		case 0x01: name = "Mapudungun (Chile)"; break;
-		}
-		break;
-	case 0x7c:
-		switch (secondary) {
-		case 0x01: name = "Mohawk (Mohawk)"; break;
-		}
-		break;
-	case 0x7e:
-		switch (secondary) {
-		case 0x01: name = "Breton (France)"; break;
-		}
-		break;
-	case 0x7f:
-		switch (secondary) {
-		case 0x00: name = "Invariant Language (Invariant Country)"; break;
-		}
-		break;
-	case 0x80:
-		switch (secondary) {
-		case 0x01: name = "Uighur (PRC)"; break;
-		}
-		break;
-	case 0x81:
-		switch (secondary) {
-		case 0x00: name = "Maori (New Zealand)"; break;
-		case 0x01: name = "Maori"; break;
-		}
-		break;
-	case 0x83:
-		switch (secondary) {
-		case 0x01: name = "Corsican (France)"; break;
-		}
-		break;
-	case 0x84:
-		switch (secondary) {
-		case 0x01: name = "Alsatian (France)"; break;
-		}
-		break;
-	case 0x85:
-		switch (secondary) {
-		case 0x01: name = "Yakut (Russia)"; break;
-		}
-		break;
-	case 0x86:
-		switch (secondary) {
-		case 0x01: name = "K'iche (Guatemala)"; break;
-		}
-		break;
-	case 0x87:
-		switch (secondary) {
-		case 0x01: name = "Kinyarwanda (Rwanda)"; break;
-		}
-		break;
-	case 0x88:
-		switch (secondary) {
-		case 0x01: name = "Wolof (Senegal)"; break;
-		}
-		break;
-	case 0x8c:
-		switch (secondary) {
-		case 0x01: name = "Dari (Afghanistan)"; break;
-		}
-		break;
-
-	default:
-		name = "Language Neutral";
-
-	}
-
-	if (!name)
-		name = "Language Neutral";
-
-	return copy_lang (lang_out, lang_len, name);
+	return 0;
 }
+
+gboolean
+mono_w32process_get_fileversion_info (const gunichar2 *filename, gpointer *data)
+{
+	return FALSE;
+}
+
+gboolean
+mono_w32process_module_get_information (gpointer handle, gpointer module, gpointer modinfo, guint32 size)
+{
+	return FALSE;
+}
+
+gboolean
+mono_w32process_ver_query_value (gconstpointer datablock, const gunichar2 *subblock, gpointer *buffer, guint32 *len)
+{
+	return FALSE;
+}
+
+#endif /* ENABLE_NETCORE && DISABLE_PROCESSES */

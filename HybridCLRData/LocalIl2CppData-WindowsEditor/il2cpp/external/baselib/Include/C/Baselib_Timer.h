@@ -28,6 +28,9 @@ static const uint64_t Baselib_Timer_MaxNumberOfNanosecondsPerTick = 1000ULL;
 // Baselib_Timer_Ticks are guaranteed to be less granular than this constant.
 static const double Baselib_Timer_MinNumberOfNanosecondsPerTick = 0.01;
 
+// When comparing results of Baselib_Timer_GetHighPrecisionTimerTicks on different threads, timestamps are strictly monotonous with a tolerance of this many nanoseconds.
+static const double Baselib_Timer_HighPrecisionTimerCrossThreadMontotonyTolerance_InNanoseconds = 100.0;
+
 // Defines the conversion ratio from Baselib_Timer_Ticks to nanoseconds as a fraction.
 typedef struct Baselib_Timer_TickToNanosecondConversionRatio
 {
@@ -57,9 +60,10 @@ extern BASELIB_API const double Baselib_Timer_TickToNanosecondsConversionFactor;
 // However, there are no strict guarantees on the accuracy of the timer.
 //
 // Monotony:
-// ATTENTION: On some platforms this clock is suspended during application/device sleep states.
-// The timer is not susceptible to wall clock time changes by the user.
-// Different threads are guaranteed to be on the same timeline.
+// * ATTENTION: On some platforms this clock is suspended during application/device sleep states.
+// * The timer is not susceptible to wall clock time changes by the user.
+// * The timer is strictly monotonous on a thread
+// * When comparing times from different threads, timestamps are strictly monotonous with a tolerance of Baselib_Timer_HighPrecisionTimerCrossThreadMontotonyTolerance_InNanoseconds.
 //
 // Known issues:
 // * Some web browsers impose Spectre mitigation which can introduce jitter in this timer.

@@ -1,6 +1,6 @@
 #include "il2cpp-config.h"
 
-#if !IL2CPP_USE_GENERIC_MEMORY_MAPPED_FILE && IL2CPP_TARGET_POSIX && !RUNTIME_TINY
+#if !IL2CPP_USE_GENERIC_MEMORY_MAPPED_FILE && IL2CPP_TARGET_POSIX
 
 #include <sys/mman.h>
 #include <map>
@@ -21,8 +21,6 @@
 #ifndef MAP_32BIT
 #define MAP_32BIT 0
 #endif
-
-#define MMAP_PAGE_SIZE 4096
 
 namespace il2cpp
 {
@@ -50,15 +48,22 @@ namespace os
         return buf->st_size == 0 && (buf->st_mode & (S_IFCHR | S_IFBLK | S_IFIFO | S_IFSOCK)) != 0;
     }
 
+    static int64_t GetPageSize()
+    {
+        static int64_t page_size = getpagesize();
+
+        return page_size;
+    }
+
     static int64_t AlignUpToPageSize(int64_t size)
     {
-        int64_t page_size = MMAP_PAGE_SIZE;
+        const int64_t page_size = GetPageSize();
         return (size + page_size - 1) & ~(page_size - 1);
     }
 
     static int64_t AlignDownToPageSize(int64_t size)
     {
-        int64_t page_size = MMAP_PAGE_SIZE;
+        const int64_t page_size = GetPageSize();
         return size & ~(page_size - 1);
     }
 
@@ -144,6 +149,14 @@ namespace os
         if (flags & MONO_MMAP_EXEC)
             prot |= PROT_EXEC;
         return prot;
+    }
+
+    void MemoryMappedFile::AllocateStaticData()
+    {
+    }
+
+    void MemoryMappedFile::FreeStaticData()
+    {
     }
 
     FileHandle* MemoryMappedFile::Create(FileHandle* file, const char* mapName, int32_t mode, int64_t *capacity, MemoryMappedFileAccess access, int32_t options, MemoryMappedFileError* error)

@@ -33,7 +33,6 @@ namespace utils
 
     std::string Runtime::GetDataDir()
     {
-#if !RUNTIME_TINY
         // use explicit value if set
         if (s_DataDir.size() > 0)
             return s_DataDir;
@@ -49,9 +48,6 @@ namespace utils
         }
 
         return s_DataDirFallback;
-#else
-        return std::string();
-#endif
     }
 } // utils
 } // il2cpp
