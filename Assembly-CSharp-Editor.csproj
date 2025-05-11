@@ -48,14 +48,15 @@
   <ItemGroup>
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Editor\SchemaTools.cs" />
     <Compile Include="Assets\Editor\SceneHelper.cs" />
+    <Compile Include="Assets\Editor\HybridScriptableBuildPipelineViewer.cs" />
+    <Compile Include="Assets\Editor\HybridBuildPipeViewerBase.cs" />
+    <Compile Include="Assets\Editor\HybridBuilderWindow.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Editor\TextureSchema.cs" />
-    <Compile Include="Assets\Editor\ConfromScriptableBuildPipelineViewer.cs" />
-    <Compile Include="Assets\Editor\ConfromBuilderWIndow.cs" />
+    <Compile Include="Assets\Editor\HybridBuilderSettings.cs" />
     <Compile Include="Assets\Editor\BuildHelper.cs" />
-    <Compile Include="Assets\Editor\ConformBuildPipeViewerBase.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Editor\TextureTools.cs" />
-    <None Include="Assets\Editor\ConfromBuilderWIndow.uxml" />
-    <None Include="Assets\Editor\ConformBuildPipeViewerBase.uxml" />
+    <None Include="Assets\Editor\HybridBuilderWIndow.uxml" />
+    <None Include="Assets\Editor\HybridBuildPipeViewerBase.uxml" />
     <Reference Include="UnityEngine">
       <HintPath>E:\Unity\Unity.3.24f1c2\6000.0.26f1c1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>
     </Reference>
@@ -824,23 +825,20 @@
     <Reference Include="UnityEditor.UI">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\UnityEditor.UI.dll</HintPath>
     </Reference>
+    <Reference Include="YooAsset.Editor">
+      <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\YooAsset.Editor.dll</HintPath>
+    </Reference>
     <Reference Include="Unity.AI.Navigation">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.AI.Navigation.dll</HintPath>
     </Reference>
     <Reference Include="Unity.Rider.Editor">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.Rider.Editor.dll</HintPath>
     </Reference>
-    <Reference Include="Unity.Multiplayer.Center.Common">
-      <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.Multiplayer.Center.Common.dll</HintPath>
-    </Reference>
     <Reference Include="Unity.AI.Navigation.Updater">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.AI.Navigation.Updater.dll</HintPath>
     </Reference>
     <Reference Include="HybridCLR.Editor">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\HybridCLR.Editor.dll</HintPath>
-    </Reference>
-    <Reference Include="YooAsset.Editor">
-      <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\YooAsset.Editor.dll</HintPath>
     </Reference>
     <Reference Include="Unity.TestTools.CodeCoverage.Editor.OpenCover.Mono.Reflection">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.TestTools.CodeCoverage.Editor.OpenCover.Mono.Reflection.dll</HintPath>
@@ -862,9 +860,6 @@
     </Reference>
     <Reference Include="Unity.TestTools.CodeCoverage.Editor">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.TestTools.CodeCoverage.Editor.dll</HintPath>
-    </Reference>
-    <Reference Include="Unity.Multiplayer.Center.Editor">
-      <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.Multiplayer.Center.Editor.dll</HintPath>
     </Reference>
     <Reference Include="Unity.ScriptableBuildPipeline.Editor">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.ScriptableBuildPipeline.Editor.dll</HintPath>

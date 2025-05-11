@@ -13,12 +13,16 @@ MonoBehaviour:
   m_Name: AssetBundleCollectorSetting
   m_EditorClassIdentifier: 
   ShowPackageView: 0
-  EnableAddressable: 1
-  UniqueBundleName: 0
   ShowEditorAlias: 0
+  UniqueBundleName: 0
   Packages:
   - PackageName: TestPackage
     PackageDesc: "\u6D4B\u8BD5\u5305"
+    EnableAddressable: 1
+    LocationToLower: 0
+    IncludeAssetGUID: 0
+    AutoCollectShaders: 1
+    IgnoreRuleName: NormalIgnoreRule
     Groups:
     - GroupName: Textures
       GroupDesc: "\u56FE\u7247\u8D44\u6E90"
@@ -92,8 +96,8 @@ MonoBehaviour:
       Collectors:
       - CollectPath: Assets/HotUpdateAssets/Materials
         CollectorGUID: a0bc536143d059d4282f69dab9bbe2c7
-        CollectorType: 0
-        AddressRuleName: AddressByFilePath
+        CollectorType: 1
+        AddressRuleName: AddressByGroupAndFileName
         PackRuleName: PackDirectory
         FilterRuleName: CollectAll
         AssetTags: 
@@ -105,19 +109,6 @@ MonoBehaviour:
       Collectors:
       - CollectPath: Assets/HotUpdateAssets/Scenes
         CollectorGUID: a99cd3f7d9f0e8947a59fdfb32115f9d
-        CollectorType: 0
-        AddressRuleName: AddressByFileName
-        PackRuleName: PackDirectory
-        FilterRuleName: CollectAll
-        AssetTags: 
-        UserData: 
-    - GroupName: ShaderVariants
-      GroupDesc: "\u7740\u8272\u5668\u53D8\u4F53"
-      AssetTags: 
-      ActiveRuleName: EnableGroup
-      Collectors:
-      - CollectPath: Assets/HotUpdateAssets/Shadervariants
-        CollectorGUID: 43dfec9dde161164e8d79dc19a435769
         CollectorType: 0
         AddressRuleName: AddressByFileName
         PackRuleName: PackDirectory

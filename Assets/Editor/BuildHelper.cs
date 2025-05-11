@@ -18,18 +18,19 @@ using HybridCLR.Editor.Settings;
 
 public class BuildHelper
 {
+    public static string BuildOutputPath=AssetBundleBuilderHelper.GetDefaultBuildOutputRoot();
     /// <summary>
     /// 工程目录路径，Assets上一层
     /// </summary>
     public static string ProjectPath = Application.dataPath.Replace("Assets", "");
 
-    public static string DllPath = string.Format("{0}/HybridCLRData/HotUpdateDlls/Android/", ProjectPath);
+    public static string DllPath = $"{ProjectPath}/HybridCLRData/HotUpdateDlls/Android/";
 
-    public static string PackageExportPath = string.Format("{0}/BuildPacakage/", ProjectPath);
+    public static string PackageExportPath = $"{ProjectPath}/BuildPacakage/";
 
-    public static string HotUpdateAssetsPath = string.Format("{0}/HotUpdateAssets/", Application.dataPath);
+    public static string HotUpdateAssetsPath = $"{Application.dataPath}/HotUpdateAssets/";
 
-    public static string HotUpdateDllPath = string.Format("{0}HotUpdateDll/", HotUpdateAssetsPath);
+    public static string HotUpdateDllPath = $"{HotUpdateAssetsPath}HotUpdateDll/";
     /// <summary>
     /// 版本文件名
     /// </summary>

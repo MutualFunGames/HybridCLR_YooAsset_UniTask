@@ -1,0 +1,21 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd" editor-extension-mode="True">
+    <ui:VisualElement name="BuildContainer">
+        <ui:VisualElement name="OutputPar" picking-mode="Ignore" focusable="true" style="flex-grow: 1; overflow: hidden; flex-direction: row;">
+            <ui:TextField picking-mode="Ignore" label="BuildOutput" name="BuildOutput" readonly="true" style="flex-wrap: wrap; align-items: stretch; flex-direction: row; justify-content: flex-start; align-content: flex-end; flex-shrink: 1; flex-grow: 1;" />
+            <ui:Button text="Browse" display-tooltip-when-elided="true" name="BrowseButton" enabled="true" style="align-items: auto; flex-direction: row; justify-content: flex-start; align-self: auto; align-content: auto; flex-wrap: wrap; flex-shrink: 0; flex-grow: 0; flex-basis: auto; width: auto;" />
+        </ui:VisualElement>
+        <ui:VisualElement name="VersionPar" style="flex-grow: 1; flex-wrap: nowrap; flex-direction: row; align-self: auto; align-content: flex-start; align-items: stretch;">
+            <ui:TextField picking-mode="Ignore" label="Build Version" name="BuildVersion" readonly="true" style="flex-wrap: wrap; align-items: stretch; flex-shrink: 1; flex-grow: 1;" />
+            <ui:Toggle label="Use of self-incrementing versions" name="Toggle" style="flex-wrap: wrap; align-items: stretch; flex-direction: row; align-content: auto;" />
+        </ui:VisualElement>
+        <ui:Toggle label="Clear Build Cache" name="ClearBuildCache" />
+        <ui:Toggle label="Use Asset Depend DB" name="UseAssetDependency" />
+        <ui:VisualElement name="EncryptionContainer" style="height: 24px;" />
+        <uie:EnumField label="Compression" value="Center" name="Compression" />
+        <uie:EnumField label="File Name Style" value="Center" name="FileNameStyle" />
+        <uie:EnumField label="Copy Buildin File Option" value="Center" name="CopyBuildinFileOption" />
+        <ui:TextField picking-mode="Ignore" label="Copy Buildin File Param" name="CopyBuildinFileParam" />
+        <ui:VisualElement name="ExtensionContainer" />
+        <ui:Button text="Click Build" display-tooltip-when-elided="true" name="Build" style="height: 50px; background-color: rgb(40, 106, 42); margin-top: 10px;" />
+    </ui:VisualElement>
+</ui:UXML>

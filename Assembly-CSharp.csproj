@@ -825,23 +825,20 @@
     <Reference Include="UnityEditor.UI">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\UnityEditor.UI.dll</HintPath>
     </Reference>
+    <Reference Include="YooAsset.Editor">
+      <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\YooAsset.Editor.dll</HintPath>
+    </Reference>
     <Reference Include="Unity.AI.Navigation">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.AI.Navigation.dll</HintPath>
     </Reference>
     <Reference Include="Unity.Rider.Editor">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.Rider.Editor.dll</HintPath>
     </Reference>
-    <Reference Include="Unity.Multiplayer.Center.Common">
-      <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.Multiplayer.Center.Common.dll</HintPath>
-    </Reference>
     <Reference Include="Unity.AI.Navigation.Updater">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.AI.Navigation.Updater.dll</HintPath>
     </Reference>
     <Reference Include="HybridCLR.Editor">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\HybridCLR.Editor.dll</HintPath>
-    </Reference>
-    <Reference Include="YooAsset.Editor">
-      <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\YooAsset.Editor.dll</HintPath>
     </Reference>
     <Reference Include="Unity.TestTools.CodeCoverage.Editor.OpenCover.Mono.Reflection">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.TestTools.CodeCoverage.Editor.OpenCover.Mono.Reflection.dll</HintPath>
@@ -863,9 +860,6 @@
     </Reference>
     <Reference Include="Unity.TestTools.CodeCoverage.Editor">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.TestTools.CodeCoverage.Editor.dll</HintPath>
-    </Reference>
-    <Reference Include="Unity.Multiplayer.Center.Editor">
-      <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.Multiplayer.Center.Editor.dll</HintPath>
     </Reference>
     <Reference Include="Unity.ScriptableBuildPipeline.Editor">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.ScriptableBuildPipeline.Editor.dll</HintPath>

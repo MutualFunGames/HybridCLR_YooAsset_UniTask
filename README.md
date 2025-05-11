@@ -2,7 +2,7 @@
 typora-copy-images-to: ./
 ---
 
-# HybridCLR+YooAsset+UniTask整合框架说明文档
+# HybridCLR+YooAsset+UniTask整合框架说明文档_Release2025
 
 ## 首先需要明确的概念
 
@@ -14,7 +14,7 @@ Assembly-Csharp为Unity自动整合的dll，在Unity工程中任何没有被单�
 
 Assembly Definition是Unity2017.3以后出的一个功能，主要在于解决庞大的程序集编译时效问题
 
-在Assets目录下任意一个文件夹创建一个Assembly Definition，会使得该文件夹下所有的代码单独编译成一个dll，并且修改该文件夹下代码时，只会重新编译该dll，而不会重新编译AssemblyCSharp.dll
+在Assets目录下任意一个文件夹创建一个Assembly Definition，会使得该文件夹下所有的代码单独编译成一个dll，并且修改该文件夹下代码时，只会重新编译该dll，而不会重新编译Assembly-CSharp.dll
 
 当我们划分AOT程序集以及热更新程序集时，可以用到该功能
 

@@ -10,9 +10,9 @@ using UnityEngine.UIElements;
 
 namespace YooAsset.Editor
 {
-    internal class ConfromScriptableBuildPipelineViewer : ConformBuildPipeViewerBase
+    internal class HybridScriptableBuildPipelineViewer : HybridBuildPipeViewerBase
     {
-        public ConfromScriptableBuildPipelineViewer(string packageName, BuildTarget buildTarget, VisualElement parent)
+        public HybridScriptableBuildPipelineViewer(string packageName, BuildTarget buildTarget, VisualElement parent)
             : base(packageName, EBuildPipeline.ScriptableBuildPipeline, buildTarget, parent)
         {
         }
