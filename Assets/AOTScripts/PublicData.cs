@@ -5,7 +5,7 @@ using UnityEngine;
 public  class PublicData
 {
 	/// <summary>
-	/// 在CheckVersion状态中更新
+	/// 鍦–heckVersion鐘舵�佷腑鏇存柊
 	/// </summary>
 	public static string Version = "v1.0.0";
 

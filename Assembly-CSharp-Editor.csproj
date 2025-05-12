@@ -50,10 +50,11 @@
     <Compile Include="Assets\Editor\SceneHelper.cs" />
     <Compile Include="Assets\Editor\HybridScriptableBuildPipelineViewer.cs" />
     <Compile Include="Assets\Editor\HybridBuildPipeViewerBase.cs" />
+    <Compile Include="Assets\Editor\HybridBuilderSetting.cs" />
     <Compile Include="Assets\Editor\HybridBuilderWindow.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Editor\TextureSchema.cs" />
-    <Compile Include="Assets\Editor\HybridBuilderSettings.cs" />
     <Compile Include="Assets\Editor\BuildHelper.cs" />
+    <Compile Include="Assets\Editor\SampleBundleEncryption.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Editor\TextureTools.cs" />
     <None Include="Assets\Editor\HybridBuilderWIndow.uxml" />
     <None Include="Assets\Editor\HybridBuildPipeViewerBase.uxml" />

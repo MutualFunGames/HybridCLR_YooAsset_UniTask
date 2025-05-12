@@ -12,14 +12,16 @@ using YooAsset.Editor;
 public class HybridBuilderWindow : EditorWindow
 {
     private string _buildPackage;
+    private HybridBuilderSetting _hybridBuilderSetting;
     private EBuildPipeline _buildPipeline;
 
     private Toolbar _toolbar;
     private ToolbarMenu _packageMenu;
     private ToolbarMenu _pipelineMenu;
+    private ToolbarMenu _hybridBuilderSettingMenu;
     private VisualElement _container;
 
-    [MenuItem("整合工具/AssetBundle Builder", false, 102)]
+    [MenuItem("整合工具/Hybrid AssetBundle Builder", false, 102)]
     public static void OpenWindow()
     {
         HybridBuilderWindow window =
@@ -82,6 +84,29 @@ public class HybridBuilderWindow : EditorWindow
                 _toolbar.Add(_pipelineMenu);
             }
 
+            var hybridBuilderSettings = FindAllHybridBuilderSettings();
+            if (hybridBuilderSettings.Count == 0)
+            {
+                var label = new Label();
+                label.text = "Not found any HybridBuilderSetting";
+                label.style.width = 100;
+                _toolbar.Add(label);
+                return;
+            }
+
+            //HybridBuilder打包设置
+            {
+                _hybridBuilderSetting = hybridBuilderSettings[0];
+                _hybridBuilderSettingMenu = new ToolbarMenu();
+                _hybridBuilderSettingMenu.style.width = 200;
+                foreach (var hybridBuilderSetting in hybridBuilderSettings)
+                {
+                    _hybridBuilderSettingMenu.menu.AppendAction(hybridBuilderSetting.name,
+                        HybridBuilderSettingMenuAction, HybridBuilderSettingMenuFun, hybridBuilderSetting);
+                }
+
+                _toolbar.Add(_hybridBuilderSettingMenu);
+            }
             RefreshBuildPipelineView();
         }
         catch (Exception e)
@@ -98,6 +123,7 @@ public class HybridBuilderWindow : EditorWindow
         _buildPipeline = AssetBundleBuilderSetting.GetPackageBuildPipeline(_buildPackage);
         _packageMenu.text = _buildPackage;
         _pipelineMenu.text = _buildPipeline.ToString();
+        _hybridBuilderSettingMenu.text = _hybridBuilderSetting.name;
 
         var buildTarget = EditorUserBuildSettings.activeBuildTarget;
         if (_buildPipeline == EBuildPipeline.EditorSimulateBuildPipeline)
@@ -111,7 +137,8 @@ public class HybridBuilderWindow : EditorWindow
         else if (_buildPipeline == EBuildPipeline.ScriptableBuildPipeline)
         {
             //实例化Viewer
-            var viewer = new HybridScriptableBuildPipelineViewer(_buildPackage, buildTarget, _container);
+            var viewer =
+                new HybridScriptableBuildPipelineViewer(_buildPackage, buildTarget, _hybridBuilderSetting, _container);
         }
         else if (_buildPipeline == EBuildPipeline.RawFileBuildPipeline)
         {
@@ -121,6 +148,37 @@ public class HybridBuilderWindow : EditorWindow
         {
             throw new System.NotImplementedException(_buildPipeline.ToString());
         }
+    }
+
+    /// <summary>
+    /// 查找工程下所有HybridBuilderSetting类型文件
+    /// </summary>
+    /// <returns></returns>
+    /// <exception cref="Exception"></exception>
+    List<HybridBuilderSetting> FindAllHybridBuilderSettings()
+    {
+        var hybridBuilderSettings = new List<HybridBuilderSetting>();
+        string[] guids = AssetDatabase.FindAssets("t:HybridBuilderSetting");
+        if (guids.Length == 0)
+            throw new System.Exception($"Not found any assets : {nameof(HybridBuilderSetting)}");
+
+        foreach (string assetGUID in guids)
+        {
+            string assetPath = AssetDatabase.GUIDToAssetPath(assetGUID);
+            var assetType = AssetDatabase.GetMainAssetTypeAtPath(assetPath);
+            if (assetType == typeof(HybridBuilderSetting))
+            {
+                var hybridBuilderSetting = AssetDatabase.LoadAssetAtPath<HybridBuilderSetting>(assetPath);
+                if (hybridBuilderSetting == null)
+                {
+                    throw new System.Exception($"LoadError : {assetPath}");
+                }
+
+                hybridBuilderSettings.Add(hybridBuilderSetting);
+            }
+        }
+
+        return hybridBuilderSettings;
     }
 
     private List<string> GetBuildPackageNames()
@@ -143,6 +201,26 @@ public class HybridBuilderWindow : EditorWindow
             RefreshBuildPipelineView();
         }
     }
+
+    void HybridBuilderSettingMenuAction(DropdownMenuAction action)
+    {
+        var targetSetting = (HybridBuilderSetting) action.userData;
+        if (_hybridBuilderSetting != targetSetting)
+        {
+            _hybridBuilderSetting = targetSetting;
+            RefreshBuildPipelineView();
+        }
+    }
+
+    private DropdownMenuAction.Status HybridBuilderSettingMenuFun(DropdownMenuAction action)
+    {
+        var targetSetting = (HybridBuilderSetting) action.userData;
+        if (_hybridBuilderSetting == targetSetting)
+            return DropdownMenuAction.Status.Checked;
+        else
+            return DropdownMenuAction.Status.Normal;
+    }
+
 
     private DropdownMenuAction.Status PackageMenuFun(DropdownMenuAction action)
     {

@@ -9,7 +9,7 @@ using HybridCLR.Editor.Commands;
 using HybridCLR.Editor;
 using UnityEditorInternal;
 using System.IO;
-using Cysharp.Threading.Tasks;
+using System.Runtime.InteropServices;
 using YooAsset.Editor;
 using YooAsset;
 using Newtonsoft.Json;
@@ -55,8 +55,11 @@ public class BuildHelper
         }
         return names.ToArray();
     }
+    
 
-    [MenuItem("整合工具/打APK包")]
+
+
+    [UnityEditor.MenuItem("整合工具/打APK包")]
     public static void BuildAPK()
     {
         //先生成AOT文件，再进行打包，以确保所有引用库都被引用,废弃，因HybridCLR会修改构建管线，自动执行一次GenerateALL
@@ -84,6 +87,7 @@ public class BuildHelper
 
         EditorUtility.ClearProgressBar();
     }
+    
     // [MenuItem("整合工具/打初始AB包")]
     // public static void BuildOriginAssetBundle()
     // {
@@ -142,7 +146,8 @@ public class BuildHelper
     //     }
     //     #endregion
     // }
-    // [MenuItem("整合工具/打增量AB包")]
+    
+    // [UnityEditor.UnityEditor.MenuItem("整合工具/打增量AB包")]
     // public static void BuildIncreasinglyAssetBundle()
     // {
     //     #region 获取资源版本
@@ -321,12 +326,9 @@ public class BuildHelper
         AssetDatabase.Refresh();
         Debug.Log("生成热更新Dll成功");
     }
-    private static List<Type> GetEncryptionServicesClassTypes()
-    {
-        return EditorTools.GetAssignableTypes(typeof(IEncryptionServices));
-    }
 
-    //[MenuItem("整合工具/删除本地沙盒文件夹")]
+
+    //[UnityEditor.UnityEditor.MenuItem("整合工具/删除本地沙盒文件夹")]
     public static void DeleteSandBoxDirectory()
     {
         var path = $"{ProjectPath}/SandBox";
@@ -336,7 +338,7 @@ public class BuildHelper
         }
         Debug.Log("沙盒文件夹删除成功");
     }
-    [MenuItem("整合工具/删除本地AB包数据并重新创建版本文件")]
+    [UnityEditor.MenuItem("整合工具/删除本地AB包数据并重新创建版本文件")]
     public static void DeleteAssetBundlesDataAndVersionFile()
     {
         DeleteSandBoxDirectory();
@@ -526,7 +528,7 @@ public class BuildHelper
             }
         }
     }
-    //[MenuItem("整合工具/读取XML测试")]
+    //[UnityEditor.UnityEditor.MenuItem("整合工具/读取XML测试")]
     public static void ReadXML()
     {
         string filePath = @$"{Application.dataPath}\HybridCLRData\Generated\link.xml";
@@ -565,7 +567,7 @@ public class BuildHelper
         xml.Save($"{Application.dataPath}/Test.xml");
         AssetDatabase.Refresh();
     }
-    //[MenuItem("整合工具/读取预制体测试")]
+    //[UnityEditor.UnityEditor.MenuItem("整合工具/读取预制体测试")]
     public static void ReadPrefabs()
     {
         EditorUtility.DisplayProgressBar("Progress", "Find Class...", 0);

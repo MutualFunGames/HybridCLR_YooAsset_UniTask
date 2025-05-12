@@ -1,7 +1,3 @@
----
-typora-copy-images-to: ./
----
-
 # HybridCLR+YooAsset+UniTask整合框架说明文档_Release2025
 
 ## 首先需要明确的概念

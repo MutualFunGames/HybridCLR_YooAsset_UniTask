@@ -5,7 +5,7 @@ using System.Linq;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
-using UnityEditor.UIElements;
+
 using UnityEngine.UIElements;
 
 namespace YooAsset.Editor
@@ -31,40 +31,22 @@ namespace YooAsset.Editor
         private Toggle _clearBuildCacheToggle;
         private Toggle _useAssetDependencyDBToggle;
 
-        private HybridBuilderSettings hybridBuilderSettings;
-        public HybridBuildPipeViewerBase(string packageName, EBuildPipeline buildPipeline, BuildTarget buildTarget, VisualElement parent)
+        private HybridBuilderSetting _hybridBuilderSetting;
+
+        public HybridBuildPipeViewerBase(string packageName, EBuildPipeline buildPipeline, BuildTarget buildTarget,
+            HybridBuilderSetting hybridBuildSetting,
+            VisualElement parent)
         {
             PackageName = packageName;
             BuildTarget = buildTarget;
             BuildPipeline = buildPipeline;
+            _hybridBuilderSetting = hybridBuildSetting;
 
-            LoadHybridBuilderSettings();
             CreateView(parent);
             RefreshView();
         }
 
-        /// <summary>
-        /// 加载本地设置文件
-        /// 通过类名去查找当前工程中所有同类型文件
-        /// 因此工程中最好只有一个设置文件
-        /// </summary>
-        /// <exception cref="Exception"></exception>
-        void LoadHybridBuilderSettings()
-        {
-            string[] guids = AssetDatabase.FindAssets(nameof(HybridBuilderSettings));
-            if (guids.Length == 0)
-                throw new System.Exception($"Not found any assets : {nameof(HybridBuilderSettings)}");
 
-            foreach (string assetGUID in guids)
-            {
-                string assetPath = AssetDatabase.GUIDToAssetPath(assetGUID);
-                var assetType = AssetDatabase.GetMainAssetTypeAtPath(assetPath);
-                if (assetType == typeof(HybridBuilderSettings))
-                {
-                    hybridBuilderSettings = AssetDatabase.LoadAssetAtPath<HybridBuilderSettings>(assetPath);
-                }
-            }
-        }
         private void CreateView(VisualElement parent)
         {
             // 加载布局文件
@@ -76,42 +58,45 @@ namespace YooAsset.Editor
             Root.style.flexGrow = 1f;
             parent.Add(Root);
 
-            var outputPar = Root.Q("OutputPar");
             // 输出目录
-            _buildOutputField = outputPar.Q<TextField>("BuildOutput");
-            _buildOutputField.SetValueWithoutNotify(hybridBuilderSettings.BuildOutputPath);
+            var assetOutputPar = Root.Q("AssetOutputPar");
+            _buildOutputField = assetOutputPar.Q<TextField>("BuildOutput");
+            _buildOutputField.SetValueWithoutNotify(_hybridBuilderSetting.BuildOutputPath);
             _buildOutputField.SetEnabled(false);
-            _buildOutputField.isReadOnly = true;
-
-
-            var browseBuuton = outputPar.Q<Button>("BrowseButton");
+            
+            var browseBuuton = assetOutputPar.Q<Button>("BrowseButton");
             browseBuuton.clicked += OutputPathBroseButton_Clicked;
+            
 
 
             var versionPar = Root.Q("VersionPar");
             var versionToggle = versionPar.Q<Toggle>("Toggle");
-            versionToggle.SetValueWithoutNotify(hybridBuilderSettings.IsUseSelfIncrementingVersions);
+            versionToggle.SetValueWithoutNotify(_hybridBuilderSetting.IsUseSelfIncrementingVersions);
             versionToggle.RegisterValueChangedCallback(OnVersionToggleChange);
-            
+
             // 构建版本
             _buildVersionField = versionPar.Q<TextField>("BuildVersion");
             _buildVersionField.style.width = StyleWidth;
-            if (hybridBuilderSettings.IsUseSelfIncrementingVersions)
+            if (_hybridBuilderSetting.IsUseSelfIncrementingVersions)
             {
-                _buildVersionField.SetValueWithoutNotify(hybridBuilderSettings.AssetBuildVersion.ToString());
+                _buildVersionField.SetValueWithoutNotify(GetBuildVersion());
             }
             else
             {
-                _buildVersionField.SetValueWithoutNotify(GetDefaultPackageVersion());   
+                _buildVersionField.SetValueWithoutNotify(GetDefaultPackageVersion());
             }
+
             _buildVersionField.SetEnabled(false);
+            
+
             // 加密方法
             {
                 var encryptionContainer = Root.Q("EncryptionContainer");
                 var encryptionClassTypes = EditorTools.GetAssignableTypes(typeof(IEncryptionServices));
                 if (encryptionClassTypes.Count > 0)
                 {
-                    var encyptionClassName = AssetBundleBuilderSetting.GetPackageEncyptionClassName(PackageName, BuildPipeline);
+                    var encyptionClassName =
+                        AssetBundleBuilderSetting.GetPackageEncyptionClassName(PackageName, BuildPipeline);
                     int defaultIndex = encryptionClassTypes.FindIndex(x => x.FullName.Equals(encyptionClassName));
                     if (defaultIndex < 0)
                         defaultIndex = 0;
@@ -120,7 +105,8 @@ namespace YooAsset.Editor
                     _encryptionField.style.width = StyleWidth;
                     _encryptionField.RegisterValueChangedCallback(evt =>
                     {
-                        AssetBundleBuilderSetting.SetPackageEncyptionClassName(PackageName, BuildPipeline, _encryptionField.value.FullName);
+                        AssetBundleBuilderSetting.SetPackageEncyptionClassName(PackageName, BuildPipeline,
+                            _encryptionField.value.FullName);
                     });
                     encryptionContainer.Add(_encryptionField);
                 }
@@ -141,7 +127,8 @@ namespace YooAsset.Editor
             _compressionField.style.width = StyleWidth;
             _compressionField.RegisterValueChangedCallback(evt =>
             {
-                AssetBundleBuilderSetting.SetPackageCompressOption(PackageName, BuildPipeline, (ECompressOption)_compressionField.value);
+                AssetBundleBuilderSetting.SetPackageCompressOption(PackageName, BuildPipeline,
+                    (ECompressOption) _compressionField.value);
             });
 
             // 输出文件名称样式
@@ -152,28 +139,33 @@ namespace YooAsset.Editor
             _outputNameStyleField.style.width = StyleWidth;
             _outputNameStyleField.RegisterValueChangedCallback(evt =>
             {
-                AssetBundleBuilderSetting.SetPackageFileNameStyle(PackageName, BuildPipeline, (EFileNameStyle)_outputNameStyleField.value);
+                AssetBundleBuilderSetting.SetPackageFileNameStyle(PackageName, BuildPipeline,
+                    (EFileNameStyle) _outputNameStyleField.value);
             });
 
             // 首包文件拷贝选项
-            var buildinFileCopyOption = AssetBundleBuilderSetting.GetPackageBuildinFileCopyOption(PackageName, BuildPipeline);
+            var buildinFileCopyOption =
+                AssetBundleBuilderSetting.GetPackageBuildinFileCopyOption(PackageName, BuildPipeline);
             _copyBuildinFileOptionField = Root.Q<EnumField>("CopyBuildinFileOption");
             _copyBuildinFileOptionField.Init(buildinFileCopyOption);
             _copyBuildinFileOptionField.SetValueWithoutNotify(buildinFileCopyOption);
             _copyBuildinFileOptionField.style.width = StyleWidth;
             _copyBuildinFileOptionField.RegisterValueChangedCallback(evt =>
             {
-                AssetBundleBuilderSetting.SetPackageBuildinFileCopyOption(PackageName, BuildPipeline, (EBuildinFileCopyOption)_copyBuildinFileOptionField.value);
+                AssetBundleBuilderSetting.SetPackageBuildinFileCopyOption(PackageName, BuildPipeline,
+                    (EBuildinFileCopyOption) _copyBuildinFileOptionField.value);
                 RefreshView();
             });
 
             // 首包文件拷贝参数
-            var buildinFileCopyParams = AssetBundleBuilderSetting.GetPackageBuildinFileCopyParams(PackageName, BuildPipeline);
+            var buildinFileCopyParams =
+                AssetBundleBuilderSetting.GetPackageBuildinFileCopyParams(PackageName, BuildPipeline);
             _copyBuildinFileTagsField = Root.Q<TextField>("CopyBuildinFileParam");
             _copyBuildinFileTagsField.SetValueWithoutNotify(buildinFileCopyParams);
             _copyBuildinFileTagsField.RegisterValueChangedCallback(evt =>
             {
-                AssetBundleBuilderSetting.SetPackageBuildinFileCopyParams(PackageName, BuildPipeline, _copyBuildinFileTagsField.value);
+                AssetBundleBuilderSetting.SetPackageBuildinFileCopyParams(PackageName, BuildPipeline,
+                    _copyBuildinFileTagsField.value);
             });
 
             // 清理构建缓存
@@ -182,16 +174,29 @@ namespace YooAsset.Editor
             _clearBuildCacheToggle.SetValueWithoutNotify(clearBuildCache);
             _clearBuildCacheToggle.RegisterValueChangedCallback(evt =>
             {
-                AssetBundleBuilderSetting.SetPackageClearBuildCache(PackageName, BuildPipeline, _clearBuildCacheToggle.value);
+                AssetBundleBuilderSetting.SetPackageClearBuildCache(PackageName, BuildPipeline,
+                    _clearBuildCacheToggle.value);
             });
 
             // 使用资源依赖数据库
-            bool useAssetDependencyDB = AssetBundleBuilderSetting.GetPackageUseAssetDependencyDB(PackageName, BuildPipeline);
+            bool useAssetDependencyDB =
+                AssetBundleBuilderSetting.GetPackageUseAssetDependencyDB(PackageName, BuildPipeline);
             _useAssetDependencyDBToggle = Root.Q<Toggle>("UseAssetDependency");
             _useAssetDependencyDBToggle.SetValueWithoutNotify(useAssetDependencyDB);
             _useAssetDependencyDBToggle.RegisterValueChangedCallback(evt =>
             {
-                AssetBundleBuilderSetting.SetPackageUseAssetDependencyDB(PackageName, BuildPipeline, _useAssetDependencyDBToggle.value);
+                AssetBundleBuilderSetting.SetPackageUseAssetDependencyDB(PackageName, BuildPipeline,
+                    _useAssetDependencyDBToggle.value);
+            });
+            
+            //混合构建选项
+            var hybridBuildOption =Root.Q<EnumField>("HybridBuildOption");
+            hybridBuildOption.Init(_hybridBuilderSetting.HybridBuildOption);
+            hybridBuildOption.SetValueWithoutNotify(_hybridBuilderSetting.HybridBuildOption);
+            hybridBuildOption.style.width = StyleWidth;
+            hybridBuildOption.RegisterValueChangedCallback(evt =>
+            {
+                _hybridBuilderSetting.HybridBuildOption = (HybridBuildOption)evt.newValue;
             });
 
             // 对齐文本间距
@@ -204,31 +209,42 @@ namespace YooAsset.Editor
             UIElementsTools.SetElementLabelMinWidth(_copyBuildinFileTagsField, LabelMinWidth);
             UIElementsTools.SetElementLabelMinWidth(_clearBuildCacheToggle, LabelMinWidth);
             UIElementsTools.SetElementLabelMinWidth(_useAssetDependencyDBToggle, LabelMinWidth);
+            UIElementsTools.SetElementLabelMinWidth(hybridBuildOption, LabelMinWidth);
 
             // 构建按钮
             var buildButton = Root.Q<Button>("Build");
             buildButton.clicked += BuildButton_clicked;
         }
+        
 
         private void OnVersionToggleChange(ChangeEvent<bool> evt)
         {
-            hybridBuilderSettings.IsUseSelfIncrementingVersions = evt.newValue;
-            if (hybridBuilderSettings.IsUseSelfIncrementingVersions)
+            _hybridBuilderSetting.IsUseSelfIncrementingVersions = evt.newValue;
+            if (_hybridBuilderSetting.IsUseSelfIncrementingVersions)
             {
-                _buildVersionField.SetValueWithoutNotify(hybridBuilderSettings.AssetBuildVersion.ToString());
+                _buildVersionField.SetValueWithoutNotify(GetBuildVersion());
             }
             else
             {
-                _buildVersionField.SetValueWithoutNotify(GetDefaultPackageVersion());   
+                _buildVersionField.SetValueWithoutNotify(GetDefaultPackageVersion());
             }
         }
 
+        string GetBuildVersion()
+        {
+            var buildVersion =
+                $"{_hybridBuilderSetting.ReleaseBuildVersion}_{_hybridBuilderSetting.AssetBuildVersion}_{_hybridBuilderSetting.ScriptBuildVersion}";
+            return buildVersion;
+        }
         private void RefreshView()
         {
-            var buildinFileCopyOption = AssetBundleBuilderSetting.GetPackageBuildinFileCopyOption(PackageName, BuildPipeline);
-            bool tagsFiledVisible = buildinFileCopyOption == EBuildinFileCopyOption.ClearAndCopyByTags || buildinFileCopyOption == EBuildinFileCopyOption.OnlyCopyByTags;
+            var buildinFileCopyOption =
+                AssetBundleBuilderSetting.GetPackageBuildinFileCopyOption(PackageName, BuildPipeline);
+            bool tagsFiledVisible = buildinFileCopyOption == EBuildinFileCopyOption.ClearAndCopyByTags ||
+                                    buildinFileCopyOption == EBuildinFileCopyOption.OnlyCopyByTags;
             _copyBuildinFileTagsField.visible = tagsFiledVisible;
         }
+
         private void BuildButton_clicked()
         {
             if (EditorUtility.DisplayDialog("提示", $"开始构建资源包[{PackageName}]！", "Yes", "No"))
@@ -264,7 +280,7 @@ namespace YooAsset.Editor
             var encryptionClassTypes = EditorTools.GetAssignableTypes(typeof(IEncryptionServices));
             var classType = encryptionClassTypes.Find(x => x.FullName.Equals(encyptionClassName));
             if (classType != null)
-                return (IEncryptionServices)Activator.CreateInstance(classType);
+                return (IEncryptionServices) Activator.CreateInstance(classType);
             else
                 return null;
         }
@@ -274,15 +290,24 @@ namespace YooAsset.Editor
             int totalMinutes = DateTime.Now.Hour * 60 + DateTime.Now.Minute;
             return DateTime.Now.ToString("yyyy-MM-dd") + "-" + totalMinutes;
         }
-        
+
+        /// <summary>
+        /// 选择一个资源输出目录
+        /// </summary>
         private void OutputPathBroseButton_Clicked()
         {
-            string outputPath = EditorTools.OpenFolderPanel("SelectOutputPath", "Assets/");
-            if (!string.IsNullOrEmpty(outputPath))
+            var defaultPath = _hybridBuilderSetting.BuildOutputPath;
+            if (string.IsNullOrEmpty(defaultPath))
             {
-                hybridBuilderSettings.BuildOutputPath = outputPath;
-                _buildOutputField.SetValueWithoutNotify(hybridBuilderSettings.BuildOutputPath);
+                defaultPath = AssetBundleBuilderHelper.GetDefaultBuildOutputRoot();
             }
+            string outputPath = EditorUtility.OpenFolderPanel("Select Output Path",defaultPath,string.Empty);
+            Debug.Log(outputPath);
+             if (!string.IsNullOrEmpty(outputPath))
+             {
+                 _hybridBuilderSetting.BuildOutputPath = outputPath;
+                 _buildOutputField.SetValueWithoutNotify(_hybridBuilderSetting.BuildOutputPath);
+             }
         }
     }
 }

@@ -12,28 +12,33 @@ namespace YooAsset.Editor
 {
     internal class HybridScriptableBuildPipelineViewer : HybridBuildPipeViewerBase
     {
-        public HybridScriptableBuildPipelineViewer(string packageName, BuildTarget buildTarget, VisualElement parent)
-            : base(packageName, EBuildPipeline.ScriptableBuildPipeline, buildTarget, parent)
+        public HybridScriptableBuildPipelineViewer(string packageName, BuildTarget buildTarget,
+            HybridBuilderSetting hybridBuilderSetting, VisualElement parent)
+            : base(packageName, EBuildPipeline.ScriptableBuildPipeline, buildTarget, hybridBuilderSetting, parent)
         {
         }
+
         /// <summary>
         /// 执行构建
         /// </summary>
         protected override void ExecuteBuild()
         {
             var fileNameStyle = AssetBundleBuilderSetting.GetPackageFileNameStyle(PackageName, BuildPipeline);
-            var buildinFileCopyOption = AssetBundleBuilderSetting.GetPackageBuildinFileCopyOption(PackageName, BuildPipeline);
-            var buildinFileCopyParams = AssetBundleBuilderSetting.GetPackageBuildinFileCopyParams(PackageName, BuildPipeline);
+            var buildinFileCopyOption =
+                AssetBundleBuilderSetting.GetPackageBuildinFileCopyOption(PackageName, BuildPipeline);
+            var buildinFileCopyParams =
+                AssetBundleBuilderSetting.GetPackageBuildinFileCopyParams(PackageName, BuildPipeline);
             var compressOption = AssetBundleBuilderSetting.GetPackageCompressOption(PackageName, BuildPipeline);
             var clearBuildCache = AssetBundleBuilderSetting.GetPackageClearBuildCache(PackageName, BuildPipeline);
-            var useAssetDependencyDB = AssetBundleBuilderSetting.GetPackageUseAssetDependencyDB(PackageName, BuildPipeline);
+            var useAssetDependencyDB =
+                AssetBundleBuilderSetting.GetPackageUseAssetDependencyDB(PackageName, BuildPipeline);
             var builtinShaderBundleName = GetBuiltinShaderBundleName();
 
             ScriptableBuildParameters buildParameters = new ScriptableBuildParameters();
             buildParameters.BuildOutputRoot = AssetBundleBuilderHelper.GetDefaultBuildOutputRoot();
             buildParameters.BuildinFileRoot = AssetBundleBuilderHelper.GetStreamingAssetsRoot();
             buildParameters.BuildPipeline = BuildPipeline.ToString();
-            buildParameters.BuildBundleType = (int)EBuildBundleType.AssetBundle;
+            buildParameters.BuildBundleType = (int) EBuildBundleType.AssetBundle;
             buildParameters.BuildTarget = BuildTarget;
             buildParameters.PackageName = PackageName;
             buildParameters.PackageVersion = GetPackageVersion();
