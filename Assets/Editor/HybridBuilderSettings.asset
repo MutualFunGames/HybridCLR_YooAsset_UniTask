@@ -12,10 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 07db0dba8f275934a8610be7b456aaf9, type: 3}
   m_Name: HybridBuilderSettings
   m_EditorClassIdentifier: 
-  BuildOutputPath: E:/UnityProject/HybridCLR_YooAsset_UniTask/Bundles
-  HotUpdateAssetsOutputPath: E:/UnityProject/HybridCLR_YooAsset_UniTask/Assets/HotUpdateAssets/
-  HotUpdateDllOutputPath: E:/UnityProject/HybridCLR_YooAsset_UniTask/Assets/HotUpdateAssets/HotUpdateDll/
-  AssetBuildVersion: 111
-  ScriptBuildVersion: 0
-  IsUseSelfIncrementingVersions: 0
-  IsBuildHotScript: 0
+  _buildOutputPath: E:/UnityProject/HybridCLR_YooAsset_UniTask/HybridCLRData
+  assetBuildVersion: 11
+  scriptBuildVersion: 11
+  releaseBuildVersion: 11
+  versionFileName: VERSION.txt
+  _isUseSelfIncrementingVersions: 1
+  _hybridBuildOption: 4

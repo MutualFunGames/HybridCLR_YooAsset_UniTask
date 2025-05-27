@@ -47,7 +47,7 @@ public class GameManager
     {
         if (message is SceneEventDefine.ChangeToHomeScene)
         {
-            YooAssets.LoadSceneAsync("scene_home");
+            YooAssets.LoadSceneAsync("HotUpdateScene");
         }
         else if (message is SceneEventDefine.ChangeToBattleScene)
         {

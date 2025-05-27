@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 7744653541021780417}
   - component: {fileID: 8539472529416408928}
   m_Layer: 0
-  m_Name: HotUpdateLuncher
+  m_Name: HotUpdateLauncher
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

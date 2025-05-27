@@ -793,6 +793,9 @@
     <Reference Include="System.Xml.XPath.XDocument">
       <HintPath>E:\Unity\Unity.3.24f1c2\6000.0.26f1c1\Editor\Data\UnityReferenceAssemblies\unity-4.8-api\Facades\System.Xml.XPath.XDocument.dll</HintPath>
     </Reference>
+    <Reference Include="YooAsset">
+      <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\YooAsset.dll</HintPath>
+    </Reference>
     <Reference Include="UnityEditor.UI">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\UnityEditor.UI.dll</HintPath>
     </Reference>
@@ -804,6 +807,18 @@
     <ProjectReference Include="UniTask.csproj">
       <Project>{e8a89cc3-7c97-9d4e-bed1-2876ec45868d}</Project>
       <Name>UniTask</Name>
+    </ProjectReference>
+    <ProjectReference Include="UniFramework.Utility.csproj">
+      <Project>{d9b8f05f-ca2b-377f-473a-b605b248e548}</Project>
+      <Name>UniFramework.Utility</Name>
+    </ProjectReference>
+    <ProjectReference Include="UniFramework.Machine.csproj">
+      <Project>{f63d6b2b-9cc4-439f-08f8-a0c65910e305}</Project>
+      <Name>UniFramework.Machine</Name>
+    </ProjectReference>
+    <ProjectReference Include="UniFramework.Event.csproj">
+      <Project>{279ad970-b335-1c3c-2cf1-36a8dcd1db39}</Project>
+      <Name>UniFramework.Event</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

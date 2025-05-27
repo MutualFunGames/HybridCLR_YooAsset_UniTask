@@ -61,7 +61,7 @@ namespace YooAsset.Editor
             // 输出目录
             var assetOutputPar = Root.Q("AssetOutputPar");
             _buildOutputField = assetOutputPar.Q<TextField>("BuildOutput");
-            _buildOutputField.SetValueWithoutNotify(_hybridBuilderSetting.BuildOutputPath);
+            _buildOutputField.SetValueWithoutNotify(_hybridBuilderSetting.buildOutputPath);
             _buildOutputField.SetEnabled(false);
             
             var browseBuuton = assetOutputPar.Q<Button>("BrowseButton");
@@ -71,15 +71,15 @@ namespace YooAsset.Editor
 
             var versionPar = Root.Q("VersionPar");
             var versionToggle = versionPar.Q<Toggle>("Toggle");
-            versionToggle.SetValueWithoutNotify(_hybridBuilderSetting.IsUseSelfIncrementingVersions);
+            versionToggle.SetValueWithoutNotify(_hybridBuilderSetting.isUseSelfIncrementingVersions);
             versionToggle.RegisterValueChangedCallback(OnVersionToggleChange);
 
             // 构建版本
             _buildVersionField = versionPar.Q<TextField>("BuildVersion");
             _buildVersionField.style.width = StyleWidth;
-            if (_hybridBuilderSetting.IsUseSelfIncrementingVersions)
+            if (_hybridBuilderSetting.isUseSelfIncrementingVersions)
             {
-                _buildVersionField.SetValueWithoutNotify(GetBuildVersion());
+                _buildVersionField.SetValueWithoutNotify(_hybridBuilderSetting.GetBuildVersion());
             }
             else
             {
@@ -95,8 +95,7 @@ namespace YooAsset.Editor
                 var encryptionClassTypes = EditorTools.GetAssignableTypes(typeof(IEncryptionServices));
                 if (encryptionClassTypes.Count > 0)
                 {
-                    var encyptionClassName =
-                        AssetBundleBuilderSetting.GetPackageEncyptionClassName(PackageName, BuildPipeline);
+                    var encyptionClassName = _hybridBuilderSetting.assetEncyptionClassName;
                     int defaultIndex = encryptionClassTypes.FindIndex(x => x.FullName.Equals(encyptionClassName));
                     if (defaultIndex < 0)
                         defaultIndex = 0;
@@ -105,8 +104,7 @@ namespace YooAsset.Editor
                     _encryptionField.style.width = StyleWidth;
                     _encryptionField.RegisterValueChangedCallback(evt =>
                     {
-                        AssetBundleBuilderSetting.SetPackageEncyptionClassName(PackageName, BuildPipeline,
-                            _encryptionField.value.FullName);
+                        _hybridBuilderSetting.assetEncyptionClassName = _encryptionField.value.FullName;
                     });
                     encryptionContainer.Add(_encryptionField);
                 }
@@ -120,83 +118,75 @@ namespace YooAsset.Editor
             }
 
             // 压缩方式选项
-            var compressOption = AssetBundleBuilderSetting.GetPackageCompressOption(PackageName, BuildPipeline);
+            var compressOption = _hybridBuilderSetting.assetCompressOption;
             _compressionField = Root.Q<EnumField>("Compression");
             _compressionField.Init(compressOption);
             _compressionField.SetValueWithoutNotify(compressOption);
             _compressionField.style.width = StyleWidth;
             _compressionField.RegisterValueChangedCallback(evt =>
             {
-                AssetBundleBuilderSetting.SetPackageCompressOption(PackageName, BuildPipeline,
-                    (ECompressOption) _compressionField.value);
+                _hybridBuilderSetting.assetCompressOption = (ECompressOption) _compressionField.value;
             });
 
             // 输出文件名称样式
-            var fileNameStyle = AssetBundleBuilderSetting.GetPackageFileNameStyle(PackageName, BuildPipeline);
+            var fileNameStyle = _hybridBuilderSetting.assetFileNameStyle;
             _outputNameStyleField = Root.Q<EnumField>("FileNameStyle");
             _outputNameStyleField.Init(fileNameStyle);
             _outputNameStyleField.SetValueWithoutNotify(fileNameStyle);
             _outputNameStyleField.style.width = StyleWidth;
             _outputNameStyleField.RegisterValueChangedCallback(evt =>
             {
-                AssetBundleBuilderSetting.SetPackageFileNameStyle(PackageName, BuildPipeline,
-                    (EFileNameStyle) _outputNameStyleField.value);
+                _hybridBuilderSetting.assetFileNameStyle = (EFileNameStyle) _outputNameStyleField.value;
             });
 
             // 首包文件拷贝选项
-            var buildinFileCopyOption =
-                AssetBundleBuilderSetting.GetPackageBuildinFileCopyOption(PackageName, BuildPipeline);
+            var buildinFileCopyOption = _hybridBuilderSetting.assetBuildinFileCopyOption;
             _copyBuildinFileOptionField = Root.Q<EnumField>("CopyBuildinFileOption");
             _copyBuildinFileOptionField.Init(buildinFileCopyOption);
             _copyBuildinFileOptionField.SetValueWithoutNotify(buildinFileCopyOption);
             _copyBuildinFileOptionField.style.width = StyleWidth;
             _copyBuildinFileOptionField.RegisterValueChangedCallback(evt =>
             {
-                AssetBundleBuilderSetting.SetPackageBuildinFileCopyOption(PackageName, BuildPipeline,
-                    (EBuildinFileCopyOption) _copyBuildinFileOptionField.value);
+                _hybridBuilderSetting.assetBuildinFileCopyOption =
+                    (EBuildinFileCopyOption) _copyBuildinFileOptionField.value;
                 RefreshView();
             });
 
             // 首包文件拷贝参数
-            var buildinFileCopyParams =
-                AssetBundleBuilderSetting.GetPackageBuildinFileCopyParams(PackageName, BuildPipeline);
+            var buildinFileCopyParams = _hybridBuilderSetting.assetBuildinFileCopyParams;
             _copyBuildinFileTagsField = Root.Q<TextField>("CopyBuildinFileParam");
             _copyBuildinFileTagsField.SetValueWithoutNotify(buildinFileCopyParams);
             _copyBuildinFileTagsField.RegisterValueChangedCallback(evt =>
             {
-                AssetBundleBuilderSetting.SetPackageBuildinFileCopyParams(PackageName, BuildPipeline,
-                    _copyBuildinFileTagsField.value);
+                _hybridBuilderSetting.assetBuildinFileCopyParams = _copyBuildinFileTagsField.value;
             });
 
             // 清理构建缓存
-            bool clearBuildCache = AssetBundleBuilderSetting.GetPackageClearBuildCache(PackageName, BuildPipeline);
+            bool clearBuildCache = _hybridBuilderSetting.isClearBuildCache;
             _clearBuildCacheToggle = Root.Q<Toggle>("ClearBuildCache");
             _clearBuildCacheToggle.SetValueWithoutNotify(clearBuildCache);
             _clearBuildCacheToggle.RegisterValueChangedCallback(evt =>
             {
-                AssetBundleBuilderSetting.SetPackageClearBuildCache(PackageName, BuildPipeline,
-                    _clearBuildCacheToggle.value);
+                _hybridBuilderSetting.isClearBuildCache = evt.newValue;
             });
 
             // 使用资源依赖数据库
-            bool useAssetDependencyDB =
-                AssetBundleBuilderSetting.GetPackageUseAssetDependencyDB(PackageName, BuildPipeline);
-            _useAssetDependencyDBToggle = Root.Q<Toggle>("UseAssetDependency");
+            bool useAssetDependencyDB = _hybridBuilderSetting.isUseAssetDependDB;
+                _useAssetDependencyDBToggle = Root.Q<Toggle>("UseAssetDependency");
             _useAssetDependencyDBToggle.SetValueWithoutNotify(useAssetDependencyDB);
             _useAssetDependencyDBToggle.RegisterValueChangedCallback(evt =>
             {
-                AssetBundleBuilderSetting.SetPackageUseAssetDependencyDB(PackageName, BuildPipeline,
-                    _useAssetDependencyDBToggle.value);
+                _hybridBuilderSetting.isUseAssetDependDB = evt.newValue;
             });
             
-            //混合构建选项
+            //热更新脚本混合构建选项
             var hybridBuildOption =Root.Q<EnumField>("HybridBuildOption");
-            hybridBuildOption.Init(_hybridBuilderSetting.HybridBuildOption);
-            hybridBuildOption.SetValueWithoutNotify(_hybridBuilderSetting.HybridBuildOption);
+            hybridBuildOption.Init(_hybridBuilderSetting.hybridBuildOption);
+            hybridBuildOption.SetValueWithoutNotify(_hybridBuilderSetting.hybridBuildOption);
             hybridBuildOption.style.width = StyleWidth;
             hybridBuildOption.RegisterValueChangedCallback(evt =>
             {
-                _hybridBuilderSetting.HybridBuildOption = (HybridBuildOption)evt.newValue;
+                _hybridBuilderSetting.hybridBuildOption = (HybridBuildOption)evt.newValue;
             });
 
             // 对齐文本间距
@@ -219,27 +209,20 @@ namespace YooAsset.Editor
 
         private void OnVersionToggleChange(ChangeEvent<bool> evt)
         {
-            _hybridBuilderSetting.IsUseSelfIncrementingVersions = evt.newValue;
-            if (_hybridBuilderSetting.IsUseSelfIncrementingVersions)
+            _hybridBuilderSetting.isUseSelfIncrementingVersions = evt.newValue;
+            if (_hybridBuilderSetting.isUseSelfIncrementingVersions)
             {
-                _buildVersionField.SetValueWithoutNotify(GetBuildVersion());
+                _buildVersionField.SetValueWithoutNotify(_hybridBuilderSetting.GetBuildVersion());
             }
             else
             {
                 _buildVersionField.SetValueWithoutNotify(GetDefaultPackageVersion());
             }
         }
-
-        string GetBuildVersion()
-        {
-            var buildVersion =
-                $"{_hybridBuilderSetting.ReleaseBuildVersion}_{_hybridBuilderSetting.AssetBuildVersion}_{_hybridBuilderSetting.ScriptBuildVersion}";
-            return buildVersion;
-        }
+        
         private void RefreshView()
         {
-            var buildinFileCopyOption =
-                AssetBundleBuilderSetting.GetPackageBuildinFileCopyOption(PackageName, BuildPipeline);
+            var buildinFileCopyOption = _hybridBuilderSetting.assetBuildinFileCopyOption;
             bool tagsFiledVisible = buildinFileCopyOption == EBuildinFileCopyOption.ClearAndCopyByTags ||
                                     buildinFileCopyOption == EBuildinFileCopyOption.OnlyCopyByTags;
             _copyBuildinFileTagsField.visible = tagsFiledVisible;
@@ -247,7 +230,7 @@ namespace YooAsset.Editor
 
         private void BuildButton_clicked()
         {
-            if (EditorUtility.DisplayDialog("提示", $"开始构建资源包[{PackageName}]！", "Yes", "No"))
+            if (EditorUtility.DisplayDialog("提示", $"开始以[{_hybridBuilderSetting.name}]配置->构建资源包[{PackageName}]！", "Yes", "No"))
             {
                 EditorTools.ClearUnityConsole();
                 EditorApplication.delayCall += ExecuteBuild;
@@ -276,7 +259,7 @@ namespace YooAsset.Editor
         /// </summary>
         protected IEncryptionServices CreateEncryptionInstance()
         {
-            var encyptionClassName = AssetBundleBuilderSetting.GetPackageEncyptionClassName(PackageName, BuildPipeline);
+            var encyptionClassName = _hybridBuilderSetting.assetEncyptionClassName;
             var encryptionClassTypes = EditorTools.GetAssignableTypes(typeof(IEncryptionServices));
             var classType = encryptionClassTypes.Find(x => x.FullName.Equals(encyptionClassName));
             if (classType != null)
@@ -296,17 +279,17 @@ namespace YooAsset.Editor
         /// </summary>
         private void OutputPathBroseButton_Clicked()
         {
-            var defaultPath = _hybridBuilderSetting.BuildOutputPath;
-            if (string.IsNullOrEmpty(defaultPath))
-            {
-                defaultPath = AssetBundleBuilderHelper.GetDefaultBuildOutputRoot();
-            }
+            var defaultPath = _hybridBuilderSetting.buildOutputPath;
+            // if (string.IsNullOrEmpty(defaultPath))
+            // {
+            //     defaultPath = AssetBundleBuilderHelper.GetDefaultBuildOutputRoot();
+            // }
             string outputPath = EditorUtility.OpenFolderPanel("Select Output Path",defaultPath,string.Empty);
             Debug.Log(outputPath);
              if (!string.IsNullOrEmpty(outputPath))
              {
-                 _hybridBuilderSetting.BuildOutputPath = outputPath;
-                 _buildOutputField.SetValueWithoutNotify(_hybridBuilderSetting.BuildOutputPath);
+                 _hybridBuilderSetting.buildOutputPath = outputPath;
+                 _buildOutputField.SetValueWithoutNotify(_hybridBuilderSetting.buildOutputPath);
              }
         }
     }

@@ -5,10 +5,10 @@
       "depth": 0,
       "source": "git",
       "dependencies": {},
-      "hash": "e5b52922f7fe276ed46968e2e3ec9182f90ee9a1"
+      "hash": "7a0032934b438ad20a4a691f8093ce1865824c42"
     },
     "com.tuyoogame.yooasset": {
-      "version": "2.3.8",
+      "version": "2.3.9",
       "depth": 0,
       "source": "registry",
       "dependencies": {
@@ -24,15 +24,6 @@
       "depth": 0,
       "source": "builtin",
       "dependencies": {}
-    },
-    "com.unity.ai.navigation": {
-      "version": "2.0.4",
-      "depth": 0,
-      "source": "registry",
-      "dependencies": {
-        "com.unity.modules.ai": "1.0.0"
-      },
-      "url": "https://packages.unity.cn"
     },
     "com.unity.editorcoroutines": {
       "version": "1.0.0",

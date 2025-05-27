@@ -26,7 +26,7 @@ public class LoadImage : MonoBehaviour
             await obj.ToUniTask();
             if (obj.Result == null)
             {
-                Debug.Log("¼ÓÔØÔ¤ÖÆÌåÎª¿Õ");
+                Debug.Log("åŠ è½½é¢„åˆ¶ä½“ä¸ºç©º");
             }
         }
     }

@@ -8,7 +8,7 @@ using System;
 using YooAsset;
 using System.IO;
 
-public class HotUpdateLuncher : MonoBehaviour
+public class HotUpdateLauncher : MonoBehaviour
 {
     public static void Run()
     {

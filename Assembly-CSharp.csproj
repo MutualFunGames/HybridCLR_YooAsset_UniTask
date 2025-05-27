@@ -26,7 +26,7 @@
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <OutputPath>Temp\Bin\Debug\Assembly-CSharp\</OutputPath>
-    <DefineConstants>UNITY_6000_0_26;UNITY_6000_0;UNITY_6000;UNITY_5_3_OR_NEWER;UNITY_5_4_OR_NEWER;UNITY_5_5_OR_NEWER;UNITY_5_6_OR_NEWER;UNITY_2017_1_OR_NEWER;UNITY_2017_2_OR_NEWER;UNITY_2017_3_OR_NEWER;UNITY_2017_4_OR_NEWER;UNITY_2018_1_OR_NEWER;UNITY_2018_2_OR_NEWER;UNITY_2018_3_OR_NEWER;UNITY_2018_4_OR_NEWER;UNITY_2019_1_OR_NEWER;UNITY_2019_2_OR_NEWER;UNITY_2019_3_OR_NEWER;UNITY_2019_4_OR_NEWER;UNITY_2020_1_OR_NEWER;UNITY_2020_2_OR_NEWER;UNITY_2020_3_OR_NEWER;UNITY_2021_1_OR_NEWER;UNITY_2021_2_OR_NEWER;UNITY_2021_3_OR_NEWER;UNITY_2022_1_OR_NEWER;UNITY_2022_2_OR_NEWER;UNITY_2022_3_OR_NEWER;UNITY_2023_1_OR_NEWER;UNITY_2023_2_OR_NEWER;UNITY_2023_3_OR_NEWER;UNITY_6000_0_OR_NEWER;UNITY_INCLUDE_TESTS;ENABLE_AR;ENABLE_AUDIO;ENABLE_CACHING;ENABLE_CLOTH;ENABLE_EVENT_QUEUE;ENABLE_MICROPHONE;ENABLE_MULTIPLE_DISPLAYS;ENABLE_PHYSICS;ENABLE_TEXTURE_STREAMING;ENABLE_LZMA;ENABLE_UNITYEVENTS;ENABLE_VR;ENABLE_WEBCAM;ENABLE_UNITYWEBREQUEST;ENABLE_WWW;ENABLE_CLOUD_SERVICES;ENABLE_CLOUD_SERVICES_ADS;ENABLE_CLOUD_SERVICES_USE_WEBREQUEST;ENABLE_CLOUD_SERVICES_CRASH_REPORTING;ENABLE_CLOUD_SERVICES_NATIVE_CRASH_REPORTING;ENABLE_CLOUD_SERVICES_PURCHASING;ENABLE_CLOUD_SERVICES_ANALYTICS;ENABLE_CLOUD_SERVICES_BUILD;ENABLE_EDITOR_GAME_SERVICES;ENABLE_UNITY_GAME_SERVICES_ANALYTICS_SUPPORT;ENABLE_CLOUD_LICENSE;ENABLE_EDITOR_HUB_LICENSE;ENABLE_WEBSOCKET_CLIENT;ENABLE_GENERATE_NATIVE_PLUGINS_FOR_ASSEMBLIES_API;ENABLE_DIRECTOR_AUDIO;ENABLE_DIRECTOR_TEXTURE;ENABLE_MANAGED_JOBS;ENABLE_MANAGED_TRANSFORM_JOBS;ENABLE_MANAGED_ANIMATION_JOBS;ENABLE_MANAGED_AUDIO_JOBS;ENABLE_ENGINE_CODE_STRIPPING;ENABLE_ONSCREEN_KEYBOARD;ENABLE_MANAGED_UNITYTLS;INCLUDE_DYNAMIC_GI;ENABLE_SCRIPTING_GC_WBARRIERS;PLATFORM_SUPPORTS_MONO;ENABLE_MARSHALLING_TESTS;ENABLE_VIDEO;ENABLE_NAVIGATION_OFFMESHLINK_TO_NAVMESHLINK;ENABLE_ACCELERATOR_CLIENT_DEBUGGING;ENABLE_ACCESSIBILITY;TEXTCORE_1_0_OR_NEWER;EDITOR_ONLY_NAVMESH_BUILDER_DEPRECATED;PLATFORM_ANDROID;UNITY_ANDROID;UNITY_ANDROID_API;ENABLE_EGL;ENABLE_NETWORK;ENABLE_RUNTIME_GI;ENABLE_CRUNCH_TEXTURE_COMPRESSION;UNITY_CAN_SHOW_SPLASH_SCREEN;UNITY_HAS_GOOGLEVR;UNITY_HAS_TANGO;ENABLE_SPATIALTRACKING;ENABLE_ETC_COMPRESSION;PLATFORM_EXTENDS_VULKAN_DEVICE;PLATFORM_HAS_MULTIPLE_SWAPCHAINS;UNITY_ANDROID_SUPPORTS_SHADOWFILES;PLATFORM_UPDATES_TIME_OUTSIDE_OF_PLAYER_LOOP;PLATFORM_EXTENDS_VULKAN_PIPELINE_CACHE;PLATFORM_SUPPORTS_SPLIT_GRAPHICS_JOBS;PLATFORM_HAS_ADDITIONAL_API_CHECKS;ENABLE_UNITYADS_RUNTIME;UNITY_UNITYADS_API;ENABLE_MONO;NET_4_6;NET_UNITY_4_8;ENABLE_PROFILER;DEBUG;TRACE;UNITY_ASSERTIONS;UNITY_EDITOR;UNITY_EDITOR_64;UNITY_EDITOR_WIN;ENABLE_UNITY_COLLECTIONS_CHECKS;ENABLE_BURST_AOT;UNITY_TEAM_LICENSE;ENABLE_CUSTOM_RENDER_TEXTURE;ENABLE_DIRECTOR;ENABLE_LOCALIZATION;ENABLE_SPRITES;ENABLE_TERRAIN;ENABLE_TILEMAP;ENABLE_TIMELINE;ENABLE_LEGACY_INPUT_MANAGER;TEXTCORE_FONT_ENGINE_1_5_OR_NEWER;TEXTCORE_TEXT_ENGINE_1_5_OR_NEWER;CSHARP_7_OR_LATER;CSHARP_7_3_OR_NEWER;YOO_ASSET_2;YOO_ASSET_2_3;YOO_ASSET_2_3_OR_NEWER</DefineConstants>
+    <DefineConstants>UNITY_6000_0_26;UNITY_6000_0;UNITY_6000;UNITY_5_3_OR_NEWER;UNITY_5_4_OR_NEWER;UNITY_5_5_OR_NEWER;UNITY_5_6_OR_NEWER;UNITY_2017_1_OR_NEWER;UNITY_2017_2_OR_NEWER;UNITY_2017_3_OR_NEWER;UNITY_2017_4_OR_NEWER;UNITY_2018_1_OR_NEWER;UNITY_2018_2_OR_NEWER;UNITY_2018_3_OR_NEWER;UNITY_2018_4_OR_NEWER;UNITY_2019_1_OR_NEWER;UNITY_2019_2_OR_NEWER;UNITY_2019_3_OR_NEWER;UNITY_2019_4_OR_NEWER;UNITY_2020_1_OR_NEWER;UNITY_2020_2_OR_NEWER;UNITY_2020_3_OR_NEWER;UNITY_2021_1_OR_NEWER;UNITY_2021_2_OR_NEWER;UNITY_2021_3_OR_NEWER;UNITY_2022_1_OR_NEWER;UNITY_2022_2_OR_NEWER;UNITY_2022_3_OR_NEWER;UNITY_2023_1_OR_NEWER;UNITY_2023_2_OR_NEWER;UNITY_2023_3_OR_NEWER;UNITY_6000_0_OR_NEWER;UNITY_INCLUDE_TESTS;ENABLE_AR;ENABLE_AUDIO;ENABLE_CACHING;ENABLE_CLOTH;ENABLE_EVENT_QUEUE;ENABLE_MICROPHONE;ENABLE_MULTIPLE_DISPLAYS;ENABLE_PHYSICS;ENABLE_TEXTURE_STREAMING;ENABLE_LZMA;ENABLE_UNITYEVENTS;ENABLE_VR;ENABLE_WEBCAM;ENABLE_UNITYWEBREQUEST;ENABLE_WWW;ENABLE_CLOUD_SERVICES;ENABLE_CLOUD_SERVICES_ADS;ENABLE_CLOUD_SERVICES_USE_WEBREQUEST;ENABLE_CLOUD_SERVICES_CRASH_REPORTING;ENABLE_CLOUD_SERVICES_NATIVE_CRASH_REPORTING;ENABLE_CLOUD_SERVICES_PURCHASING;ENABLE_CLOUD_SERVICES_ANALYTICS;ENABLE_CLOUD_SERVICES_BUILD;ENABLE_EDITOR_GAME_SERVICES;ENABLE_UNITY_GAME_SERVICES_ANALYTICS_SUPPORT;ENABLE_CLOUD_LICENSE;ENABLE_EDITOR_HUB_LICENSE;ENABLE_WEBSOCKET_CLIENT;ENABLE_GENERATE_NATIVE_PLUGINS_FOR_ASSEMBLIES_API;ENABLE_DIRECTOR_AUDIO;ENABLE_DIRECTOR_TEXTURE;ENABLE_MANAGED_JOBS;ENABLE_MANAGED_TRANSFORM_JOBS;ENABLE_MANAGED_ANIMATION_JOBS;ENABLE_MANAGED_AUDIO_JOBS;ENABLE_ENGINE_CODE_STRIPPING;ENABLE_ONSCREEN_KEYBOARD;ENABLE_MANAGED_UNITYTLS;INCLUDE_DYNAMIC_GI;ENABLE_SCRIPTING_GC_WBARRIERS;PLATFORM_SUPPORTS_MONO;ENABLE_MARSHALLING_TESTS;ENABLE_VIDEO;ENABLE_NAVIGATION_OFFMESHLINK_TO_NAVMESHLINK;ENABLE_ACCELERATOR_CLIENT_DEBUGGING;ENABLE_ACCESSIBILITY;TEXTCORE_1_0_OR_NEWER;EDITOR_ONLY_NAVMESH_BUILDER_DEPRECATED;PLATFORM_ANDROID;UNITY_ANDROID;UNITY_ANDROID_API;ENABLE_EGL;ENABLE_NETWORK;ENABLE_RUNTIME_GI;ENABLE_CRUNCH_TEXTURE_COMPRESSION;UNITY_CAN_SHOW_SPLASH_SCREEN;UNITY_HAS_GOOGLEVR;UNITY_HAS_TANGO;ENABLE_SPATIALTRACKING;ENABLE_ETC_COMPRESSION;PLATFORM_EXTENDS_VULKAN_DEVICE;PLATFORM_HAS_MULTIPLE_SWAPCHAINS;UNITY_ANDROID_SUPPORTS_SHADOWFILES;PLATFORM_UPDATES_TIME_OUTSIDE_OF_PLAYER_LOOP;PLATFORM_EXTENDS_VULKAN_PIPELINE_CACHE;PLATFORM_SUPPORTS_SPLIT_GRAPHICS_JOBS;PLATFORM_HAS_ADDITIONAL_API_CHECKS;ENABLE_UNITYADS_RUNTIME;UNITY_UNITYADS_API;ENABLE_MONO;NET_4_6;NET_UNITY_4_8;ENABLE_PROFILER;DEBUG;TRACE;UNITY_ASSERTIONS;UNITY_EDITOR;UNITY_EDITOR_64;UNITY_EDITOR_WIN;ENABLE_UNITY_COLLECTIONS_CHECKS;ENABLE_BURST_AOT;UNITY_TEAM_LICENSE;ENABLE_CUSTOM_RENDER_TEXTURE;ENABLE_DIRECTOR;ENABLE_LOCALIZATION;ENABLE_SPRITES;ENABLE_TERRAIN;ENABLE_TILEMAP;ENABLE_TIMELINE;ENABLE_LEGACY_INPUT_MANAGER;TEXTCORE_FONT_ENGINE_1_5_OR_NEWER;TEXTCORE_TEXT_ENGINE_1_5_OR_NEWER;CSHARP_7_OR_LATER;CSHARP_7_3_OR_NEWER</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <NoWarn>0169,0649</NoWarn>
@@ -48,33 +48,34 @@
   <ItemGroup>
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\GameLogic\GameManager.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\EventDefine\UserEventDefine.cs" />
+    <Compile Include="Assets\PatchLogic\FsmNode\FsmClearCacheBundle.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\BattleLogic\EntityBullet.cs" />
-    <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\PatchLogic\FsmNode\FsmUpdatePackageManifest.cs" />
-    <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\PatchLogic\FsmNode\FsmDownloadPackageOver.cs" />
-    <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\PatchLogic\FsmNode\FsmDownloadPackageFiles.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\Behaviour\BackgroundScroller.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\WindowLogic\UILoadingWindow.cs" />
-    <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\PatchLogic\PatchWindow.cs" />
-    <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\PatchLogic\FsmNode\FsmCreateDownloader.cs" />
+    <Compile Include="Assets\PatchLogic\PatchWindow.cs" />
+    <Compile Include="Assets\PatchLogic\PatchOperation.cs" />
+    <Compile Include="Assets\PatchLogic\FsmNode\FsmInitializePackage.cs" />
+    <Compile Include="Assets\PatchLogic\FsmNode\FsmUpdatePackageManifest.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\EventDefine\PatchEventDefine.cs" />
-    <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\PatchLogic\FsmNode\FsmStartGame.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\WindowLogic\UIAboutWindow.cs" />
+    <Compile Include="Assets\PatchLogic\FsmNode\FsmDownloadPackageFiles.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\GameLogic\SceneBattle.cs" />
+    <Compile Include="Assets\PatchLogic\FsmNode\FsmStartGame.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\GameLogic\SceneHome.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\BattleLogic\BattleRoom.cs" />
     <Compile Include="Assets\HybridCLRData\Generated\AOTGenericReferences.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\Boot.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\WindowLogic\UIBattleWindow.cs" />
-    <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\PatchLogic\FsmNode\FsmRequestPackageVersion.cs" />
-    <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\PatchLogic\FsmNode\FsmInitializePackage.cs" />
-    <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\PatchLogic\FsmNode\FsmClearCacheBundle.cs" />
+    <Compile Include="Assets\PatchLogic\FsmNode\FsmDownloadPackageOver.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\BattleLogic\EntityAsteroid.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\BattleLogic\EntityEnemy.cs" />
-    <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\PatchLogic\PatchOperation.cs" />
+    <Compile Include="Assets\PatchLogic\FsmNode\FsmCreateDownloader.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\WindowLogic\UIHomeWindow.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\EventDefine\BattleEventDefine.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\BattleLogic\EntityPlayer.cs" />
+    <Compile Include="Assets\AOTLauncher.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\EventDefine\SceneEventDefine.cs" />
+    <Compile Include="Assets\PatchLogic\FsmNode\FsmRequestPackageVersion.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\BattleLogic\EntityEffect.cs" />
     <None Include="Assets\HotUpdateAssets\HotUpdateDll\HotUpdateDLLList.txt" />
     <None Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameSetting\AssetBundleCollectorConfig.xml" />
@@ -828,14 +829,8 @@
     <Reference Include="YooAsset.Editor">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\YooAsset.Editor.dll</HintPath>
     </Reference>
-    <Reference Include="Unity.AI.Navigation">
-      <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.AI.Navigation.dll</HintPath>
-    </Reference>
     <Reference Include="Unity.Rider.Editor">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.Rider.Editor.dll</HintPath>
-    </Reference>
-    <Reference Include="Unity.AI.Navigation.Updater">
-      <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.AI.Navigation.Updater.dll</HintPath>
     </Reference>
     <Reference Include="HybridCLR.Editor">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\HybridCLR.Editor.dll</HintPath>
@@ -851,9 +846,6 @@
     </Reference>
     <Reference Include="Unity.TestTools.CodeCoverage.Editor.OpenCover.Model">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.TestTools.CodeCoverage.Editor.OpenCover.Model.dll</HintPath>
-    </Reference>
-    <Reference Include="Unity.AI.Navigation.Editor">
-      <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.AI.Navigation.Editor.dll</HintPath>
     </Reference>
     <Reference Include="UnityEngine.UI">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\UnityEngine.UI.dll</HintPath>
@@ -872,9 +864,6 @@
     </Reference>
     <Reference Include="Unity.Performance.Profile-Analyzer.Editor">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.Performance.Profile-Analyzer.Editor.dll</HintPath>
-    </Reference>
-    <Reference Include="Unity.AI.Navigation.Editor.ConversionSystem">
-      <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.AI.Navigation.Editor.ConversionSystem.dll</HintPath>
     </Reference>
     <Reference Include="Unity.TextMeshPro.Editor">
       <HintPath>E:\UnityProject\HybridCLR_YooAsset_UniTask\Library\ScriptAssemblies\Unity.TextMeshPro.Editor.dll</HintPath>
@@ -902,10 +891,6 @@
       <Project>{32f4d956-d904-85df-62db-b9fc4ed3b8b1}</Project>
       <Name>UniTask.DOTween</Name>
     </ProjectReference>
-    <ProjectReference Include="AOTPublic.csproj">
-      <Project>{76ec82e1-f6ab-a713-5b6e-26e607cae92e}</Project>
-      <Name>AOTPublic</Name>
-    </ProjectReference>
     <ProjectReference Include="UniFramework.Event.csproj">
       <Project>{279ad970-b335-1c3c-2cf1-36a8dcd1db39}</Project>
       <Name>UniFramework.Event</Name>
@@ -917,10 +902,6 @@
     <ProjectReference Include="UniTask.csproj">
       <Project>{e8a89cc3-7c97-9d4e-bed1-2876ec45868d}</Project>
       <Name>UniTask</Name>
-    </ProjectReference>
-    <ProjectReference Include="HotUpdate.csproj">
-      <Project>{3e0da64f-92ea-7238-d6c7-248263c95921}</Project>
-      <Name>HotUpdate</Name>
     </ProjectReference>
     <ProjectReference Include="UniTask.TextMeshPro.csproj">
       <Project>{6e20cd00-0ba3-4e27-fd09-0045e640af42}</Project>

@@ -9,12 +9,16 @@ using HybridCLR.Editor.Commands;
 using HybridCLR.Editor;
 using UnityEditorInternal;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using YooAsset.Editor;
 using YooAsset;
 using Newtonsoft.Json;
 using System.Xml;
+using HybridCLR.Editor.AOT;
+using HybridCLR.Editor.Meta;
 using HybridCLR.Editor.Settings;
+using UnityEditor.Build.Pipeline.Utilities;
 
 public class BuildHelper
 {
@@ -43,7 +47,7 @@ public class BuildHelper
 
     public static string AOTDLLGroupName = "AOT";
     // Start is called before the first frame update
-    static string[] GetBuildScenes()
+    public static string[] GetBuildScenes()
     {
         List<string> names = new List<string>();
         foreach (EditorBuildSettingsScene e in EditorBuildSettings.scenes)
@@ -59,7 +63,7 @@ public class BuildHelper
 
 
 
-    [UnityEditor.MenuItem("整合工具/打APK包")]
+    [MenuItem("整合工具/打APK包")]
     public static void BuildAPK()
     {
         //先生成AOT文件，再进行打包，以确保所有引用库都被引用,废弃，因HybridCLR会修改构建管线，自动执行一次GenerateALL
@@ -205,22 +209,55 @@ public class BuildHelper
     //     }
     //     #endregion
     // }
+    
+    [MenuItem("整合工具/获取需要补充元数据的Dll")]
+    public static void GetPatchedAOTAssemblyList()
+    {
+        BuildTarget target = EditorUserBuildSettings.activeBuildTarget;
+        CompileDllCommand.CompileDll(target);
+        var gs = SettingsUtil.HybridCLRSettings;
+        List<string> hotUpdateDllNames = SettingsUtil.HotUpdateAssemblyNamesExcludePreserved;
+
+        AssemblyReferenceDeepCollector collector = new AssemblyReferenceDeepCollector(MetaUtil.CreateHotUpdateAndAOTAssemblyResolver(target, hotUpdateDllNames), hotUpdateDllNames);
+        var analyzer = new Analyzer(new Analyzer.Options
+        {
+            MaxIterationCount = Math.Min(20, gs.maxGenericReferenceIteration),
+            Collector = collector,
+        });
+
+        analyzer.Run();
+
+        var types = analyzer.AotGenericTypes.ToList();
+        var methods = analyzer.AotGenericMethods.ToList();
+
+        List<dnlib.DotNet.ModuleDef> modules = new HashSet<dnlib.DotNet.ModuleDef>(
+            types.Select(t => t.Type.Module).Concat(methods.Select(m => m.Method.Module))).ToList();
+        modules.Sort((a, b) => a.Name.CompareTo(b.Name));
+
+        List<string> patchtedAOTAssemblys = new List<string>();
+        foreach (dnlib.DotNet.ModuleDef module in modules)
+        {
+            Debug.Log($"需要补充元数据的AOT ========= {module}");
+            patchtedAOTAssemblys.Add(module.Name);
+        }
+
+        gs.patchAOTAssemblies = patchtedAOTAssemblys.ToArray();
+    }
     [MenuItem("整合工具/生成AOT补充文件并复制进文件夹")]
     public static void GenerateAOTDllListFile()
     {
-        //先生成AOT文件，再进行打包，以确保所有引用库都被引用
-        PrebuildCommand.GenerateAll();
+        //先生成AOT文件
+        Il2CppDefGeneratorCommand.GenerateIl2CppDef();
+        LinkGeneratorCommand.GenerateLinkXml();
+        StripAOTDllCommand.GenerateStripedAOTDlls();
     
         List<string> dllNames = new List<string>();
+        
+        var patchAOTAssemblies = SettingsUtil.HybridCLRSettings.patchAOTAssemblies;
     
-        var setting = HybridCLRSettings.LoadOrCreate();
-        SerializedObject _serializedObject;
-        _serializedObject = new SerializedObject(setting);
-        var patchAOTAssemblies = _serializedObject.FindProperty("patchAOTAssemblies");
-    
-        foreach (SerializedProperty sp in patchAOTAssemblies)
+        foreach (var patchAOTAssembly in patchAOTAssemblies)
         {
-            dllNames.Add(sp.stringValue + ".dll");
+            dllNames.Add(patchAOTAssembly + ".dll");
         }
     
         var json = JsonConvert.SerializeObject(dllNames);
@@ -239,7 +276,7 @@ public class BuildHelper
                 }
             }
         }
-    
+        
         var dllExportPath = SettingsUtil.GetAssembliesPostIl2CppStripDir(EditorUserBuildSettings.activeBuildTarget);
     
         Dictionary<string, byte[]> dllDatas = new Dictionary<string, byte[]>();
@@ -270,22 +307,14 @@ public class BuildHelper
     public static void BuildAndCopyHotUpdateDll()
     {
         List<string> dllNames = new List<string>();
-        var setting = HybridCLRSettings.LoadOrCreate();
-        SerializedObject _serializedObject;
-        _serializedObject = new SerializedObject(setting);
-        var _hotUpdateAssemblyDefinitions = _serializedObject.FindProperty("hotUpdateAssemblyDefinitions");
-        var _hotUpdateAssemblies = _serializedObject.FindProperty("hotUpdateAssemblies");
-    
-    
-        foreach (SerializedProperty sp in _hotUpdateAssemblyDefinitions)
+        var _hotUpdateAssemblies = SettingsUtil.HybridCLRSettings.preserveHotUpdateAssemblies;
+
+        
+        foreach (var hotUpdateAssembly in _hotUpdateAssemblies)
         {
-            AssemblyDefinitionAsset ada = (AssemblyDefinitionAsset)sp.objectReferenceValue;
-            dllNames.Add(ada.name + ".dll");
+            dllNames.Add(hotUpdateAssembly + ".dll");
         }
-        foreach (SerializedProperty sp in _hotUpdateAssemblies)
-        {
-            dllNames.Add(sp.stringValue + ".dll");
-        }
+        
         CompileDllCommand.CompileDllActiveBuildTarget();
     
         var dllExportPath = SettingsUtil.GetHotUpdateDllsOutputDirByTarget(EditorUserBuildSettings.activeBuildTarget);

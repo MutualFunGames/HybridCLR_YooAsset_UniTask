@@ -14,25 +14,29 @@ Assembly Definition是Unity2017.3以后出的一个功能，主要在于解决�
 
 当我们划分AOT程序集以及热更新程序集时，可以用到该功能
 
-### AOT与热更新程序集的关系
-
-#### AOT程序集
-
-AOT程序集是随包一起打出，不会被更新的代码
-
-在当前框架定义下，Assembly-CSharp为主AOT程序集，用AssemblyDefinition划分其他AOT程序集
+### AOT与热更新程序集的划分
 
 #### 热更新程序集
 
 热更新程序集理论上可以是Assembly-CSharp程序集，但是为了保证项目逻辑清晰，资源管理方便，当前框架使用AssemblyDefinition划分单独的dll作为热更新程序集
 
+需要在HybridCLR-Settings-hotUpdateAssemblyDefinitions中将所有热更新的AssemblyDefinition加入列表
+
+`hotUpdateAssemblyDefinitions`和`hotUpdateAssemblies`合并后构成最终的热更新dll列表。同一个assembly不要在两个列表中同时出现，会报错！
+
+热更新assembly不应该被il2cpp处理并且编译到最终的包体里。HybridCLR处理了`IFilterBuildAssemblies`回调， 将热更新dll从build assemblies列表移除。
+
+#### AOT程序集
+
+AOT程序集是随包一起打出，不会被更新的代码
+
+在当前仓库定义下，Assembly-CSharp为主AOT程序集，用AssemblyDefinition划分其他AOT程序集
+
+把Assembly-CSharp作为AOT程序集，强烈建议关闭热更新程序集的`auto reference`选项。因为Assembly-CSharp是最顶层assembly，它会自动引用剩余所有assembly，很容易就出现失误引用热更新程序集的情况。
+
 ### UniTask
 
-UniTask是Github上的开源库，为Unity提供一个高性能异步方案，可以代替协程实现异步操作，同时兼容Unity生命周期，使得Awake，Start，协程等方法都可以异步执行，但是仍然运行在主线程上，C#的Task会运行在其他线程
-
-### AOT补充元数据
-
-因为某些程序集可能没有被AOT引用到而没有打包进包体内或没有被加载进内存中，导致热更新调用这些程序集时找不到相关类型，所以需要运行时主动去加载对应的dll，一般而言，使用第三方库都可能需要通过这种方法进行补充，经过测试，本项目中的YooAsset和NewtonJson，只需要正确设置热更新AssemblyDefinition引用，不需要通过AOT补充元数据即可调用，而UniTask需要补充后才可以调用
+UniTask是Github上的开源库，为Unity提供一个高性能异步方案，可以代替协程实现异步操作，同时兼容Unity生命周期，使得Awake，Start，协程等方法都可以异步执行，但是仍然运行在主线程上
 
 ### 热更新Dll的加载
 
@@ -43,6 +47,8 @@ HybridCLR官方推荐直接代码直接挂载在预制体上，通过AssetBundle
 HybridCLR在每次出包时，需要编译热更新代码，执行CompileDll-ActivityTarget打包出DLL，修改后缀名后,作为RawFile打包成DLL进行加载
 
 热更新DLL引用库发生变动，则需要重新执行Generate-All，获取依赖关系，生成Link,如果热更新引用了AOT部分没引用过的组件,则需要用整合工具生成link,也可以直接关闭代码裁剪
+
+也就是说如果热更新引用库发生变化,需要重新打包
 
 ## 热更新运行流程
 
@@ -78,17 +84,7 @@ HybridCLR在每次出包时，需要编译热更新代码，执行CompileDll-Act
 
 2.运行整合工具-打初始AB包
 
-### AOT部分代码改动
-
-#### 需要通过注入元数据方式加载的第三方库更新
-
-1.运行整合工具-生成AOT并复制进文件夹
-
-2.执行整合工具-打增量AB包
-
-该方法只支持第三方库只被热更新部分引用到，如果AOT部分也引用到该第三方库，也需要重新打APK包
-
-#### AOT部分代码及资源改动
+### AOT代码改动
 
 重新打APK
 
@@ -122,7 +118,7 @@ Unity提供了一个方式来告诉Unity引擎，哪些类型是不能够被剪�
 
 HybridCLR自带的生成工具可以自动引用热更新及AOT代码中的类，并添加到link.xml中，但是无法获取热更新预制体身上已挂在的，但没有在代码中显式调用的组件
 
-例如：假设一个热更新的预制体上挂载了Animator组件，那么AnimationClip类会被裁剪掉，或者预制体挂载了Rigibody组件，那么PhysicsMaterial类会被裁剪掉，，并报出一个错误，提示你关闭代码裁剪
+例如：假设一个热更新的预制体上挂载了Animator组件，那么AnimationClip类会被裁剪掉，或者预制体挂载了Rigibody组件，那么PhysicsMaterial类会被裁剪掉，并报出一个错误，提示你关闭代码裁剪
 
 ### 整合工具-补全热更新预制体依赖
 

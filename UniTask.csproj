@@ -90,8 +90,8 @@
     <Compile Include="Assets\Plugins\UniTask\Runtime\UniTask.WhenAny.Generated.cs" />
     <Compile Include="Assets\Plugins\UniTask\Runtime\Internal\ValueStopwatch.cs" />
     <Compile Include="Assets\Plugins\UniTask\Runtime\CompilerServices\AsyncUniTaskVoidMethodBuilder.cs" />
-    <Compile Include="Assets\Plugins\UniTask\Runtime\EnumerableAsyncExtensions.cs" />
     <Compile Include="Assets\Plugins\UniTask\Runtime\AsyncUnit.cs" />
+    <Compile Include="Assets\Plugins\UniTask\Runtime\EnumerableAsyncExtensions.cs" />
     <Compile Include="Assets\Plugins\UniTask\Runtime\IUniTaskAsyncEnumerable.cs" />
     <Compile Include="Assets\Plugins\UniTask\Runtime\Triggers\AsyncTriggerExtensions.cs" />
     <Compile Include="Assets\Plugins\UniTask\Runtime\TimeoutController.cs" />

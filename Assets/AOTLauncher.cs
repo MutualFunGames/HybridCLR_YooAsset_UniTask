@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
@@ -6,7 +6,7 @@ using UnityEngine;
 using UniFramework.Event;
 using YooAsset;
 
-public class Boot : MonoBehaviour
+public class AOTLauncher : MonoBehaviour
 {
     /// <summary>
     /// 资源系统运行模式
@@ -20,7 +20,7 @@ public class Boot : MonoBehaviour
         Application.runInBackground = true;
         DontDestroyOnLoad(this.gameObject);
     }
-    async UniTaskVoid Start()
+    async UniTask Start()
     {
         // 游戏管理器
         GameManager.Instance.Behaviour = this;

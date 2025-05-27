@@ -21,11 +21,11 @@ public class HybridBuilderWindow : EditorWindow
     private ToolbarMenu _hybridBuilderSettingMenu;
     private VisualElement _container;
 
-    [MenuItem("整合工具/Hybrid AssetBundle Builder", false, 102)]
+    [MenuItem("整合工具/Hybrid Builder", false, 102)]
     public static void OpenWindow()
     {
         HybridBuilderWindow window =
-            GetWindow<HybridBuilderWindow>("Hybrid AssetBundle Builder", true, WindowsDefine.DockedWindowTypes);
+            GetWindow<HybridBuilderWindow>("Hybrid Builder", true, WindowsDefine.DockedWindowTypes);
         window.minSize = new Vector2(800, 600);
     }
 
