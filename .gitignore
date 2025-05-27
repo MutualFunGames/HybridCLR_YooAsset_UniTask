@@ -13,3 +13,5 @@ Temp/
 Bundles/
 Sandbox/
 obj/
+dll/
+HybridCLRData/
