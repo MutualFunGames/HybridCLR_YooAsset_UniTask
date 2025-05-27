@@ -78,7 +78,7 @@ namespace YooAsset.Editor
             var builtinShaderBundleName = GetBuiltinShaderBundleName();
 
             ScriptableBuildParameters buildParameters = new ScriptableBuildParameters();
-            buildParameters.BuildOutputRoot = AssetBundleBuilderHelper.GetDefaultBuildOutputRoot();
+            buildParameters.BuildOutputRoot = _hybridBuilderSetting.buildOutputPath;
             buildParameters.BuildinFileRoot = AssetBundleBuilderHelper.GetStreamingAssetsRoot();
             buildParameters.BuildPipeline = BuildPipeline.ToString();
             buildParameters.BuildBundleType = (int) EBuildBundleType.AssetBundle;

@@ -18,4 +18,11 @@ MonoBehaviour:
   releaseBuildVersion: 11
   versionFileName: VERSION.txt
   _isUseSelfIncrementingVersions: 1
+  _isClearBuildCache: 1
+  _isUseAssetDependDB: 1
+  _assetEncyptionClassName: YooAsset.Editor.EncryptionNone
+  _assetCompressOption: 2
+  _assetFileNameStyle: 1
+  _assetBuildinFileCopyOption: 2
+  _assetBuildinFileCopyParams: 12321
   _hybridBuildOption: 4
