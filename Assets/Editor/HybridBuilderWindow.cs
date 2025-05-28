@@ -13,11 +13,10 @@ public class HybridBuilderWindow : EditorWindow
 {
     private string _buildPackage;
     private HybridBuilderSetting _hybridBuilderSetting;
-    private EBuildPipeline _buildPipeline;
+
 
     private Toolbar _toolbar;
     private ToolbarMenu _packageMenu;
-    private ToolbarMenu _pipelineMenu;
     private ToolbarMenu _hybridBuilderSettingMenu;
     private VisualElement _container;
 
@@ -68,21 +67,7 @@ public class HybridBuilderWindow : EditorWindow
 
                 _toolbar.Add(_packageMenu);
             }
-
-            // 构建管线
-            {
-                _pipelineMenu = new ToolbarMenu();
-                _pipelineMenu.style.width = 200;
-                _pipelineMenu.menu.AppendAction(EBuildPipeline.EditorSimulateBuildPipeline.ToString(),
-                    PipelineMenuAction, PipelineMenuFun, EBuildPipeline.EditorSimulateBuildPipeline);
-                _pipelineMenu.menu.AppendAction(EBuildPipeline.BuiltinBuildPipeline.ToString(), PipelineMenuAction,
-                    PipelineMenuFun, EBuildPipeline.BuiltinBuildPipeline);
-                _pipelineMenu.menu.AppendAction(EBuildPipeline.ScriptableBuildPipeline.ToString(), PipelineMenuAction,
-                    PipelineMenuFun, EBuildPipeline.ScriptableBuildPipeline);
-                _pipelineMenu.menu.AppendAction(EBuildPipeline.RawFileBuildPipeline.ToString(), PipelineMenuAction,
-                    PipelineMenuFun, EBuildPipeline.RawFileBuildPipeline);
-                _toolbar.Add(_pipelineMenu);
-            }
+            
 
             var hybridBuilderSettings = FindAllHybridBuilderSettings();
             if (hybridBuilderSettings.Count == 0)
@@ -119,35 +104,15 @@ public class HybridBuilderWindow : EditorWindow
     {
         // 清空扩展区域
         _container.Clear();
-
-        _buildPipeline = AssetBundleBuilderSetting.GetPackageBuildPipeline(_buildPackage);
+        
         _packageMenu.text = _buildPackage;
-        _pipelineMenu.text = _buildPipeline.ToString();
         _hybridBuilderSettingMenu.text = _hybridBuilderSetting.name;
 
         var buildTarget = EditorUserBuildSettings.activeBuildTarget;
-        if (_buildPipeline == EBuildPipeline.EditorSimulateBuildPipeline)
-        {
-            var viewer = new EditorSimulateBuildPipelineViewer(_buildPackage, buildTarget, _container);
-        }
-        else if (_buildPipeline == EBuildPipeline.BuiltinBuildPipeline)
-        {
-            var viewer = new BuiltinBuildPipelineViewer(_buildPackage, buildTarget, _container);
-        }
-        else if (_buildPipeline == EBuildPipeline.ScriptableBuildPipeline)
-        {
-            //实例化Viewer
-            var viewer =
-                new HybridScriptableBuildPipelineViewer(_buildPackage, buildTarget, _hybridBuilderSetting, _container);
-        }
-        else if (_buildPipeline == EBuildPipeline.RawFileBuildPipeline)
-        {
-            var viewer = new RawfileBuildpipelineViewer(_buildPackage, buildTarget, _container);
-        }
-        else
-        {
-            throw new System.NotImplementedException(_buildPipeline.ToString());
-        }
+
+        var viewer =
+            new HybridScriptableBuildPipelineViewer(_buildPackage, buildTarget, _hybridBuilderSetting, _container);
+
     }
 
     /// <summary>
@@ -226,26 +191,6 @@ public class HybridBuilderWindow : EditorWindow
     {
         var packageName = (string) action.userData;
         if (_buildPackage == packageName)
-            return DropdownMenuAction.Status.Checked;
-        else
-            return DropdownMenuAction.Status.Normal;
-    }
-
-    private void PipelineMenuAction(DropdownMenuAction action)
-    {
-        var pipelineType = (EBuildPipeline) action.userData;
-        if (_buildPipeline != pipelineType)
-        {
-            _buildPipeline = pipelineType;
-            AssetBundleBuilderSetting.SetPackageBuildPipeline(_buildPackage, pipelineType);
-            RefreshBuildPipelineView();
-        }
-    }
-
-    private DropdownMenuAction.Status PipelineMenuFun(DropdownMenuAction action)
-    {
-        var pipelineType = (EBuildPipeline) action.userData;
-        if (_buildPipeline == pipelineType)
             return DropdownMenuAction.Status.Checked;
         else
             return DropdownMenuAction.Status.Normal;

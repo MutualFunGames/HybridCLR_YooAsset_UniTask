@@ -13,9 +13,11 @@ MonoBehaviour:
   m_Name: HybridBuilderSettings
   m_EditorClassIdentifier: 
   _buildOutputPath: E:/UnityProject/HybridCLR_YooAsset_UniTask/HybridCLRData
-  assetBuildVersion: 11
-  scriptBuildVersion: 11
-  releaseBuildVersion: 11
+  _patchedAOTDLLFolder: {fileID: 102900000, guid: 11b7f96fc9278374ba086b0d6bd5c1cb, type: 3}
+  _hotUpdateDLLFolder: {fileID: 0}
+  _releaseBuildVersion: 2
+  _assetBuildVersion: 2
+  _scriptBuildVersion: 1
   versionFileName: VERSION.txt
   _isUseSelfIncrementingVersions: 1
   _isClearBuildCache: 1
@@ -23,6 +25,6 @@ MonoBehaviour:
   _assetEncyptionClassName: YooAsset.Editor.EncryptionNone
   _assetCompressOption: 2
   _assetFileNameStyle: 1
-  _assetBuildinFileCopyOption: 2
+  _assetBuildinFileCopyOption: 1
   _assetBuildinFileCopyParams: 12321
-  _hybridBuildOption: 4
+  _hybridBuildOption: 0

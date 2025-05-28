@@ -1,0 +1,59 @@
+{
+    "FileVersion": "1.0.0",
+    "PackageName": "TestPackage",
+    "PackageVersion": "1_1_1",
+    "Wrappers": [
+        {
+            "BundleGUID": "ade6ee77c0fbd363a16f6dd538809936",
+            "FileName": "assets_hotupdateassets_aotdll_aotdlllist_txt.rawfile"
+        },
+        {
+            "BundleGUID": "48a6a2f2eb1de7340ee1829b414768f2",
+            "FileName": "assets_hotupdateassets_aotdll_mscorlib_dll_bytes.rawfile"
+        },
+        {
+            "BundleGUID": "ee267dfe4b3a85bdd99db0852892096b",
+            "FileName": "assets_hotupdateassets_aotdll_system_core_dll_bytes.rawfile"
+        },
+        {
+            "BundleGUID": "ab7881a9892f77e1086ac0c4be929d73",
+            "FileName": "assets_hotupdateassets_aotdll_system_dll_bytes.rawfile"
+        },
+        {
+            "BundleGUID": "5dcd81061aa67fa74fd7ef29fc042a4d",
+            "FileName": "assets_hotupdateassets_aotdll_unitask_dll_bytes.rawfile"
+        },
+        {
+            "BundleGUID": "0c24454f469c075bff784005167be6f9",
+            "FileName": "assets_hotupdateassets_hotupdatedll_hotupdatedlllist_txt.rawfile"
+        },
+        {
+            "BundleGUID": "dcf63d4dcf67d9cd7baeb03b7fdfa752",
+            "FileName": "assets_hotupdateassets_hotupdatedll_hotupdate_dll_bytes.rawfile"
+        },
+        {
+            "BundleGUID": "b3aa9196d09ee5c95cf37991b4a36abe",
+            "FileName": "assets_hotupdateassets_materials.bundle"
+        },
+        {
+            "BundleGUID": "7ba67614902a248dd4d65112f70fea72",
+            "FileName": "assets_hotupdateassets_prefabs.bundle"
+        },
+        {
+            "BundleGUID": "90d65ca8421bd66104b727c7f9b3a4c6",
+            "FileName": "assets_hotupdateassets_scenes.bundle"
+        },
+        {
+            "BundleGUID": "5a10248fe3630053264e3302a6e56c1e",
+            "FileName": "assets_hotupdateassets_textures.bundle"
+        },
+        {
+            "BundleGUID": "9ed37c4e59f1fdcad9c85dd83eba7422",
+            "FileName": "assets_hotupdateassets_uiprefabs.bundle"
+        },
+        {
+            "BundleGUID": "0985e8a6b279150e44f81650b8ef5584",
+            "FileName": "unityshaders.bundle"
+        }
+    ]
+}

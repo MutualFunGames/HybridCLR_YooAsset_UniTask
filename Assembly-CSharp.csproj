@@ -77,7 +77,7 @@
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\EventDefine\SceneEventDefine.cs" />
     <Compile Include="Assets\PatchLogic\FsmNode\FsmRequestPackageVersion.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Runtime\BattleLogic\EntityEffect.cs" />
-    <None Include="Assets\HotUpdateAssets\HotUpdateDll\HotUpdateDLLList.txt" />
+    <None Include="Assets\HotUpdateAssets\HotUpdateDLL\HotUpdateDLLList.txt" />
     <None Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameSetting\AssetBundleCollectorConfig.xml" />
     <None Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameRes\Shader\UnlitShader.shader" />
     <None Include="Assets\HybridCLRData\Generated\link.xml" />
@@ -87,7 +87,8 @@
     <None Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameRes\UIFont\LICENSE.txt" />
     <None Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameRes\Config\config_test.json" />
     <None Include="Assets\StreamingAssets\VERSION.txt" />
-    <None Include="Assets\HotUpdateAssets\AOTDll\AOTDLLList.txt" />
+    <None Include="Assets\StreamingAssets\yoo\TestPackage\BuildinCatalog.json" />
+    <None Include="Assets\HotUpdateAssets\AOTDLL\AOTDLLList.txt" />
     <Reference Include="UnityEngine">
       <HintPath>E:\Unity\Unity.3.24f1c2\6000.0.26f1c1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>
     </Reference>

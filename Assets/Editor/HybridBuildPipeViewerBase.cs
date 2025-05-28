@@ -4,9 +4,11 @@ using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEditor.UIElements;
 using UnityEngine;
 
 using UnityEngine.UIElements;
+using Object = UnityEngine.Object;
 
 namespace YooAsset.Editor
 {
@@ -28,6 +30,8 @@ namespace YooAsset.Editor
         private EnumField _outputNameStyleField;
         private EnumField _copyBuildinFileOptionField;
         private TextField _copyBuildinFileTagsField;
+        private ObjectField _patchedAOTDLLFolderField;
+        private ObjectField _hotUpdateDLLFolderField;
         private Toggle _clearBuildCacheToggle;
         private Toggle _useAssetDependencyDBToggle;
 
@@ -43,7 +47,8 @@ namespace YooAsset.Editor
             _hybridBuilderSetting = hybridBuildSetting;
 
             CreateView(parent);
-            RefreshView();
+            RefreshScriptCollectorGourpNameView();
+            RefreshBuildinFileCopyOptionView();
         }
 
 
@@ -64,8 +69,16 @@ namespace YooAsset.Editor
             _buildOutputField.SetValueWithoutNotify(_hybridBuilderSetting.buildOutputPath);
             _buildOutputField.SetEnabled(false);
             
-            var browseBuuton = assetOutputPar.Q<Button>("BrowseButton");
-            browseBuuton.clicked += OutputPathBroseButton_Clicked;
+            var buildOutputPathBrowserButton = assetOutputPar.Q<Button>("BrowseButton");
+            buildOutputPathBrowserButton.clicked += () =>
+            {
+                var defaultPath=_hybridBuilderSetting.buildOutputPath;
+                BrowserFolder(defaultPath, (selectPath) =>
+                {
+                    _hybridBuilderSetting.buildOutputPath = selectPath;
+                    _buildOutputField.SetValueWithoutNotify(selectPath);
+                });
+            };
             
 
 
@@ -149,7 +162,7 @@ namespace YooAsset.Editor
             {
                 _hybridBuilderSetting.assetBuildinFileCopyOption =
                     (EBuildinFileCopyOption) _copyBuildinFileOptionField.value;
-                RefreshView();
+                RefreshBuildinFileCopyOptionView();
             });
 
             // 首包文件拷贝参数
@@ -161,6 +174,39 @@ namespace YooAsset.Editor
                 _hybridBuilderSetting.assetBuildinFileCopyParams = _copyBuildinFileTagsField.value;
             });
 
+            
+            _patchedAOTDLLFolderField= Root.Q<ObjectField>(nameof(_hybridBuilderSetting.PatchedAOTDLLFolder));
+            _patchedAOTDLLFolderField.objectType = typeof(DefaultAsset);
+            _patchedAOTDLLFolderField.SetValueWithoutNotify(_hybridBuilderSetting.PatchedAOTDLLFolder);
+            _patchedAOTDLLFolderField.RegisterValueChangedCallback((evt) =>
+            {
+                var assetPath = AssetDatabase.GetAssetPath(evt.newValue);
+                if (!Directory.Exists(assetPath))
+                {
+                    Debug.unityLogger.Log($"该文件不是文件夹类型 ===> {assetPath}");
+                    _patchedAOTDLLFolderField.SetValueWithoutNotify(evt.previousValue);
+                }
+                _hybridBuilderSetting.PatchedAOTDLLFolder = evt.newValue as DefaultAsset;
+            });
+
+            
+            _hotUpdateDLLFolderField= Root.Q<ObjectField>(nameof(_hybridBuilderSetting.HotUpdateDLLFolder));
+            _hotUpdateDLLFolderField.objectType = typeof(DefaultAsset);
+            _hotUpdateDLLFolderField.SetValueWithoutNotify(_hybridBuilderSetting.HotUpdateDLLFolder);
+            _hotUpdateDLLFolderField.RegisterValueChangedCallback((evt) =>
+            {
+                var assetPath = AssetDatabase.GetAssetPath(evt.newValue);
+                if (!Directory.Exists(assetPath))
+                {
+                    Debug.unityLogger.Log($"该文件不是文件夹类型 ===> {assetPath}");
+                    _hotUpdateDLLFolderField.SetValueWithoutNotify(evt.previousValue);
+                    return;
+                }
+                _hybridBuilderSetting.HotUpdateDLLFolder = evt.newValue as DefaultAsset;
+            });
+
+            
+            
             // 清理构建缓存
             bool clearBuildCache = _hybridBuilderSetting.isClearBuildCache;
             _clearBuildCacheToggle = Root.Q<Toggle>("ClearBuildCache");
@@ -187,6 +233,7 @@ namespace YooAsset.Editor
             hybridBuildOption.RegisterValueChangedCallback(evt =>
             {
                 _hybridBuilderSetting.hybridBuildOption = (HybridBuildOption)evt.newValue;
+                RefreshScriptCollectorGourpNameView();
             });
 
             // 对齐文本间距
@@ -200,7 +247,9 @@ namespace YooAsset.Editor
             UIElementsTools.SetElementLabelMinWidth(_clearBuildCacheToggle, LabelMinWidth);
             UIElementsTools.SetElementLabelMinWidth(_useAssetDependencyDBToggle, LabelMinWidth);
             UIElementsTools.SetElementLabelMinWidth(hybridBuildOption, LabelMinWidth);
-
+            UIElementsTools.SetElementLabelMinWidth(_patchedAOTDLLFolderField, LabelMinWidth);
+            UIElementsTools.SetElementLabelMinWidth(_hotUpdateDLLFolderField, LabelMinWidth);
+            
             // 构建按钮
             var buildButton = Root.Q<Button>("Build");
             buildButton.clicked += BuildButton_clicked;
@@ -220,7 +269,7 @@ namespace YooAsset.Editor
             }
         }
         
-        private void RefreshView()
+        private void RefreshBuildinFileCopyOptionView()
         {
             var buildinFileCopyOption = _hybridBuilderSetting.assetBuildinFileCopyOption;
             bool tagsFiledVisible = buildinFileCopyOption == EBuildinFileCopyOption.ClearAndCopyByTags ||
@@ -228,6 +277,17 @@ namespace YooAsset.Editor
             _copyBuildinFileTagsField.visible = tagsFiledVisible;
         }
 
+        private void RefreshScriptCollectorGourpNameView()
+        {
+            var buildOption = _hybridBuilderSetting.hybridBuildOption;
+            bool nameFiledVisible = buildOption == HybridBuildOption.BuildAll ||
+                                    buildOption == HybridBuildOption.BuildAllAndExportAndroidProject ||
+                                    buildOption == HybridBuildOption.BuildAPK ||
+                                    buildOption == HybridBuildOption.BuildScript;
+            
+            _patchedAOTDLLFolderField.visible = nameFiledVisible;
+            _hotUpdateDLLFolderField.visible = nameFiledVisible;
+        }
         private void BuildButton_clicked()
         {
             if (EditorUtility.DisplayDialog("提示", $"开始以[{_hybridBuilderSetting.name}]配置->构建资源包[{PackageName}]！", "Yes", "No"))
@@ -274,24 +334,16 @@ namespace YooAsset.Editor
             return DateTime.Now.ToString("yyyy-MM-dd") + "-" + totalMinutes;
         }
 
-        /// <summary>
-        /// 选择一个资源输出目录
-        /// </summary>
-        private void OutputPathBroseButton_Clicked()
+
+        private void BrowserFolder(string defaultPath,Action<string> callBack)
         {
-            var defaultPath = _hybridBuilderSetting.buildOutputPath;
-            // if (string.IsNullOrEmpty(defaultPath))
-            // {
-            //     defaultPath = AssetBundleBuilderHelper.GetDefaultBuildOutputRoot();
-            // }
-            string outputPath = EditorUtility.OpenFolderPanel("Select Output Path",defaultPath,string.Empty);
-            Debug.Log(outputPath);
-             if (!string.IsNullOrEmpty(outputPath))
-             {
-                 _hybridBuilderSetting.buildOutputPath = outputPath;
-                 _buildOutputField.SetValueWithoutNotify(_hybridBuilderSetting.buildOutputPath);
-             }
+            string selectFolder = EditorUtility.OpenFolderPanel("Select Output Path",defaultPath,string.Empty);
+            if (!string.IsNullOrEmpty(selectFolder))
+            {
+                callBack?.Invoke(selectFolder);
+            }
         }
+
     }
 }
 #endif

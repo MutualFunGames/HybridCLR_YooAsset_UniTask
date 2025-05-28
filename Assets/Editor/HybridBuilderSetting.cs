@@ -11,12 +11,12 @@ public enum HybridBuildOption
     /// 构建热更新资产与所有脚本
     /// </summary>
     BuildAll,
-    
+
     /// <summary>
     /// 构建热更新资产
     /// </summary>
     BuildAsset,
-    
+
     /// <summary>
     /// 构建AOT以及热更新脚本
     /// 并复制到指定文件夹
@@ -24,28 +24,17 @@ public enum HybridBuildOption
     BuildScript,
     
     /// <summary>
-    /// 构建AOT脚本
-    /// 并复制到指定文件夹
-    /// </summary>
-    BuildPatchedAOTScript,
-    
-    /// <summary>
-    /// 构建热更新脚本
-    /// 并复制到指定文件夹
-    /// </summary>
-    BuildHotUpdateScript,
-    
-    /// <summary>
     /// 构建资产与脚本
     /// 并打包APK
     /// </summary>
     BuildAPK,
-    
+
     /// <summary>
     /// 构建资产与脚本,并导出安卓工程
     /// </summary>
     BuildAllAndExportAndroidProject
 }
+
 [CreateAssetMenu(fileName = "HybridBuilderSettings", menuName = "Scriptable Objects/HybridBuilderSettings")]
 public class HybridBuilderSetting : ScriptableObject
 {
@@ -69,34 +58,98 @@ public class HybridBuilderSetting : ScriptableObject
             {
                 return;
             }
+
             _buildOutputPath = value;
             EditorUtility.SetDirty(this);
         }
     }
 
-    [SerializeField]
-    private string _buildOutputPath;
+    [SerializeField] private string _buildOutputPath;
+
+    /// <summary>
+    /// 补充元数据AOTDLL路径 收集器组合 名称
+    /// 在构建时,会遍历当前包中所有的 AssetBundleCollector 进行对比
+    /// 如果没有将会报错
+    /// </summary>
+    public DefaultAsset PatchedAOTDLLFolder
+    {
+        get => _patchedAOTDLLFolder;
+        set
+        {
+            _patchedAOTDLLFolder = value;
+            EditorUtility.SetDirty(this);
+        }
+    }
+    [SerializeField] private DefaultAsset _patchedAOTDLLFolder;
+    
+    /// <summary>
+    /// 热更新Dll路径 收集器组合 名称
+    /// 在构建时,会遍历当前包中的所有的 AssetBundleCollector 进行对比
+    /// 如果没有将会报错
+    /// </summary>
+    public DefaultAsset HotUpdateDLLFolder
+    {
+        get => _hotUpdateDLLFolder;
+        set
+        {
+            _hotUpdateDLLFolder = value;
+
+            EditorUtility.SetDirty(this);
+        }
+    } 
+    [SerializeField] private DefaultAsset _hotUpdateDLLFolder;
+
+
+    /// <summary>
+    /// 发行版本
+    /// </summary>
+    [SerializeField] private int _releaseBuildVersion = 0;
+
+    public int ReleaseBuildVersion
+    {
+        get => _releaseBuildVersion;
+        set
+        {
+            _releaseBuildVersion = value;
+            EditorUtility.SetDirty(this);
+        }
+    }
 
     /// <summary>
     /// 资源构建版本
     /// </summary>
-    public int assetBuildVersion;
+    [SerializeField] private int _assetBuildVersion;
 
+    public int AssetBuildVersion
+    {
+        get => _assetBuildVersion;
+        set
+        {
+            _assetBuildVersion = value;
+            EditorUtility.SetDirty(this);
+        }
+    }
 
     /// <summary>
     /// 脚本构建版本
     /// </summary>
-    public int scriptBuildVersion = 0;
-    
-    /// <summary>
-    /// 发行版本
-    /// </summary>
-    public int releaseBuildVersion = 0;
-    
+    [SerializeField] private int _scriptBuildVersion = 0;
+
+    public int ScriptBuildVersion
+    {
+        get => _scriptBuildVersion;
+        set
+        {
+            _scriptBuildVersion = value;
+            EditorUtility.SetDirty(this);
+        }
+    }
+
+
     /// <summary>
     /// 版本文件名
     /// </summary>
-    public  string versionFileName = "VERSION.txt";
+    public string versionFileName = "VERSION.txt";
 
     /// <summary>
     /// 是否使用自增版本
@@ -111,8 +164,7 @@ public class HybridBuilderSetting : ScriptableObject
         }
     }
 
-    [SerializeField]
-    private bool _isUseSelfIncrementingVersions;
+    [SerializeField] private bool _isUseSelfIncrementingVersions;
 
     /// <summary>
     /// 是否清除构建缓存
@@ -127,9 +179,8 @@ public class HybridBuilderSetting : ScriptableObject
             EditorUtility.SetDirty(this);
         }
     }
-    
-    [SerializeField]
-    private bool _isClearBuildCache;
+
+    [SerializeField] private bool _isClearBuildCache;
 
     /// <summary>
     /// 在资源收集过程中，使用资源依赖关系数据库。
@@ -144,8 +195,8 @@ public class HybridBuilderSetting : ScriptableObject
             EditorUtility.SetDirty(this);
         }
     }
-    [SerializeField]
-    private  bool _isUseAssetDependDB;
+
+    [SerializeField] private bool _isUseAssetDependDB;
 
 
     /// <summary>
@@ -165,10 +216,10 @@ public class HybridBuilderSetting : ScriptableObject
             EditorUtility.SetDirty(this);
         }
     }
-    [SerializeField]
-    private string _assetEncyptionClassName;
 
-    
+    [SerializeField] private string _assetEncyptionClassName;
+
+
     /// <summary>
     /// AB包压缩方式
     /// </summary>
@@ -181,8 +232,8 @@ public class HybridBuilderSetting : ScriptableObject
             EditorUtility.SetDirty(this);
         }
     }
-    [SerializeField]
-    private ECompressOption _assetCompressOption;
+
+    [SerializeField] private ECompressOption _assetCompressOption;
 
     /// <summary>
     /// AB包命名方式
@@ -196,8 +247,8 @@ public class HybridBuilderSetting : ScriptableObject
             EditorUtility.SetDirty(this);
         }
     }
-    [SerializeField]
-    private EFileNameStyle _assetFileNameStyle;
+
+    [SerializeField] private EFileNameStyle _assetFileNameStyle;
 
 
     /// <summary>
@@ -212,8 +263,8 @@ public class HybridBuilderSetting : ScriptableObject
             EditorUtility.SetDirty(this);
         }
     }
-    [SerializeField]
-    private EBuildinFileCopyOption _assetBuildinFileCopyOption;
+
+    [SerializeField] private EBuildinFileCopyOption _assetBuildinFileCopyOption;
 
     /// <summary>
     /// copy选项参数
@@ -227,19 +278,19 @@ public class HybridBuilderSetting : ScriptableObject
             {
                 return;
             }
+
             _assetBuildinFileCopyParams = value;
             EditorUtility.SetDirty(this);
         }
     }
 
-    [SerializeField]
-    private string _assetBuildinFileCopyParams;
-    
+    [SerializeField] private string _assetBuildinFileCopyParams;
+
     /// <summary>
     /// 混合构建选项
     /// </summary>
     public HybridBuildOption hybridBuildOption
-    
+
     {
         get => _hybridBuildOption;
         set
@@ -248,14 +299,14 @@ public class HybridBuilderSetting : ScriptableObject
             EditorUtility.SetDirty(this);
         }
     }
-    [SerializeField]
-    private HybridBuildOption _hybridBuildOption;
-    
+
+    [SerializeField] private HybridBuildOption _hybridBuildOption;
+
 
     public string GetBuildVersion()
     {
         var buildVersion =
-            $"{releaseBuildVersion}_{assetBuildVersion}_{scriptBuildVersion}";
+            $"{_releaseBuildVersion}_{_assetBuildVersion}_{_scriptBuildVersion}";
         return buildVersion;
     }
 }

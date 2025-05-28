@@ -46,14 +46,28 @@
     <Analyzer Include="E:\Unity\Unity.3.24f1c2\6000.0.26f1c1\Editor\Data\Tools\Unity.SourceGenerators\Unity.UIToolkit.SourceGenerator.dll" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Assets\Editor\BuildPipelineTask\TaskVerifyBuildResult_SBP.cs" />
+    <Compile Include="Assets\Editor\BuildPipelineTask\TaskUpdateBundleInfo_SBP.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Editor\SchemaTools.cs" />
+    <Compile Include="Assets\Editor\BuildPipelineTask\TaskCreateCatalog_SBP.cs" />
+    <Compile Include="Assets\Editor\BuildPipelineTask\TaskCopyBuildinFiles_SBP.cs" />
+    <Compile Include="Assets\Editor\BuildPipelineTask\TaskPrepare_SBP.cs" />
+    <Compile Include="Assets\Editor\BuildPipelineTask\TaskCreateManifest_SBP.cs" />
+    <Compile Include="Assets\Editor\BuildPipelineTask\TaskCreatePackage_SBP.cs" />
+    <Compile Include="Assets\Editor\BuildPipelineTask\TaskCreateReport_SBP.cs" />
+    <Compile Include="Assets\Editor\BuildPipelineTask\TaskBuilding_SBP.cs" />
     <Compile Include="Assets\Editor\SceneHelper.cs" />
     <Compile Include="Assets\Editor\HybridScriptableBuildPipelineViewer.cs" />
+    <Compile Include="Assets\Editor\ScriptableBuildPipeline\HybridScriptableBuildParameters.cs" />
     <Compile Include="Assets\Editor\HybridBuildPipeViewerBase.cs" />
+    <Compile Include="Assets\Editor\BuildPipelineTask\TaskGetBuildMap_SBP.cs" />
     <Compile Include="Assets\Editor\HybridBuilderSetting.cs" />
     <Compile Include="Assets\Editor\HybridBuilderWindow.cs" />
+    <Compile Include="Assets\Editor\BuildPipelineTask\TaskBuildScript_SBP.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Editor\TextureSchema.cs" />
+    <Compile Include="Assets\Editor\ScriptableBuildPipeline\HybrdiScriptableBuildPipeline.cs" />
     <Compile Include="Assets\Editor\BuildHelper.cs" />
+    <Compile Include="Assets\Editor\BuildPipelineTask\TaskEncryption_SBP.cs" />
     <Compile Include="Assets\Editor\SampleBundleEncryption.cs" />
     <Compile Include="Assets\Samples\YooAsset\2.3.8\Space Shooter\GameScript\Editor\TextureTools.cs" />
     <None Include="Assets\Editor\HybridBuilderWIndow.uxml" />

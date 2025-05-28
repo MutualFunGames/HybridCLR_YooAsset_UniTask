@@ -27,6 +27,8 @@
         <ui:TextField picking-mode="Ignore" label="Copy Buildin File Param" name="CopyBuildinFileParam" />
         <ui:Toggle label="BuildHotUpdateScript" name="BuildHotUpdateScriptToggle" style="flex-wrap: wrap; align-items: stretch; display: none;" />
         <uie:EnumField label="Hybrid Build Option" value="Center" name="HybridBuildOption" style="flex-shrink: 0; flex-grow: 0; flex-wrap: nowrap;" />
+        <uie:ObjectField label="Patched AOT DLL Folder" name="PatchedAOTDLLFolder" type="UnityEditor.DefaultAsset, UnityEditor.CoreModule" />
+        <uie:ObjectField label="Hot Update DLL Folder" name="HotUpdateDLLFolder" type="UnityEditor.DefaultAsset, UnityEditor.CoreModule" />
         <ui:VisualElement name="ExtensionContainer" />
         <ui:Button text="Click Build" display-tooltip-when-elided="true" name="Build" style="height: 50px; background-color: rgb(40, 106, 42); margin-top: 10px;" />
     </ui:VisualElement>

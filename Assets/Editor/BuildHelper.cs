@@ -209,16 +209,17 @@ public class BuildHelper
     //     }
     //     #endregion
     // }
-    
-    [MenuItem("整合工具/获取需要补充元数据的Dll")]
-    public static void GetPatchedAOTAssemblyList()
+
+    /// <summary>
+    /// 获取AOT之前,应先编译热更新代码
+    /// 执行之前需要先编译热更新代码 CompileDllCommand.CompileDllActiveBuildTarget()
+    /// </summary>
+    public static void GetPatchedAOTAssemblyListToHybridCLRSettings()
     {
-        BuildTarget target = EditorUserBuildSettings.activeBuildTarget;
-        CompileDllCommand.CompileDll(target);
         var gs = SettingsUtil.HybridCLRSettings;
         List<string> hotUpdateDllNames = SettingsUtil.HotUpdateAssemblyNamesExcludePreserved;
 
-        AssemblyReferenceDeepCollector collector = new AssemblyReferenceDeepCollector(MetaUtil.CreateHotUpdateAndAOTAssemblyResolver(target, hotUpdateDllNames), hotUpdateDllNames);
+        AssemblyReferenceDeepCollector collector = new AssemblyReferenceDeepCollector(MetaUtil.CreateHotUpdateAndAOTAssemblyResolver(EditorUserBuildSettings.activeBuildTarget, hotUpdateDllNames), hotUpdateDllNames);
         var analyzer = new Analyzer(new Analyzer.Options
         {
             MaxIterationCount = Math.Min(20, gs.maxGenericReferenceIteration),
@@ -243,14 +244,32 @@ public class BuildHelper
 
         gs.patchAOTAssemblies = patchtedAOTAssemblys.ToArray();
     }
-    [MenuItem("整合工具/生成AOT补充文件并复制进文件夹")]
-    public static void GenerateAOTDllListFile()
+    [MenuItem("整合工具/获取需要补充元数据的Dll")]
+    public static void Debug_GetPatchedAOTAssemblyList()
     {
-        //先生成AOT文件
-        Il2CppDefGeneratorCommand.GenerateIl2CppDef();
-        LinkGeneratorCommand.GenerateLinkXml();
-        StripAOTDllCommand.GenerateStripedAOTDlls();
-    
+        CompileDllCommand.CompileDllActiveBuildTarget();
+
+        GetPatchedAOTAssemblyListToHybridCLRSettings();
+    }
+
+    public static void CopyDllFileToByte()
+    {
+        
+    }
+
+    /// <summary>
+    /// 将生成裁剪后的AOT dlls拷贝到AssetBundle目录
+    /// 依赖于   HybridCLR/Generate/Il2CppDef
+    /// HybridCLR/Generate/LinkXmlH
+    /// ybridCLR/Generate/AotDlls  三条指令生成数据
+    /// </summary>
+    /// <param name="assetBundlePath"></param>
+    public static void CopyPatchedAOTDllToPackagePath(string assetBundlePath)
+    {
+        if (string.IsNullOrEmpty(assetBundlePath))
+        {
+            return;
+        }
         List<string> dllNames = new List<string>();
         
         var patchAOTAssemblies = SettingsUtil.HybridCLRSettings.patchAOTAssemblies;
@@ -261,21 +280,6 @@ public class BuildHelper
         }
     
         var json = JsonConvert.SerializeObject(dllNames);
-        var path = "";
-    
-        foreach (var package in AssetBundleCollectorSettingData.Setting.Packages)
-        {
-            foreach (var group in package.Groups)
-            {
-                if (group.GroupName == AOTDLLGroupName)
-                {
-                    foreach (var collector in group.Collectors)
-                    {
-                        path = collector.CollectPath;
-                    }
-                }
-            }
-        }
         
         var dllExportPath = SettingsUtil.GetAssembliesPostIl2CppStripDir(EditorUserBuildSettings.activeBuildTarget);
     
@@ -295,17 +299,46 @@ public class BuildHelper
     
         foreach (var dllName in dllDatas.Keys)
         {
-            var dllPath = path + "/" + dllName + ".bytes";
+            var dllPath = assetBundlePath + "/" + dllName + ".bytes";
             File.WriteAllBytes(dllPath, dllDatas[dllName]);
         }
     
-        File.WriteAllText($"{path}/AOTDLLList.txt", json);
+        File.WriteAllText($"{assetBundlePath}/AOTDLLList.txt", json);
         AssetDatabase.Refresh();
         Debug.Log("AOT补充文件生成完毕");
+    }
+    
+    [MenuItem("整合工具/生成AOT补充文件并复制进文件夹")]
+    public static void Debug_GenerateAOTDllListFile()
+    {
+        //先生成AOT文件
+        Il2CppDefGeneratorCommand.GenerateIl2CppDef();
+        LinkGeneratorCommand.GenerateLinkXml();
+        StripAOTDllCommand.GenerateStripedAOTDlls();
+    
+        var aotDllOutputPath = "";
+        
+        foreach (var package in AssetBundleCollectorSettingData.Setting.Packages)
+        {
+            foreach (var group in package.Groups)
+            {
+                if (group.GroupName == AOTDLLGroupName)
+                {
+                    foreach (var collector in group.Collectors)
+                    {
+                        aotDllOutputPath = collector.CollectPath;
+                    }
+                }
+            }
+        }
+
+        CopyPatchedAOTDllToPackagePath(aotDllOutputPath);
     }
     [MenuItem("整合工具/生成热更新Dll并复制进文件夹")]
     public static void BuildAndCopyHotUpdateDll()
     {
+        CompileDllCommand.CompileDllActiveBuildTarget();
+        
         List<string> dllNames = new List<string>();
         var _hotUpdateAssemblies = SettingsUtil.HybridCLRSettings.preserveHotUpdateAssemblies;
 
@@ -315,7 +348,6 @@ public class BuildHelper
             dllNames.Add(hotUpdateAssembly + ".dll");
         }
         
-        CompileDllCommand.CompileDllActiveBuildTarget();
     
         var dllExportPath = SettingsUtil.GetHotUpdateDllsOutputDirByTarget(EditorUserBuildSettings.activeBuildTarget);
     
