@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _buildOutputPath: E:/UnityProject/HybridCLR_YooAsset_UniTask/HybridCLRData
   _patchedAOTDLLFolder: {fileID: 102900000, guid: 11b7f96fc9278374ba086b0d6bd5c1cb, type: 3}
-  _hotUpdateDLLFolder: {fileID: 0}
+  _hotUpdateDLLFolder: {fileID: 102900000, guid: 91d3e80947f8a774d929d68d3092521e, type: 3}
   _releaseBuildVersion: 2
   _assetBuildVersion: 2
   _scriptBuildVersion: 1

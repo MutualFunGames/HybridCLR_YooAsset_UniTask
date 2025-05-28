@@ -62,6 +62,14 @@ HybridCLR在每次出包时，需要编译热更新代码，执行CompileDll-Act
 
 因为YooAssets和HybridCLR都是通过UnityPackageManager加载的，导致很多代码不够好用又无法修改，所以通过编辑器代码写了一套整合工具，使得两个第三方库可以配合的更好
 
+### HybridBuilderSetting
+
+#### PatchedAOTDLLFolder&HotUpdateDLLFolder
+
+要严格注意，不要和包中其他文件夹相同，需要自行检查是否真的为对应的AssetBundle打包路径
+
+该变量只用于判断AssetBundleCollector中是否有打包路径
+
 ![整合工具说明](README/整合工具说明.png)
 
 ## 打包流程
