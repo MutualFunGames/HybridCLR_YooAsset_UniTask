@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -7,6 +8,10 @@ using YooAsset.Editor;
 
 public enum HybridBuildOption
 {
+    /// <summary>
+    /// 不进行任何构建
+    /// </summary>
+    None,
     /// <summary>
     /// 构建热更新资产与所有脚本
     /// </summary>
@@ -25,14 +30,9 @@ public enum HybridBuildOption
     
     /// <summary>
     /// 构建资产与脚本
-    /// 并打包APK
+    /// 并打包应用程序
     /// </summary>
-    BuildAPK,
-
-    /// <summary>
-    /// 构建资产与脚本,并导出安卓工程
-    /// </summary>
-    BuildAllAndExportAndroidProject
+    BuildApplication,
 }
 
 [CreateAssetMenu(fileName = "HybridBuilderSettings", menuName = "Scriptable Objects/HybridBuilderSettings")]
@@ -81,6 +81,20 @@ public class HybridBuilderSetting : ScriptableObject
         }
     }
     [SerializeField] private DefaultAsset _patchedAOTDLLFolder;
+
+    public string PatchedAOTDLLCollectPath
+    {
+        get
+        {
+            if (!_patchedAOTDLLFolder){
+                Debug.unityLogger.LogError("路径为空！",
+                    $"PatchedAOTDLLFolder ===> {_patchedAOTDLLFolder} ");
+                return String.Empty;
+            }
+            var patchedAOTDLLPath = AssetDatabase.GetAssetPath(_patchedAOTDLLFolder);
+            return patchedAOTDLLPath;
+        }
+    }
     
     /// <summary>
     /// 热更新Dll路径 收集器组合 名称
@@ -99,7 +113,19 @@ public class HybridBuilderSetting : ScriptableObject
     } 
     [SerializeField] private DefaultAsset _hotUpdateDLLFolder;
 
-
+    public string HotUpdateDLLCollectPath
+    {
+        get
+        {
+            if (!_hotUpdateDLLFolder){
+                Debug.unityLogger.LogError("路径为空！",
+                    $"HotUpdateDLLFolder ===> {_hotUpdateDLLFolder} ");
+                return String.Empty;
+            }
+            var hotUpdateDLLPath = AssetDatabase.GetAssetPath(_hotUpdateDLLFolder);
+            return hotUpdateDLLPath;
+        }
+    }
     /// <summary>
     /// 发行版本
     /// </summary>

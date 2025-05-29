@@ -9,7 +9,20 @@ public class HybridScriptableBuildParameters : BuildParameters
         /// 压缩选项
         /// </summary>
         public ECompressOption CompressOption = ECompressOption.Uncompressed;
+        
+        public HybridBuildOption HybridBuildOption= HybridBuildOption.None;
+        
+        /// <summary>
+        /// 热更新DLL打包路径
+        /// 应在HybridSetting和YooAssetCollector中同时存在
+        /// </summary>
+        public string HotUpdateDLLCollectPath;
 
+        /// <summary>
+        /// AOTDLL打包路径
+        /// 应在HybridSetting和YooAssetCollector中同时存在
+        /// </summary>
+        public string PatchedAOTDLLCollectPath;
         
         /// <summary>
         /// 从AssetBundle文件头里剥离Unity版本信息

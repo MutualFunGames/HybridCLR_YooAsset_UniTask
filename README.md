@@ -14,17 +14,29 @@ Assembly Definition是Unity2017.3以后出的一个功能，主要在于解决�
 
 当我们划分AOT程序集以及热更新程序集时，可以用到该功能
 
-### AOT与热更新程序集的划分
+### AOT与热更新程序集
 
 #### 热更新程序集
 
-热更新程序集理论上可以是Assembly-CSharp程序集，但是为了保证项目逻辑清晰，资源管理方便，当前框架使用AssemblyDefinition划分单独的dll作为热更新程序集
+热更新程序集理论上可以是Assembly-CSharp程序集，但是为了保证项目逻辑清晰，资源管理方便，当前框架使用AssemblyDefinition划分单独的dll作为热更新程序集,热更新assembly不应该被il2cpp处理并且编译到最终的包体里。HybridCLR处理了`IFilterBuildAssemblies`回调， 将热更新dll从build assemblies列表移除
 
-需要在HybridCLR-Settings-hotUpdateAssemblyDefinitions中将所有热更新的AssemblyDefinition加入列表
+##### 打包方式
+
+需要在HybridCLR-Settings中将所有热更新的AssemblyDefinition加入列表hotUpdateAssemblyDefinitions|hotUpdateAssemblies
 
 `hotUpdateAssemblyDefinitions`和`hotUpdateAssemblies`合并后构成最终的热更新dll列表。同一个assembly不要在两个列表中同时出现，会报错！
 
-热更新assembly不应该被il2cpp处理并且编译到最终的包体里。HybridCLR处理了`IFilterBuildAssemblies`回调， 将热更新dll从build assemblies列表移除。
+
+
+com.code-philosophy.hybridclr的`HybridCLR.Editor`程序集提供了`HybridCLR.Editor.Commands.CompileDllCommand.CompileDll(BuildTarget target)`接口， 方便开发者灵活地自行编译热更新dll。编译完成后的热更新dll放到 `{project}/HybridCLRData/HotUpdateDlls/{platform}` 目录下。
+
+
+
+在打包AssetBundle前,应将 `{project}/HybridCLRData/HotUpdateDlls/{platform}` 目录下的热更新DLL放入可被YooAsset.AssetBundleCollector收集的目录下,也就是Asset目录下的目录下
+
+虽然 `{project}/HybridCLRData/HotUpdateDlls/{platform}`目录下有许多Dll,但是只需要拷贝我们在HybridCLR-Settings中配置的Dll到AssetBundleCollector目录下即可
+
+
 
 #### AOT程序集
 
@@ -46,9 +58,9 @@ HybridCLR官方推荐直接代码直接挂载在预制体上，通过AssetBundle
 
 HybridCLR在每次出包时，需要编译热更新代码，执行CompileDll-ActivityTarget打包出DLL，修改后缀名后,作为RawFile打包成DLL进行加载
 
-热更新DLL引用库发生变动，则需要重新执行Generate-All，获取依赖关系，生成Link,如果热更新引用了AOT部分没引用过的组件,则需要用整合工具生成link,也可以直接关闭代码裁剪
+热更新DLL引用库发生变动，则需要重新执行Generate-All，获取依赖关系，生成Link,如果热更新引用了AOT部分没引用过的AOT类(大多数时候是Unity或其他第三方库),则需要用整合工具生成link,也可以直接关闭代码裁剪
 
-也就是说如果热更新引用库发生变化,需要重新打包
+在不关闭代码裁剪的情况下,当热更新DLL引用库发生变动,为了保证热更新中引用的AOT类都已经随包打出,需要重新生成link.xml并构建包体
 
 ## 热更新运行流程
 

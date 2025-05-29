@@ -5,22 +5,11 @@ using YooAsset.Editor;
 
 public class TaskBuildScript_SBP : IBuildTask
 {
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
-    void Start()
-    {
-        
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
-
     public void Run(BuildContext context)
     {
         var buildParametersContext = context.GetContextObject<BuildParametersContext>();
         var buildParameters = buildParametersContext.Parameters as HybridScriptableBuildParameters;
+        
         
         CompileDllCommand.CompileDllActiveBuildTarget();
         PrebuildCommand.GenerateAll();
@@ -28,18 +17,11 @@ public class TaskBuildScript_SBP : IBuildTask
         //获取需要补充元数据的Dll
         BuildHelper.GetPatchedAOTAssemblyListToHybridCLRSettings();
 
-        string aotPackagePath = Path.Combine("");
+        var projectPath=Directory.GetParent(Application.dataPath).FullName;
+        var pathcedAOTDllFullPath=Path.Combine(projectPath,buildParameters.PatchedAOTDLLCollectPath);
+        BuildHelper.CopyPatchedAOTDllToCollectPath(pathcedAOTDllFullPath);
         
-        // foreach (var group in package.Groups)
-        // {
-        //     if (group.GroupName == AOTDLLGroupName)
-        //     {
-        //         foreach (var collector in group.Collectors)
-        //         {
-        //             aotDllOutputPath = collector.CollectPath;
-        //         }
-        //     }
-        // }
-        BuildHelper.CopyPatchedAOTDllToPackagePath(aotPackagePath);
+        var hotUpdateDLLFullPath=Path.Combine(projectPath,buildParameters.HotUpdateDLLCollectPath);
+        BuildHelper.CopyHotUpdateDllToCollectPath(hotUpdateDLLFullPath);
     }
 }

@@ -26,26 +26,15 @@ public class BuildHelper
     /// <summary>
     /// 工程目录路径，Assets上一层
     /// </summary>
-    public static string ProjectPath = Application.dataPath.Replace("Assets", "");
-
-    public static string DllPath = $"{ProjectPath}/HybridCLRData/HotUpdateDlls/Android/";
-
+    public static string ProjectPath =Directory.GetParent(Application.dataPath).FullName;
+    
     public static string PackageExportPath = $"{ProjectPath}/BuildPacakage/";
-
-    public static string HotUpdateAssetsPath = $"{Application.dataPath}/HotUpdateAssets/";
-
-    public static string HotUpdateDllPath = $"{HotUpdateAssetsPath}HotUpdateDll/";
+    
     /// <summary>
     /// 版本文件名
     /// </summary>
     public static string VersionFileName = "/VERSION.txt";
-
-    /// <summary>
-    /// 热更新配置的Group名称，用来查找热更新dll存放位置
-    /// </summary>
-    public static string HotFixDllGroupName = "HotUpdateDll";
-
-    public static string AOTDLLGroupName = "AOT";
+    
     // Start is called before the first frame update
     public static string[] GetBuildScenes()
     {
@@ -59,16 +48,21 @@ public class BuildHelper
         }
         return names.ToArray();
     }
+
+
+
     
-
-
-
     [MenuItem("整合工具/打APK包")]
-    public static void BuildAPK()
+    public static void Debug_BuildAPK()
     {
         //先生成AOT文件，再进行打包，以确保所有引用库都被引用,废弃，因HybridCLR会修改构建管线，自动执行一次GenerateALL
         PrebuildCommand.GenerateAll();
 
+        BuildAPK();
+    }
+
+    public static void BuildAPK()
+    {
         BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions();
         buildPlayerOptions.scenes = GetBuildScenes();
 
@@ -92,124 +86,6 @@ public class BuildHelper
         EditorUtility.ClearProgressBar();
     }
     
-    // [MenuItem("整合工具/打初始AB包")]
-    // public static void BuildOriginAssetBundle()
-    // {
-    //     #region 获取资源版本
-    //     CreateVersionFile();
-    //     var versionString = File.ReadAllText(Application.streamingAssetsPath + VersionFileName);
-    //     //var versionStringArray = versionString.Split(".");
-    //     //var version = int.Parse(String.Join("", versionStringArray));
-    //
-    //     #endregion
-    //
-    //     #region 打包DLL并重命名,放入热更新文件夹作为RawFile打包
-    //     GenerateAOTDllListFile();
-    //     BuildAndCopyHotUpdateDll();
-    //     #endregion
-    //
-    //     #region 
-    //     //version++;
-    //     string defaultOutputRoot = AssetBundleBuilderHelper.GetDefaultBuildOutputRoot();
-    //     BuildParameters buildParameters = new ScriptableBuildParameters();
-    //     buildParameters.BuildOutputRoot = defaultOutputRoot;
-    //     buildParameters.BuildTarget = EditorUserBuildSettings.activeBuildTarget;
-    //     buildParameters.BuildPipeline = AssetBundleBuilderSetting.GetPackageBuildPipeline();
-    //     buildParameters.BuildMode = EBuildMode.ForceRebuild;
-    //     buildParameters.PackageName = AssetBundleBuilderSettingData.Setting.BuildPackage;
-    //
-    //     //versionString = version + "";
-    //     //var length = versionString.Length * 2 - 1;
-    //     //for (int i = 1; i < length; i += 2)
-    //     //{
-    //     //    versionString = versionString.Insert(i, ".");
-    //     //}
-    //
-    //     buildParameters.PackageVersion = versionString;
-    //     buildParameters.VerifyBuildingResult = true;
-    //     buildParameters.ShareAssetPackRule = new DefaultShareAssetPackRule();
-    //     var esct = GetEncryptionServicesClassTypes();
-    //     buildParameters.EncryptionServices = (IEncryptionServices)Activator.CreateInstance(esct[0]);
-    //     buildParameters.CompressOption = AssetBundleBuilderSettingData.Setting.CompressOption;
-    //     buildParameters.OutputNameStyle = AssetBundleBuilderSettingData.Setting.OutputNameStyle;
-    //     buildParameters.CopyBuildinFileOption = AssetBundleBuilderSettingData.Setting.CopyBuildinFileOption;
-    //     buildParameters.CopyBuildinFileTags = AssetBundleBuilderSettingData.Setting.CopyBuildinFileTags;
-    //     if (AssetBundleBuilderSettingData.Setting.BuildPipeline == EBuildPipeline.BuiltinBuildPipeline)
-    //     {
-    //         buildParameters.SBPParameters = new BuildParameters.SBPBuildParameters();
-    //         buildParameters.SBPParameters.WriteLinkXML = true;
-    //     }
-    //
-    //     var builder = new AssetBundleBuilder();
-    //     var buildResult = builder.Run(buildParameters);
-    //     if (buildResult.Success)
-    //     {
-    //         File.WriteAllText(Application.streamingAssetsPath + VersionFileName, versionString);
-    //         Debug.Log("初始AB包打完");
-    //         EditorUtility.RevealInFinder(buildResult.OutputPackageDirectory);
-    //     }
-    //     #endregion
-    // }
-    
-    // [UnityEditor.UnityEditor.MenuItem("整合工具/打增量AB包")]
-    // public static void BuildIncreasinglyAssetBundle()
-    // {
-    //     #region 获取资源版本
-    //     var versionString = File.ReadAllText(Application.streamingAssetsPath + VersionFileName);
-    //     var versionStringArray = versionString.Split(".");
-    //     var version = int.Parse(String.Join("", versionStringArray));
-    //
-    //     #endregion
-    //
-    //     #region 打包DLL并重命名,放入热更新文件夹作为RawFile打包
-    //     //GenerateAOTDllListFile();
-    //     BuildAndCopyHotUpdateDll();
-    //     #endregion
-    //
-    //     #region 
-    //     version++;
-    //     string defaultOutputRoot = AssetBundleBuilderHelper.GetDefaultOutputRoot();
-    //     BuildParameters buildParameters = new BuildParameters();
-    //     buildParameters.OutputRoot = defaultOutputRoot;
-    //     buildParameters.BuildTarget = EditorUserBuildSettings.activeBuildTarget;
-    //     buildParameters.BuildPipeline = AssetBundleBuilderSettingData.Setting.BuildPipeline;
-    //     buildParameters.BuildMode = EBuildMode.IncrementalBuild;
-    //     buildParameters.PackageName = AssetBundleBuilderSettingData.Setting.BuildPackage;
-    //
-    //     versionString = version + "";
-    //     var length = versionString.Length * 2 - 1;
-    //     for (int i = 1; i < length; i += 2)
-    //     {
-    //         versionString = versionString.Insert(i, ".");
-    //     }
-    //
-    //     buildParameters.PackageVersion = versionString;
-    //     buildParameters.VerifyBuildingResult = true;
-    //     buildParameters.ShareAssetPackRule = new DefaultShareAssetPackRule();
-    //     var esct = GetEncryptionServicesClassTypes();
-    //     buildParameters.EncryptionServices = (IEncryptionServices)Activator.CreateInstance(esct[0]);
-    //     buildParameters.CompressOption = AssetBundleBuilderSettingData.Setting.CompressOption;
-    //     buildParameters.OutputNameStyle = AssetBundleBuilderSettingData.Setting.OutputNameStyle;
-    //     buildParameters.CopyBuildinFileOption = AssetBundleBuilderSettingData.Setting.CopyBuildinFileOption;
-    //     buildParameters.CopyBuildinFileTags = AssetBundleBuilderSettingData.Setting.CopyBuildinFileTags;
-    //
-    //     if (AssetBundleBuilderSettingData.Setting.BuildPipeline == EBuildPipeline.ScriptableBuildPipeline)
-    //     {
-    //         buildParameters.SBPParameters = new BuildParameters.SBPBuildParameters();
-    //         buildParameters.SBPParameters.WriteLinkXML = true;
-    //     }
-    //
-    //     var builder = new AssetBundleBuilder();
-    //     var buildResult = builder.Run(buildParameters);
-    //     if (buildResult.Success)
-    //     {
-    //         File.WriteAllText(Application.streamingAssetsPath + VersionFileName, versionString);
-    //         Debug.Log("增量AB包打完");
-    //         EditorUtility.RevealInFinder(buildResult.OutputPackageDirectory);
-    //     }
-    //     #endregion
-    // }
-
     /// <summary>
     /// 获取AOT之前,应先编译热更新代码
     /// 执行之前需要先编译热更新代码 CompileDllCommand.CompileDllActiveBuildTarget()
@@ -238,8 +114,10 @@ public class BuildHelper
         List<string> patchtedAOTAssemblys = new List<string>();
         foreach (dnlib.DotNet.ModuleDef module in modules)
         {
-            Debug.Log($"需要补充元数据的AOT ========= {module}");
-            patchtedAOTAssemblys.Add(module.Name);
+            //替换掉程序集的拓展名,以方便后续拷贝AOTDll的时候可以和HotUpdateDll共用相同的拷贝逻辑
+            var patchtedAOTAssemblysName = module.Name.Replace(".dll",string.Empty);
+            Debug.Log($"需要补充元数据的AOT ========= {patchtedAOTAssemblysName}");
+            patchtedAOTAssemblys.Add(patchtedAOTAssemblysName);
         }
 
         gs.patchAOTAssemblies = patchtedAOTAssemblys.ToArray();
@@ -252,60 +130,59 @@ public class BuildHelper
         GetPatchedAOTAssemblyListToHybridCLRSettings();
     }
 
-    public static void CopyDllFileToByte()
+    public static List<string> CopyDllFileToByte(string[] originFileNames,string originDir,string targetDir)
     {
-        
+        List<string> bytesFiles = new List<string>();
+        foreach (var originFileName in originFileNames)
+        {
+            var dllFilePath = Path.Combine(ProjectPath,originDir, $"{originFileName}.dll");
+            if (!File.Exists(dllFilePath))
+            {
+                Debug.Log($"{dllFilePath}不存在");
+                continue;
+            }
+            var targetFileName= $"{originFileName}.bytes";
+            var dllRawFilePath = Path.Combine(targetDir, targetFileName);
+            File.Copy(dllFilePath,dllRawFilePath,true);
+            bytesFiles.Add(targetFileName);
+        }
+
+        return bytesFiles;
     }
 
     /// <summary>
-    /// 将生成裁剪后的AOT dlls拷贝到AssetBundle目录
+    /// 将生成裁剪后的AOT dlls拷贝到AssetBundle打包路径下
     /// 依赖于   HybridCLR/Generate/Il2CppDef
     /// HybridCLR/Generate/LinkXmlH
     /// ybridCLR/Generate/AotDlls  三条指令生成数据
     /// </summary>
-    /// <param name="assetBundlePath"></param>
-    public static void CopyPatchedAOTDllToPackagePath(string assetBundlePath)
+    /// <param name="rawFileCollectPath"></param>
+    public static void CopyPatchedAOTDllToCollectPath(string rawFileCollectPath)
     {
-        if (string.IsNullOrEmpty(assetBundlePath))
+        if (string.IsNullOrEmpty(rawFileCollectPath))
         {
+            Debug.unityLogger.LogError("CopyPatchedAOTDllToCollectPath",$"{nameof(rawFileCollectPath)}===>Null");
             return;
         }
-        List<string> dllNames = new List<string>();
         
-        var patchAOTAssemblies = SettingsUtil.HybridCLRSettings.patchAOTAssemblies;
-    
-        foreach (var patchAOTAssembly in patchAOTAssemblies)
-        {
-            dllNames.Add(patchAOTAssembly + ".dll");
-        }
-    
-        var json = JsonConvert.SerializeObject(dllNames);
+        var patchedAOTAssemblies = SettingsUtil.HybridCLRSettings.patchAOTAssemblies;
         
-        var dllExportPath = SettingsUtil.GetAssembliesPostIl2CppStripDir(EditorUserBuildSettings.activeBuildTarget);
-    
-        Dictionary<string, byte[]> dllDatas = new Dictionary<string, byte[]>();
-    
-        foreach (var dllName in dllNames)
+        var dllOutputPath = SettingsUtil.GetAssembliesPostIl2CppStripDir(EditorUserBuildSettings.activeBuildTarget);
+
+        var dllRawFileAssetNames=CopyDllFileToByte(patchedAOTAssemblies,dllOutputPath,rawFileCollectPath);
+  
+        if (dllRawFileAssetNames != null && dllRawFileAssetNames.Count > 0)
         {
-            var dllPath = dllExportPath + "/" + dllName;
-            if (!File.Exists(dllPath))
-            {
-                Debug.Log($"{dllName}不存在");
-                continue;
-            }
-            var dllData = File.ReadAllBytes(dllPath);
-            dllDatas.Add(dllName, dllData);
+            var namesJson= JsonConvert.SerializeObject(dllRawFileAssetNames);
+            File.WriteAllText($"{rawFileCollectPath}/AOTDLLs.txt", namesJson);
+            AssetDatabase.Refresh();
+            Debug.unityLogger.Log("CopyPatchedAOTDllToCollectPath Success!");   
         }
-    
-        foreach (var dllName in dllDatas.Keys)
+        else
         {
-            var dllPath = assetBundlePath + "/" + dllName + ".bytes";
-            File.WriteAllBytes(dllPath, dllDatas[dllName]);
+            Debug.unityLogger.LogError("CopyPatchedAOTDllToCollectPath",$"{nameof(dllRawFileAssetNames)}===>Null");
         }
-    
-        File.WriteAllText($"{assetBundlePath}/AOTDLLList.txt", json);
-        AssetDatabase.Refresh();
-        Debug.Log("AOT补充文件生成完毕");
+
     }
     
     [MenuItem("整合工具/生成AOT补充文件并复制进文件夹")]
@@ -315,77 +192,54 @@ public class BuildHelper
         Il2CppDefGeneratorCommand.GenerateIl2CppDef();
         LinkGeneratorCommand.GenerateLinkXml();
         StripAOTDllCommand.GenerateStripedAOTDlls();
-    
-        var aotDllOutputPath = "";
-        
-        foreach (var package in AssetBundleCollectorSettingData.Setting.Packages)
-        {
-            foreach (var group in package.Groups)
-            {
-                if (group.GroupName == AOTDLLGroupName)
-                {
-                    foreach (var collector in group.Collectors)
-                    {
-                        aotDllOutputPath = collector.CollectPath;
-                    }
-                }
-            }
-        }
 
-        CopyPatchedAOTDllToPackagePath(aotDllOutputPath);
+        var aotDllRawFileCollectPath = Path.Combine(Application.dataPath, "HotUpdateAssets","AOTDLL");
+        
+        Debug.unityLogger.Log(aotDllRawFileCollectPath);
+        CopyPatchedAOTDllToCollectPath(aotDllRawFileCollectPath);
     }
+
     [MenuItem("整合工具/生成热更新Dll并复制进文件夹")]
-    public static void BuildAndCopyHotUpdateDll()
+    public static void Debug_GenerateHotUpdateDllListFile()
     {
         CompileDllCommand.CompileDllActiveBuildTarget();
         
-        List<string> dllNames = new List<string>();
-        var _hotUpdateAssemblies = SettingsUtil.HybridCLRSettings.preserveHotUpdateAssemblies;
+        var hotUpdateDllRawFileCollectPath = Path.Combine(Application.dataPath, "HotUpdateAssets","HotUpdateDLL");
+        
+        Debug.unityLogger.Log(hotUpdateDllRawFileCollectPath);
+        CopyHotUpdateDllToCollectPath(hotUpdateDllRawFileCollectPath);
+    }
+    
+    /// <summary>
+    /// 将生成裁剪后的HotUpdate dlls拷贝到AssetBundle打包路径下
+    /// 依赖于   CompileDllCommand.CompileDllActiveBuildTarget()  生成数据
+    /// </summary>
+    /// <param name="rawFileCollectPath"></param>
+    public static void CopyHotUpdateDllToCollectPath(string rawFileCollectPath)
+    {
+        if (string.IsNullOrEmpty(rawFileCollectPath))
+        {
+            Debug.unityLogger.LogError("CopyHotUpdateDllToCollectPath",$"{nameof(rawFileCollectPath)}===>Null");   
+            return;
+        }
+        var hotUpdateAssemblies = SettingsUtil.HotUpdateAssemblyNamesExcludePreserved;
 
-        
-        foreach (var hotUpdateAssembly in _hotUpdateAssemblies)
+        var hotUpdateOutputPath =
+            SettingsUtil.GetHotUpdateDllsOutputDirByTarget(EditorUserBuildSettings.activeBuildTarget);
+
+        var dllRawFileAssetNames=CopyDllFileToByte(hotUpdateAssemblies.ToArray(),hotUpdateOutputPath,rawFileCollectPath);
+
+        if (dllRawFileAssetNames != null && dllRawFileAssetNames.Count > 0)
         {
-            dllNames.Add(hotUpdateAssembly + ".dll");
+            var json = JsonConvert.SerializeObject(dllRawFileAssetNames);
+            File.WriteAllText(Path.Combine(rawFileCollectPath,"HotUpdateDLLs.txt"), json);
+            AssetDatabase.Refresh();
+            Debug.unityLogger.Log("CopyHotUpdateDllToCollectPath  Success");   
         }
-        
-    
-        var dllExportPath = SettingsUtil.GetHotUpdateDllsOutputDirByTarget(EditorUserBuildSettings.activeBuildTarget);
-    
-        Dictionary<string, byte[]> dllDatas = new Dictionary<string, byte[]>();
-        foreach (var dllName in dllNames)
+        else
         {
-            var dllPath = dllExportPath + "/" + dllName;
-            if (!File.Exists(dllPath))
-            {
-                Debug.Log($"{dllName}不存在");
-                continue;
-            }
-            var dllData = File.ReadAllBytes(dllPath);
-            dllDatas.Add(dllName, dllData);
+            Debug.unityLogger.LogError("CopyHotUpdateDllToCollectPath",$"{nameof(dllRawFileAssetNames)}===>Null");
         }
-    
-        foreach (var package in AssetBundleCollectorSettingData.Setting.Packages)
-        {
-            foreach (var group in package.Groups)
-            {
-                if (group.GroupName == HotFixDllGroupName)
-                {
-                    foreach (var collector in group.Collectors)
-                    {
-                        HotUpdateDllPath = collector.CollectPath;
-                    }
-                }
-            }
-        }
-        var json = JsonConvert.SerializeObject(dllNames);
-        File.WriteAllText($"{HotUpdateDllPath}/HotUpdateDLLList.txt", json);
-        foreach (var dllName in dllDatas.Keys)
-        {
-            var dllPath = HotUpdateDllPath + "/" + dllName + ".bytes";
-            File.WriteAllBytes(dllPath, dllDatas[dllName]);
-        }
-        AssetDatabase.Refresh();
-        Debug.Log("生成热更新Dll成功");
     }
 
 

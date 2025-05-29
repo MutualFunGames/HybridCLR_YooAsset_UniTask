@@ -281,8 +281,7 @@ namespace YooAsset.Editor
         {
             var buildOption = _hybridBuilderSetting.hybridBuildOption;
             bool nameFiledVisible = buildOption == HybridBuildOption.BuildAll ||
-                                    buildOption == HybridBuildOption.BuildAllAndExportAndroidProject ||
-                                    buildOption == HybridBuildOption.BuildAPK ||
+                                    buildOption == HybridBuildOption.BuildApplication ||
                                     buildOption == HybridBuildOption.BuildScript;
             
             _patchedAOTDLLFolderField.visible = nameFiledVisible;

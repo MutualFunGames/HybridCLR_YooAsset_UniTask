@@ -31,33 +31,36 @@ namespace YooAsset.Editor
         {
             switch (_hybridBuilderSetting.hybridBuildOption)
             {
+                case HybridBuildOption.BuildScript:
+                case HybridBuildOption.BuildApplication:
                 case HybridBuildOption.BuildAll:
-                    CheckScriptPath();
-                    break;
-                case HybridBuildOption.BuildAsset:
-                    BuildAsset();
+                    if (CheckScriptPathExsist())
+                    {
+                        Debug.unityLogger.Log($"CheckScriptPathExsist Success");
+                    }
+                    else
+                    {
+                        Debug.unityLogger.LogError("CheckScriptPathExsist", $"CheckScriptPathExsist Failed");
+                        return;
+                    }
+
                     break;
             }
+            StartBuild();
         }
 
         /// <summary>
         /// 确认是否存在AOT补充Dll路径和HotUpdatePath路径
         /// </summary>
-        void CheckScriptPath()
+        bool CheckScriptPathExsist()
         {
-            if (!_hybridBuilderSetting.PatchedAOTDLLFolder || !_hybridBuilderSetting.HotUpdateDLLFolder)
-            {
-                Debug.unityLogger.LogError("路径为空！",
-                    $"PatchedAOTDLLFolder ===> {_hybridBuilderSetting.PatchedAOTDLLFolder}  PatchedAOTDLLFolder ===> {_hybridBuilderSetting.HotUpdateDLLFolder}");
-                return;
-            }
+            bool hasPatchedAOTDLLPath = false;
+            bool hasHotUpdateDllPath = false;
+
+            var patchedAOTDLLPathGUID = AssetDatabase.AssetPathToGUID(_hybridBuilderSetting.PatchedAOTDLLCollectPath);
+            var hotUpdateDLLPathGUID = AssetDatabase.AssetPathToGUID(_hybridBuilderSetting.HotUpdateDLLCollectPath);
 
             var buildPackage = AssetBundleCollectorSettingData.Setting.GetPackage(buildPackageName);
-            var patchedAOTDllPath = AssetDatabase.GetAssetPath(_hybridBuilderSetting.PatchedAOTDLLFolder);
-            var patchedAOTDLLPathGUID = AssetDatabase.AssetPathToGUID(patchedAOTDllPath);
-
-
-            Debug.unityLogger.Log($"获取AOT路径 ===> {patchedAOTDllPath}  AOT路径GUID ===> {patchedAOTDLLPathGUID}");
             foreach (var group in buildPackage.Groups)
             {
                 foreach (var collector in group.Collectors)
@@ -65,47 +68,21 @@ namespace YooAsset.Editor
                     Debug.unityLogger.Log($"正在遍历CollectorPath ==> {collector.CollectorGUID}");
                     if (string.Equals(patchedAOTDLLPathGUID, collector.CollectorGUID))
                     {
-                        Debug.unityLogger.Log($"找到GUID相同文件夹 ==> {patchedAOTDLLPathGUID}");
+                        hasPatchedAOTDLLPath = true;
+                        Debug.unityLogger.Log($"hasPatchedAOTDLLPath == CollectorGUID ==> {patchedAOTDLLPathGUID}");
+                    }
+                    else if (string.Equals(hotUpdateDLLPathGUID, collector.CollectorGUID))
+                    {
+                        hasHotUpdateDllPath = true;
+                        Debug.unityLogger.Log($"hasPatchedAOTDLLPath == CollectorGUID ==> {collector.CollectorGUID}");
                     }
                 }
             }
+
+            return hasPatchedAOTDLLPath && hasHotUpdateDllPath;
         }
-
-        public void BuildAPK()
-        {
-            //先生成AOT文件，再进行打包，以确保所有引用库都被引用,废弃，因HybridCLR会修改构建管线，自动执行一次GenerateALL
-            PrebuildCommand.GenerateAll();
-
-            BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions();
-            buildPlayerOptions.scenes = BuildHelper.GetBuildScenes();
-
-            var versionString = _hybridBuilderSetting.GetBuildVersion();
-
-            var buildPath =
-                $"{_hybridBuilderSetting.buildOutputPath}{PlayerSettings.productName}_{versionString}_{DateTime.Now.ToString("yyyy_M_d_HH_mm_s")}";
-            var buildTarget = EditorUserBuildSettings.activeBuildTarget;
-
-            switch (buildTarget)
-            {
-                case BuildTarget.Android:
-                    buildPath = buildPath + ".apk";
-                    break;
-            }
-
-            buildPlayerOptions.locationPathName = buildPath;
-            buildPlayerOptions.target = buildTarget;
-            buildPlayerOptions.options = BuildOptions.None;
-            //执行打包 场景名字，打包路径
-            UnityEditor.BuildPipeline.BuildPlayer(buildPlayerOptions);
-
-            EditorUtility.ClearProgressBar();
-        }
-
-        void BuildHotUpdateScript()
-        {
-        }
-
-        void BuildAsset()
+        
+        void StartBuild()
         {
             var fileNameStyle = _hybridBuilderSetting.assetFileNameStyle;
             var buildinFileCopyOption = _hybridBuilderSetting.assetBuildinFileCopyOption;
@@ -116,8 +93,12 @@ namespace YooAsset.Editor
             var builtinShaderBundleName = GetBuiltinShaderBundleName();
 
             HybridScriptableBuildParameters buildParameters = new HybridScriptableBuildParameters();
+            buildParameters.PatchedAOTDLLCollectPath = _hybridBuilderSetting.PatchedAOTDLLCollectPath;
+            buildParameters.HotUpdateDLLCollectPath = _hybridBuilderSetting.HotUpdateDLLCollectPath;
             buildParameters.BuildOutputRoot = _hybridBuilderSetting.buildOutputPath;
-            //拷贝目录,有需求可以自行更改
+            buildParameters.HybridBuildOption = _hybridBuilderSetting.hybridBuildOption;
+
+            //打包后的拷贝目录,有需求可以自行更改
             buildParameters.BuildinFileRoot = AssetBundleBuilderHelper.GetStreamingAssetsRoot();
             buildParameters.BuildPipeline = BuildPipeline.ToString();
             buildParameters.BuildBundleType = (int) EBuildBundleType.AssetBundle;
@@ -146,14 +127,16 @@ namespace YooAsset.Editor
 
         void UpdateBuildVersion()
         {
-            _hybridBuilderSetting.ReleaseBuildVersion++;
             switch (_hybridBuilderSetting.hybridBuildOption)
             {
                 case HybridBuildOption.BuildAll:
-                case HybridBuildOption.BuildAllAndExportAndroidProject:
-                case HybridBuildOption.BuildAPK:
                     _hybridBuilderSetting.AssetBuildVersion++;
                     _hybridBuilderSetting.ScriptBuildVersion++;
+                    break;
+                case HybridBuildOption.BuildApplication:
+                    _hybridBuilderSetting.AssetBuildVersion++;
+                    _hybridBuilderSetting.ScriptBuildVersion++;
+                    _hybridBuilderSetting.ReleaseBuildVersion++;
                     break;
                 case HybridBuildOption.BuildAsset:
                     _hybridBuilderSetting.AssetBuildVersion++;
