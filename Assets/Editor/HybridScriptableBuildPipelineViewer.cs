@@ -84,14 +84,6 @@ namespace YooAsset.Editor
         
         void StartBuild()
         {
-            var fileNameStyle = _hybridBuilderSetting.assetFileNameStyle;
-            var buildinFileCopyOption = _hybridBuilderSetting.assetBuildinFileCopyOption;
-            var buildinFileCopyParams = _hybridBuilderSetting.assetBuildinFileCopyParams;
-            var compressOption = _hybridBuilderSetting.assetCompressOption;
-            var clearBuildCache = _hybridBuilderSetting.isClearBuildCache;
-            var useAssetDependencyDB = _hybridBuilderSetting.isUseAssetDependDB;
-            var builtinShaderBundleName = GetBuiltinShaderBundleName();
-
             HybridScriptableBuildParameters buildParameters = new HybridScriptableBuildParameters();
             buildParameters.PatchedAOTDLLCollectPath = _hybridBuilderSetting.PatchedAOTDLLCollectPath;
             buildParameters.HotUpdateDLLCollectPath = _hybridBuilderSetting.HotUpdateDLLCollectPath;
@@ -107,13 +99,13 @@ namespace YooAsset.Editor
             buildParameters.PackageVersion = GetPackageVersion();
             buildParameters.EnableSharePackRule = true;
             buildParameters.VerifyBuildingResult = true;
-            buildParameters.FileNameStyle = fileNameStyle;
-            buildParameters.BuildinFileCopyOption = buildinFileCopyOption;
-            buildParameters.BuildinFileCopyParams = buildinFileCopyParams;
-            buildParameters.CompressOption = compressOption;
-            buildParameters.ClearBuildCacheFiles = clearBuildCache;
-            buildParameters.UseAssetDependencyDB = useAssetDependencyDB;
-            buildParameters.BuiltinShadersBundleName = builtinShaderBundleName;
+            buildParameters.FileNameStyle =  _hybridBuilderSetting.assetFileNameStyle;
+            buildParameters.BuildinFileCopyOption = _hybridBuilderSetting.assetBuildinFileCopyOption;
+            buildParameters.BuildinFileCopyParams = _hybridBuilderSetting.assetBuildinFileCopyParams;
+            buildParameters.CompressOption = _hybridBuilderSetting.assetCompressOption;
+            buildParameters.ClearBuildCacheFiles = _hybridBuilderSetting.isClearBuildCache;
+            buildParameters.UseAssetDependencyDB = _hybridBuilderSetting.isUseAssetDependDB;
+            buildParameters.BuiltinShadersBundleName = GetBuiltinShaderBundleName();
             buildParameters.EncryptionServices = CreateEncryptionInstance();
 
             HybrdiScriptableBuildPipeline pipeline = new HybrdiScriptableBuildPipeline();

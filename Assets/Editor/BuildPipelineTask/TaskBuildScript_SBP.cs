@@ -23,5 +23,8 @@ public class TaskBuildScript_SBP : IBuildTask
         
         var hotUpdateDLLFullPath=Path.Combine(projectPath,buildParameters.HotUpdateDLLCollectPath);
         BuildHelper.CopyHotUpdateDllToCollectPath(hotUpdateDLLFullPath);
+        
+        //补全热更新预制体依赖
+        BuildHelper.SupplementPrefabDependent();
     }
 }

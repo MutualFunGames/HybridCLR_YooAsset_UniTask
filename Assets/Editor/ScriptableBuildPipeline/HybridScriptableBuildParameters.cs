@@ -10,6 +10,9 @@ public class HybridScriptableBuildParameters : BuildParameters
         /// </summary>
         public ECompressOption CompressOption = ECompressOption.Uncompressed;
         
+        /// <summary>
+        /// 构建选项
+        /// </summary>
         public HybridBuildOption HybridBuildOption= HybridBuildOption.None;
         
         /// <summary>
