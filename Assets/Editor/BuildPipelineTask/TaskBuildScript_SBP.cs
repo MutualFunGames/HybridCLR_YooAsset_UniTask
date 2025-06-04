@@ -21,12 +21,12 @@ public class TaskBuildScript_SBP : IBuildTask
             case HybridBuildOption.BuildScript:
                 //如果是生成代码，则只需要更新AOT和热更新代码即可
                 Il2CppDefGeneratorCommand.GenerateIl2CppDef();
+                //由于该方法中已经执行了生成热更新dll，因此无需重复执行
                 LinkGeneratorCommand.GenerateLinkXml();
                 StripAOTDllCommand.GenerateStripedAOTDlls();
                 break;
         }
-
-        CompileDllCommand.CompileDllActiveBuildTarget();
+        
 
         //获取需要补充元数据的Dll
         BuildHelper.GetPatchedAOTAssemblyListToHybridCLRSettings();
