@@ -11,7 +11,6 @@ using YooAsset.Editor;
 
 public class HybridBuilderWindow : EditorWindow
 {
-    private string _buildPackage;
     private HybridBuilderSetting _hybridBuilderSetting;
 
 
@@ -42,31 +41,6 @@ public class HybridBuilderWindow : EditorWindow
             visualAsset.CloneTree(root);
             _toolbar = root.Q<Toolbar>("Toolbar");
             _container = root.Q("Container");
-
-
-            // 检测构建包裹
-            var packageNames = GetBuildPackageNames();
-            if (packageNames.Count == 0)
-            {
-                var label = new Label();
-                label.text = "Not found any package";
-                label.style.width = 100;
-                _toolbar.Add(label);
-                return;
-            }
-
-            // 构建包裹
-            {
-                _buildPackage = packageNames[0];
-                _packageMenu = new ToolbarMenu();
-                _packageMenu.style.width = 200;
-                foreach (var packageName in packageNames)
-                {
-                    _packageMenu.menu.AppendAction(packageName, PackageMenuAction, PackageMenuFun, packageName);
-                }
-
-                _toolbar.Add(_packageMenu);
-            }
             
 
             var hybridBuilderSettings = FindAllHybridBuilderSettings();
@@ -105,13 +79,12 @@ public class HybridBuilderWindow : EditorWindow
         // 清空扩展区域
         _container.Clear();
         
-        _packageMenu.text = _buildPackage;
         _hybridBuilderSettingMenu.text = _hybridBuilderSetting.name;
 
         var buildTarget = EditorUserBuildSettings.activeBuildTarget;
 
         var viewer =
-            new HybridScriptableBuildPipelineViewer(_buildPackage, buildTarget, _hybridBuilderSetting, _container);
+            new HybridScriptableBuildPipelineViewer(buildTarget, _hybridBuilderSetting, _container);
 
     }
 
@@ -145,27 +118,7 @@ public class HybridBuilderWindow : EditorWindow
 
         return hybridBuilderSettings;
     }
-
-    private List<string> GetBuildPackageNames()
-    {
-        List<string> result = new List<string>();
-        foreach (var package in AssetBundleCollectorSettingData.Setting.Packages)
-        {
-            result.Add(package.PackageName);
-        }
-
-        return result;
-    }
-
-    private void PackageMenuAction(DropdownMenuAction action)
-    {
-        var packageName = (string) action.userData;
-        if (_buildPackage != packageName)
-        {
-            _buildPackage = packageName;
-            RefreshBuildPipelineView();
-        }
-    }
+    
 
     void HybridBuilderSettingMenuAction(DropdownMenuAction action)
     {
@@ -186,13 +139,5 @@ public class HybridBuilderWindow : EditorWindow
             return DropdownMenuAction.Status.Normal;
     }
 
-
-    private DropdownMenuAction.Status PackageMenuFun(DropdownMenuAction action)
-    {
-        var packageName = (string) action.userData;
-        if (_buildPackage == packageName)
-            return DropdownMenuAction.Status.Checked;
-        else
-            return DropdownMenuAction.Status.Normal;
-    }
+    
 }

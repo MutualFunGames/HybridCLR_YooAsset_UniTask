@@ -13,15 +13,12 @@ namespace YooAsset.Editor
     internal class HybridScriptableBuildPipelineViewer : HybridBuildPipeViewerBase
     {
         private HybridBuilderSetting _hybridBuilderSetting;
-
-        private string buildPackageName;
-
-        public HybridScriptableBuildPipelineViewer(string packageName, BuildTarget buildTarget,
+        
+        public HybridScriptableBuildPipelineViewer(BuildTarget buildTarget,
             HybridBuilderSetting hybridBuilderSetting, VisualElement parent)
-            : base(packageName, EBuildPipeline.ScriptableBuildPipeline, buildTarget, hybridBuilderSetting, parent)
+            : base(EBuildPipeline.ScriptableBuildPipeline, buildTarget, hybridBuilderSetting, parent)
         {
             _hybridBuilderSetting = hybridBuilderSetting;
-            buildPackageName = packageName;
         }
 
         /// <summary>
@@ -29,10 +26,39 @@ namespace YooAsset.Editor
         /// </summary>
         protected override void ExecuteBuild()
         {
+            if (_hybridBuilderSetting.hybridBuildOption == HybridBuildOption.None)
+            {
+                return;
+            }
+            
             switch (_hybridBuilderSetting.hybridBuildOption)
             {
                 case HybridBuildOption.BuildScript:
+                    if (CheckScriptPathExsist())
+                    {
+                        Debug.unityLogger.Log($"CheckScriptPathExsist Success");
+                    }
+                    else
+                    {
+                        Debug.unityLogger.LogError("CheckScriptPathExsist", $"CheckScriptPathExsist Failed");
+                        return;
+                    }
+                    StartBuild(false);
+                    break;
                 case HybridBuildOption.BuildApplication:
+                    if (CheckScriptPathExsist())
+                    {
+                        Debug.unityLogger.Log($"CheckScriptPathExsist Success");
+                    }
+                    else
+                    {
+                        Debug.unityLogger.LogError("CheckScriptPathExsist", $"CheckScriptPathExsist Failed");
+                        return;
+                    }
+                    StartBuild(false);
+                    StartBuild(true);
+                    BuildApplication();
+                    break;
                 case HybridBuildOption.BuildAll:
                     if (CheckScriptPathExsist())
                     {
@@ -43,10 +69,28 @@ namespace YooAsset.Editor
                         Debug.unityLogger.LogError("CheckScriptPathExsist", $"CheckScriptPathExsist Failed");
                         return;
                     }
-
+                    StartBuild(false);
+                    StartBuild(true);
+                    break;
+                case HybridBuildOption.BuildAsset:
+                    StartBuild(true);
                     break;
             }
-            StartBuild();
+            UpdateBuildVersion();
+        }
+
+
+        void BuildApplication()
+        {
+            var activeBuildTarget = EditorUserBuildSettings.activeBuildTarget;
+            switch (activeBuildTarget)
+            {
+                case BuildTarget.Android:
+                    BuildHelper.BuildAPK(_hybridBuilderSetting.buildOutputPath,_hybridBuilderSetting.GetApplicationBuildVersion(true));
+                    break;
+                case BuildTarget.StandaloneWindows:
+                    break;
+            }
         }
 
         /// <summary>
@@ -54,13 +98,18 @@ namespace YooAsset.Editor
         /// </summary>
         bool CheckScriptPathExsist()
         {
+            if (string.IsNullOrEmpty(_hybridBuilderSetting.ScriptPackageName))
+            {
+                Debug.unityLogger.LogError("CheckScriptPathExsist",$"ScriptPackageName == Null ");
+                return false;
+            }
             bool hasPatchedAOTDLLPath = false;
             bool hasHotUpdateDllPath = false;
 
             var patchedAOTDLLPathGUID = AssetDatabase.AssetPathToGUID(_hybridBuilderSetting.PatchedAOTDLLCollectPath);
             var hotUpdateDLLPathGUID = AssetDatabase.AssetPathToGUID(_hybridBuilderSetting.HotUpdateDLLCollectPath);
 
-            var buildPackage = AssetBundleCollectorSettingData.Setting.GetPackage(buildPackageName);
+            var buildPackage = AssetBundleCollectorSettingData.Setting.GetPackage(_hybridBuilderSetting.ScriptPackageName);
             foreach (var group in buildPackage.Groups)
             {
                 foreach (var collector in group.Collectors)
@@ -82,21 +131,30 @@ namespace YooAsset.Editor
             return hasPatchedAOTDLLPath && hasHotUpdateDllPath;
         }
         
-        void StartBuild()
+        void StartBuild(bool isBuildAsset)
         {
             HybridScriptableBuildParameters buildParameters = new HybridScriptableBuildParameters();
             buildParameters.PatchedAOTDLLCollectPath = _hybridBuilderSetting.PatchedAOTDLLCollectPath;
             buildParameters.HotUpdateDLLCollectPath = _hybridBuilderSetting.HotUpdateDLLCollectPath;
             buildParameters.BuildOutputRoot = _hybridBuilderSetting.buildOutputPath;
-            buildParameters.HybridBuildOption = _hybridBuilderSetting.hybridBuildOption;
+            buildParameters.IsBuildAsset = isBuildAsset;
 
-            //打包后的拷贝目录,有需求可以自行更改
+            //打包后的拷贝目录,有需求可以自行更改,建议不要设置StreamingAsset，会随包打出
             buildParameters.BuildinFileRoot = AssetBundleBuilderHelper.GetStreamingAssetsRoot();
             buildParameters.BuildPipeline = BuildPipeline.ToString();
             buildParameters.BuildBundleType = (int) EBuildBundleType.AssetBundle;
             buildParameters.BuildTarget = BuildTarget;
-            buildParameters.PackageName = PackageName;
-            buildParameters.PackageVersion = GetPackageVersion();
+            var packageName=string.Empty;
+            if (isBuildAsset)
+            {
+                packageName = _hybridBuilderSetting.AssetPackageName;
+            }
+            else
+            {
+                packageName = _hybridBuilderSetting.ScriptPackageName;
+            }
+            buildParameters.PackageName=packageName;
+            buildParameters.PackageVersion = _hybridBuilderSetting.GetBuildVersions(isBuildAsset);
             buildParameters.EnableSharePackRule = true;
             buildParameters.VerifyBuildingResult = true;
             buildParameters.FileNameStyle =  _hybridBuilderSetting.assetFileNameStyle;
@@ -105,14 +163,13 @@ namespace YooAsset.Editor
             buildParameters.CompressOption = _hybridBuilderSetting.assetCompressOption;
             buildParameters.ClearBuildCacheFiles = _hybridBuilderSetting.isClearBuildCache;
             buildParameters.UseAssetDependencyDB = _hybridBuilderSetting.isUseAssetDependDB;
-            buildParameters.BuiltinShadersBundleName = GetBuiltinShaderBundleName();
+            buildParameters.BuiltinShadersBundleName = GetBuiltinShaderBundleName(packageName);
             buildParameters.EncryptionServices = CreateEncryptionInstance();
 
             HybrdiScriptableBuildPipeline pipeline = new HybrdiScriptableBuildPipeline();
             var buildResult = pipeline.Run(buildParameters, true);
             if (buildResult.Success)
             {
-                UpdateBuildVersion();
                 EditorUtility.RevealInFinder(buildResult.OutputPackageDirectory);
             }
         }
@@ -143,11 +200,11 @@ namespace YooAsset.Editor
         /// 内置着色器资源包名称
         /// 注意：和自动收集的着色器资源包名保持一致！
         /// </summary>
-        private string GetBuiltinShaderBundleName()
+        private string GetBuiltinShaderBundleName(string packageName)
         {
             var uniqueBundleName = AssetBundleCollectorSettingData.Setting.UniqueBundleName;
             var packRuleResult = DefaultPackRule.CreateShadersPackRuleResult();
-            return packRuleResult.GetBundleName(PackageName, uniqueBundleName);
+            return packRuleResult.GetBundleName(packageName, uniqueBundleName);//todo
         }
     }
 }

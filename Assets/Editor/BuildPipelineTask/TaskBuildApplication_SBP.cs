@@ -10,12 +10,7 @@ public class TaskBuildApplication_SBP : IBuildTask
     {
         var buildParametersContext = context.GetContextObject<BuildParametersContext>();
         var buildParameters = buildParametersContext.Parameters as HybridScriptableBuildParameters;
-
-
-        if (buildParameters.HybridBuildOption != HybridBuildOption.BuildApplication)
-        {
-            return;
-        }
+        
         
         var activeBuildTarget = EditorUserBuildSettings.activeBuildTarget;
         switch (activeBuildTarget)

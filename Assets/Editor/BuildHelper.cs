@@ -38,6 +38,9 @@ public class BuildHelper
     [MenuItem("整合工具/打APK包")]
     public static void Debug_BuildAPK()
     {
+        CompileDllCommand.CompileDllActiveBuildTarget();
+        PrebuildCommand.GenerateAll();
+        
         var sampleOutputPath = Path.Combine(ProjectPath, "Bundles");
         BuildAPK(sampleOutputPath, "9999");
     }

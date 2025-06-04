@@ -6,7 +6,7 @@ using UnityEngine;
 using UniFramework.Event;
 using YooAsset;
 
-public class AOTLauncher : MonoBehaviour
+public class HybridLauncher : MonoBehaviour
 {
     /// <summary>
     /// 资源系统运行模式

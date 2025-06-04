@@ -47,6 +47,44 @@ public class HybridBuilderSetting : ScriptableObject
     }
 
     /// <summary>
+    /// 资产包包名
+    /// </summary>
+    public string AssetPackageName
+    {
+        get => assetPackageName;
+        set
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return;
+            }
+            assetPackageName = value;
+            EditorUtility.SetDirty(this);
+        }
+    }
+    [SerializeField] private string assetPackageName;
+
+
+    /// <summary>
+    /// 代码包包名
+    /// </summary>
+    public string ScriptPackageName
+    {
+        get => scriptPackageName;
+        set
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return;
+            }
+            scriptPackageName = value;
+            EditorUtility.SetDirty(this);
+        }
+    }
+    
+    [SerializeField] private string scriptPackageName;
+    
+    /// <summary>
     /// 打包输出路径
     /// </summary>
     public string buildOutputPath
@@ -329,10 +367,37 @@ public class HybridBuilderSetting : ScriptableObject
     [SerializeField] private HybridBuildOption _hybridBuildOption;
 
 
-    public string GetBuildVersion()
+    public string GetApplicationBuildVersion(bool isBuild)
     {
-        var buildVersion =
-            $"{_releaseBuildVersion}_{_assetBuildVersion}_{_scriptBuildVersion}";
+        var buildVersion = string.Empty;
+        if (isBuild)
+        {
+            buildVersion =
+                $"{_releaseBuildVersion}_{_assetBuildVersion}_{_scriptBuildVersion}";
+        }
+        else
+        {
+            buildVersion =
+                $"Realse:{_releaseBuildVersion} AssetPakcage:{_assetBuildVersion} ScriptPackge:{_scriptBuildVersion}";
+        }
+
+        return buildVersion;
+    }
+
+    public string GetBuildVersions(bool isBuildAsset)
+    {
+        var buildVersion = string.Empty;
+
+        if (isBuildAsset)
+        {
+            buildVersion=
+                $"{_releaseBuildVersion}_{_assetBuildVersion}";
+        }
+        else
+        {
+            buildVersion=
+                $"{_releaseBuildVersion}_{_scriptBuildVersion}";
+        }
         return buildVersion;
     }
 }

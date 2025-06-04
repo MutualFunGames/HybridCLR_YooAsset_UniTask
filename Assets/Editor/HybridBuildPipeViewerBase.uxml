@@ -20,6 +20,8 @@
         </ui:VisualElement>
         <ui:Toggle label="Clear Build Cache" name="ClearBuildCache" />
         <ui:Toggle label="Use Asset Depend DB" name="UseAssetDependency" />
+        <ui:Label tabindex="-1" text="More than 2 packages are required to execute HybridBuild !" parse-escape-sequences="true" display-tooltip-when-elided="true" name="PackageErrorLabel" style="flex-wrap: nowrap; align-items: auto; align-self: center; color: rgb(255, 0, 0);" />
+        <ui:VisualElement name="AssetBundlePackageContainer" style="flex-grow: 1;" />
         <ui:VisualElement name="EncryptionContainer" style="height: 24px;" />
         <uie:EnumField label="Compression" value="Center" name="Compression" />
         <uie:EnumField label="File Name Style" value="Center" name="FileNameStyle" />

@@ -10,9 +10,11 @@
     <type fullname="System.ComponentModel.EditorBrowsableState" preserve="all" />
   </assembly>
   <assembly fullname="UniTask">
+    <type fullname="Cysharp.Threading.Tasks.AsyncOperationBaseExtensions" preserve="all" />
     <type fullname="Cysharp.Threading.Tasks.CompilerServices.AsyncUniTaskMethodBuilder" preserve="all" />
     <type fullname="Cysharp.Threading.Tasks.CompilerServices.AsyncUniTaskVoidMethodBuilder" preserve="all" />
     <type fullname="Cysharp.Threading.Tasks.EnumeratorAsyncExtensions" preserve="all" />
+    <type fullname="Cysharp.Threading.Tasks.OperationHandleBaseExtensions" preserve="all" />
     <type fullname="Cysharp.Threading.Tasks.PlayerLoopTiming" preserve="all" />
     <type fullname="Cysharp.Threading.Tasks.UniTask" preserve="all" />
     <type fullname="Cysharp.Threading.Tasks.UniTask/Awaiter" preserve="all" />
@@ -22,6 +24,7 @@
   </assembly>
   <assembly fullname="UnityEngine.CoreModule">
     <type fullname="UnityEngine.Component" preserve="all" />
+    <type fullname="UnityEngine.Debug" preserve="all" />
     <type fullname="UnityEngine.GameObject" preserve="all" />
     <type fullname="UnityEngine.MonoBehaviour" preserve="all" />
     <type fullname="UnityEngine.Object" preserve="all" />
@@ -54,9 +57,7 @@
     <type fullname="UnityEngine.Rendering.LightProbeUsage" preserve="all" />
     <type fullname="UnityEngine.Rendering.ReflectionProbeUsage" preserve="all" />
     <type fullname="UnityEngine.Experimental.Rendering.RayTracingMode" preserve="all" />
-    <type fullname="UnityEngine.Rendering.RayTracingAccelerationStructureBuildFlags" preserve="all" />
     <type fullname="UnityEngine.Material[]" preserve="all" />
-    <type fullname="UnityEngine.LODGroup" preserve="all" />
     <type fullname="UnityEngine.LayerMask" preserve="all" />
     <type fullname="UnityEngine.Playables.PlayableGraph" preserve="all" />
   </assembly>
@@ -74,6 +75,7 @@
   </assembly>
   <assembly fullname="YooAsset">
     <type fullname="YooAsset.AssetHandle" preserve="all" />
+    <type fullname="YooAsset.AsyncOperationBase" preserve="all" />
     <type fullname="YooAsset.EOperationStatus" preserve="all" />
     <type fullname="YooAsset.HandleBase" preserve="all" />
     <type fullname="YooAsset.InstantiateOperation" preserve="all" />
@@ -84,11 +86,11 @@
   <assembly fullname="mscorlib">
     <type fullname="System.Array" preserve="all" />
     <type fullname="System.Byte" preserve="all" />
-    <type fullname="System.Collections.IEnumerator" preserve="all" />
     <type fullname="System.Diagnostics.DebuggableAttribute" preserve="all" />
     <type fullname="System.Diagnostics.DebuggableAttribute/DebuggingModes" preserve="all" />
     <type fullname="System.Diagnostics.DebuggerHiddenAttribute" preserve="all" />
     <type fullname="System.Exception" preserve="all" />
+    <type fullname="System.IProgress`1" preserve="all" />
     <type fullname="System.Object" preserve="all" />
     <type fullname="System.Runtime.CompilerServices.AsyncStateMachineAttribute" preserve="all" />
     <type fullname="System.Runtime.CompilerServices.CompilationRelaxationsAttribute" preserve="all" />
@@ -97,16 +99,12 @@
     <type fullname="System.Runtime.CompilerServices.RuntimeCompatibilityAttribute" preserve="all" />
     <type fullname="System.Runtime.CompilerServices.RuntimeHelpers" preserve="all" />
     <type fullname="System.RuntimeFieldHandle" preserve="all" />
-    <type fullname="System.Threading.CancellationToken" preserve="all" />
     <type fullname="System.Type" preserve="all" />
     <type fullname="System.ValueType" preserve="all" />
-    <type fullname="System.Int32" preserve="all" />
-    <type fullname="System.Boolean" preserve="all" />
     <type fullname="System.RuntimeType" preserve="all" />
-    <type fullname="System.String" preserve="all" />
     <type fullname="System.UInt16" preserve="all" />
-    <type fullname="System.Single" preserve="all" />
-    <type fullname="System.UInt32" preserve="all" />
+    <type fullname="System.String" preserve="all" />
+    <type fullname="System.Int32" preserve="all" />
   </assembly>
   <assembly fullname="UnityEngine.UIModule">
     <type fullname="UnityEngine.CanvasRenderer" preserve="all" />
@@ -125,8 +123,7 @@
     <type fullname="UnityEngine.BoxCollider" preserve="all" />
     <type fullname="UnityEngine.Rigidbody" preserve="all" />
     <type fullname="UnityEngine.ArticulationBody" preserve="all" />
-    <type fullname="UnityEngine.LowLevelPhysics.GeometryHolder" preserve="all" />
-    <type fullname="UnityEngine.PhysicsMaterial" preserve="all" />
+    <type fullname="UnityEngine.PhysicMaterial" preserve="all" />
   </assembly>
   <assembly fullname="UnityEngine.AnimationModule">
     <type fullname="UnityEngine.Animator" preserve="all" />

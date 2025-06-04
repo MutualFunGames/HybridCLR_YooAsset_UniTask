@@ -12,12 +12,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 07db0dba8f275934a8610be7b456aaf9, type: 3}
   m_Name: HybridBuilderSettings
   m_EditorClassIdentifier: 
+  assetPackageName: SmapleAsset
+  scriptPackageName: SampleScript
   _buildOutputPath: E:/UnityProject/HybridCLR_YooAsset_UniTask/Bundles
   _patchedAOTDLLFolder: {fileID: 102900000, guid: 11b7f96fc9278374ba086b0d6bd5c1cb, type: 3}
   _hotUpdateDLLFolder: {fileID: 102900000, guid: a95223861ef7ae44da819502f678b5a3, type: 3}
-  _releaseBuildVersion: 7
-  _assetBuildVersion: 5
-  _scriptBuildVersion: 6
+  _releaseBuildVersion: 11
+  _assetBuildVersion: 13
+  _scriptBuildVersion: 11
   versionFileName: VERSION.txt
   _isUseSelfIncrementingVersions: 1
   _isClearBuildCache: 1
