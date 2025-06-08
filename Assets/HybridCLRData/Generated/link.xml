@@ -2,7 +2,6 @@
 <linker>
   <assembly fullname="AOTPublic">
     <type fullname="HttpHelper" preserve="all" />
-    <type fullname="PublicData" preserve="all" />
   </assembly>
   <assembly fullname="System">
     <type fullname="System.CodeDom.Compiler.GeneratedCodeAttribute" preserve="all" />
@@ -49,7 +48,6 @@
     <type fullname="YooAsset.EOperationStatus" preserve="all" />
     <type fullname="YooAsset.HandleBase" preserve="all" />
     <type fullname="YooAsset.InstantiateOperation" preserve="all" />
-    <type fullname="YooAsset.ResourcePackage" preserve="all" />
     <type fullname="YooAsset.SceneHandle" preserve="all" />
     <type fullname="YooAsset.YooAssets" preserve="all" />
   </assembly>

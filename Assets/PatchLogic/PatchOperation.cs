@@ -15,12 +15,13 @@ public class PatchOperation : GameAsyncOperation
     private readonly EventGroup _eventGroup = new EventGroup();
     private readonly StateMachine _machine;
     private readonly string _packageName;
+    private HybridRuntimeSettings _runtimeSettings;
     private ESteps _steps = ESteps.None;
 
-    public PatchOperation(string packageName, EPlayMode playMode)
+    public PatchOperation(string packageName,EPlayMode playMode,HybridRuntimeSettings hybridRuntimeSettings)
     {
         _packageName = packageName;
-
+        _runtimeSettings=hybridRuntimeSettings;
         // 注册监听事件
         _eventGroup.AddListener<UserEventDefine.UserTryInitialize>(OnHandleEventMessage);
         _eventGroup.AddListener<UserEventDefine.UserBeginDownloadWebFiles>(OnHandleEventMessage);
@@ -37,9 +38,10 @@ public class PatchOperation : GameAsyncOperation
         _machine.AddNode<FsmDownloadPackageFiles>();
         _machine.AddNode<FsmDownloadPackageOver>();
         _machine.AddNode<FsmClearCacheBundle>();
-        _machine.AddNode<FsmStartGame>();
-
+        _machine.AddNode<FsmEndPatch>();
+        
         _machine.SetBlackboardValue("PackageName", packageName);
+        _machine.SetBlackboardValue("HybridRuntimeSettings", hybridRuntimeSettings);
         _machine.SetBlackboardValue("PlayMode", playMode);
     }
     protected override void OnStart()

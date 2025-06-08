@@ -17,8 +17,7 @@ public class LoadImage : MonoBehaviour
         texture.LoadImage(data);
         image.texture = texture;
         image.SetNativeSize();
-        var package = YooAssets.TryGetPackage(PublicData.PackageName);
-        var handle = package.LoadAssetAsync<GameObject>("TestCube");
+        var handle = YooAssets.LoadAssetAsync<GameObject>("TestCube");
         await handle.ToUniTask();
         if (handle.Status == EOperationStatus.Succeed)
         {

@@ -1,11 +1,14 @@
 ﻿
+using Cysharp.Threading.Tasks;
+
 namespace UniFramework.Machine
 {
 	public interface IStateNode
 	{
-		void OnCreate(StateMachine machine);
-		void OnEnter();
-		void OnUpdate();
-		void OnExit();
+		UniTaskVoid OnCreate(StateMachine machine);
+		
+		UniTaskVoid OnEnter();
+		UniTaskVoid OnUpdate();
+		UniTaskVoid OnExit();
 	}
 }

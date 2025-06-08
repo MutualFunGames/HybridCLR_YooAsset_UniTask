@@ -47,18 +47,17 @@ public class HybrdiScriptableBuildPipeline : IBuildPipeline
             //需要确保代码在资源构建之前就已经在AssetBundle文件夹中
             pipeline.AddRange(new List<IBuildTask>
             {
-                new TaskPrepare_SBP(),
+                new TaskPrepare_RFBP(),
                 new TaskBuildScript_SBP(),
-                new TaskGetBuildMap_SBP(),
-                new TaskBuilding_SBP(),
-                new TaskVerifyBuildResult_SBP(),
-                new TaskEncryption_SBP(),
-                new TaskUpdateBundleInfo_SBP(),
-                new TaskCreateManifest_SBP(),
-                new TaskCreateReport_SBP(),
-                new TaskCreatePackage_SBP(),
-                new TaskCopyBuildinFiles_SBP(),
-                new TaskCreateCatalog_SBP()
+                new TaskGetBuildMap_RFBP(),
+                new TaskBuilding_RFBP(),
+                new TaskEncryption_RFBP(),
+                new TaskUpdateBundleInfo_RFBP(),
+                new TaskCreateManifest_RFBP(),
+                new TaskCreateReport_RFBP(),
+                new TaskCreatePackage_RFBP(),
+                new TaskCopyBuildinFiles_RFBP(),
+                new TaskCreateCatalog_RFBP()
             });
         }
         return pipeline;

@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UniFramework.Machine;
 
@@ -7,19 +8,19 @@ internal class FsmDownloadPackageOver : IStateNode
 {
     private StateMachine _machine;
 
-    void IStateNode.OnCreate(StateMachine machine)
+    async UniTaskVoid IStateNode.OnCreate(StateMachine machine)
     {
         _machine = machine;
     }
-    void IStateNode.OnEnter()
+    async UniTaskVoid IStateNode.OnEnter()
     {
         PatchEventDefine.PatchStepsChange.SendEventMessage("资源文件下载完毕！");
         _machine.ChangeState<FsmClearCacheBundle>();
     }
-    void IStateNode.OnUpdate()
+    async UniTaskVoid IStateNode.OnUpdate()
     {
     }
-    void IStateNode.OnExit()
+    async UniTaskVoid IStateNode.OnExit()
     {
     }
 }

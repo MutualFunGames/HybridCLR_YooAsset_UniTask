@@ -12,13 +12,13 @@ namespace YooAsset.Editor
 {
     internal class HybridScriptableBuildPipelineViewer : HybridBuildPipeViewerBase
     {
-        private HybridBuilderSetting _hybridBuilderSetting;
-        
+        private HybridBuilderSettings _hybridBuilderSettings;
+
         public HybridScriptableBuildPipelineViewer(BuildTarget buildTarget,
-            HybridBuilderSetting hybridBuilderSetting, VisualElement parent)
-            : base(EBuildPipeline.ScriptableBuildPipeline, buildTarget, hybridBuilderSetting, parent)
+            HybridBuilderSettings hybridBuilderSettings, VisualElement parent)
+            : base(EBuildPipeline.ScriptableBuildPipeline, buildTarget, hybridBuilderSettings, parent)
         {
-            _hybridBuilderSetting = hybridBuilderSetting;
+            _hybridBuilderSettings = hybridBuilderSettings;
         }
 
         /// <summary>
@@ -26,12 +26,12 @@ namespace YooAsset.Editor
         /// </summary>
         protected override void ExecuteBuild()
         {
-            if (_hybridBuilderSetting.hybridBuildOption == HybridBuildOption.None)
+            if (_hybridBuilderSettings.hybridBuildOption == HybridBuildOption.None)
             {
                 return;
             }
-            
-            switch (_hybridBuilderSetting.hybridBuildOption)
+
+            switch (_hybridBuilderSettings.hybridBuildOption)
             {
                 case HybridBuildOption.BuildScript:
                     if (CheckScriptPathExsist())
@@ -43,6 +43,7 @@ namespace YooAsset.Editor
                         Debug.unityLogger.LogError("CheckScriptPathExsist", $"CheckScriptPathExsist Failed");
                         return;
                     }
+
                     StartBuild(false);
                     break;
                 case HybridBuildOption.BuildApplication:
@@ -55,9 +56,10 @@ namespace YooAsset.Editor
                         Debug.unityLogger.LogError("CheckScriptPathExsist", $"CheckScriptPathExsist Failed");
                         return;
                     }
+                    BuildApplication();
                     StartBuild(false);
                     StartBuild(true);
-                    BuildApplication();
+                    EditorUtility.RevealInFinder(_hybridBuilderSettings.buildOutputPath);
                     break;
                 case HybridBuildOption.BuildAll:
                     if (CheckScriptPathExsist())
@@ -69,24 +71,55 @@ namespace YooAsset.Editor
                         Debug.unityLogger.LogError("CheckScriptPathExsist", $"CheckScriptPathExsist Failed");
                         return;
                     }
+
                     StartBuild(false);
                     StartBuild(true);
+                    EditorUtility.RevealInFinder(_hybridBuilderSettings.buildOutputPath);
                     break;
                 case HybridBuildOption.BuildAsset:
                     StartBuild(true);
                     break;
             }
-            UpdateBuildVersion();
         }
 
 
         void BuildApplication()
         {
             var activeBuildTarget = EditorUserBuildSettings.activeBuildTarget;
+            
+            //如果是生成代码，则只需要更新AOT和热更新代码即可
+            Il2CppDefGeneratorCommand.GenerateIl2CppDef();
+            //由于该方法中已经执行了生成热更新dll，因此无需重复执行生成热更新DLL
+            LinkGeneratorCommand.GenerateLinkXml();
+            
+            //补全热更新预制体依赖
+            BuildHelper.SupplementPrefabDependent();
+            
+            
             switch (activeBuildTarget)
             {
                 case BuildTarget.Android:
-                    BuildHelper.BuildAPK(_hybridBuilderSetting.buildOutputPath,_hybridBuilderSetting.GetApplicationBuildVersion(true));
+                    BuildHelper.BuildAPK(_hybridBuilderSettings.buildOutputPath,
+                        _hybridBuilderSettings.GetCurrentVersion(true),
+                        () =>
+                        {
+                            //获取需要补充元数据的AOTDLL列表
+                            //这里为什么不执行Generate/AOTGenericReference和Generate/AotDlls
+                            //因为前者本身就是生成用于参考的文件,和下面这个方法一致
+                            //为什么不执行Generate/AotDlls,是因为执行AOT本质上就是打一次包并把裁剪后的AOTDLL拷贝到HybridCLRData目录下
+                            //因此如果要打包,直接在打包后通过TaskBuildScript_SBP将AOTDLL拷贝到Package目录即可
+                            BuildHelper.GetPatchedAOTAssemblyListToHybridCLRSettings();
+                            
+                            //生成桥接函数
+                            MethodBridgeGeneratorCommand.GenerateMethodBridgeAndReversePInvokeWrapper();
+            
+                            //以上是必须要在打包Application之前完成的方法
+                            
+                            _hybridBuilderSettings.RuntimeSettings.ReleaseBuildVersion =
+                                _hybridBuilderSettings.ReleaseBuildVersion;
+                            _hybridBuilderSettings.ReleaseBuildVersion++;
+                            EditorUtility.SetDirty(_hybridBuilderSettings.RuntimeSettings);
+                        });
                     break;
                 case BuildTarget.StandaloneWindows:
                     break;
@@ -98,18 +131,20 @@ namespace YooAsset.Editor
         /// </summary>
         bool CheckScriptPathExsist()
         {
-            if (string.IsNullOrEmpty(_hybridBuilderSetting.ScriptPackageName))
+            if (string.IsNullOrEmpty(_hybridBuilderSettings.ScriptPackageName))
             {
-                Debug.unityLogger.LogError("CheckScriptPathExsist",$"ScriptPackageName == Null ");
+                Debug.unityLogger.LogError("CheckScriptPathExsist", $"ScriptPackageName == Null ");
                 return false;
             }
+
             bool hasPatchedAOTDLLPath = false;
             bool hasHotUpdateDllPath = false;
 
-            var patchedAOTDLLPathGUID = AssetDatabase.AssetPathToGUID(_hybridBuilderSetting.PatchedAOTDLLCollectPath);
-            var hotUpdateDLLPathGUID = AssetDatabase.AssetPathToGUID(_hybridBuilderSetting.HotUpdateDLLCollectPath);
+            var patchedAOTDLLPathGUID = AssetDatabase.AssetPathToGUID(_hybridBuilderSettings.PatchedAOTDLLCollectPath);
+            var hotUpdateDLLPathGUID = AssetDatabase.AssetPathToGUID(_hybridBuilderSettings.HotUpdateDLLCollectPath);
 
-            var buildPackage = AssetBundleCollectorSettingData.Setting.GetPackage(_hybridBuilderSetting.ScriptPackageName);
+            var buildPackage =
+                AssetBundleCollectorSettingData.Setting.GetPackage(_hybridBuilderSettings.ScriptPackageName);
             foreach (var group in buildPackage.Groups)
             {
                 foreach (var collector in group.Collectors)
@@ -130,71 +165,75 @@ namespace YooAsset.Editor
 
             return hasPatchedAOTDLLPath && hasHotUpdateDllPath;
         }
-        
+
         void StartBuild(bool isBuildAsset)
         {
             HybridScriptableBuildParameters buildParameters = new HybridScriptableBuildParameters();
-            buildParameters.PatchedAOTDLLCollectPath = _hybridBuilderSetting.PatchedAOTDLLCollectPath;
-            buildParameters.HotUpdateDLLCollectPath = _hybridBuilderSetting.HotUpdateDLLCollectPath;
-            buildParameters.BuildOutputRoot = _hybridBuilderSetting.buildOutputPath;
+            buildParameters.PatchedAOTDLLCollectPath = _hybridBuilderSettings.PatchedAOTDLLCollectPath;
+            buildParameters.HotUpdateDLLCollectPath = _hybridBuilderSettings.HotUpdateDLLCollectPath;
+            buildParameters.BuildOutputRoot = _hybridBuilderSettings.buildOutputPath;
             buildParameters.IsBuildAsset = isBuildAsset;
 
             //打包后的拷贝目录,有需求可以自行更改,建议不要设置StreamingAsset，会随包打出
             buildParameters.BuildinFileRoot = AssetBundleBuilderHelper.GetStreamingAssetsRoot();
-            buildParameters.BuildPipeline = BuildPipeline.ToString();
-            buildParameters.BuildBundleType = (int) EBuildBundleType.AssetBundle;
             buildParameters.BuildTarget = BuildTarget;
-            var packageName=string.Empty;
             if (isBuildAsset)
             {
-                packageName = _hybridBuilderSetting.AssetPackageName;
+                buildParameters.PackageName = _hybridBuilderSettings.AssetPackageName;
+                buildParameters.BuiltinShadersBundleName = GetBuiltinShaderBundleName(_hybridBuilderSettings.AssetPackageName);
+                buildParameters.BuildPipeline = BuildPipeline.ToString();
+                buildParameters.BuildBundleType = (int) EBuildBundleType.AssetBundle;
             }
             else
             {
-                packageName = _hybridBuilderSetting.ScriptPackageName;
+                buildParameters.PackageName = _hybridBuilderSettings.ScriptPackageName;
+                buildParameters.BuildBundleType = (int)EBuildBundleType.RawBundle;
+                buildParameters.BuildPipeline = nameof(EBuildPipeline.RawFileBuildPipeline);
             }
-            buildParameters.PackageName=packageName;
-            buildParameters.PackageVersion = _hybridBuilderSetting.GetBuildVersions(isBuildAsset);
+            
+            buildParameters.PackageVersion = _hybridBuilderSettings.GetBuildVersions(isBuildAsset);
             buildParameters.EnableSharePackRule = true;
             buildParameters.VerifyBuildingResult = true;
-            buildParameters.FileNameStyle =  _hybridBuilderSetting.assetFileNameStyle;
-            buildParameters.BuildinFileCopyOption = _hybridBuilderSetting.assetBuildinFileCopyOption;
-            buildParameters.BuildinFileCopyParams = _hybridBuilderSetting.assetBuildinFileCopyParams;
-            buildParameters.CompressOption = _hybridBuilderSetting.assetCompressOption;
-            buildParameters.ClearBuildCacheFiles = _hybridBuilderSetting.isClearBuildCache;
-            buildParameters.UseAssetDependencyDB = _hybridBuilderSetting.isUseAssetDependDB;
-            buildParameters.BuiltinShadersBundleName = GetBuiltinShaderBundleName(packageName);
+            buildParameters.FileNameStyle = _hybridBuilderSettings.assetFileNameStyle;
+            buildParameters.BuildinFileCopyOption = _hybridBuilderSettings.assetBuildinFileCopyOption;
+            buildParameters.BuildinFileCopyParams = _hybridBuilderSettings.assetBuildinFileCopyParams;
+            buildParameters.CompressOption = _hybridBuilderSettings.assetCompressOption;
+            buildParameters.ClearBuildCacheFiles = _hybridBuilderSettings.isClearBuildCache;
+            buildParameters.UseAssetDependencyDB = _hybridBuilderSettings.isUseAssetDependDB;
             buildParameters.EncryptionServices = CreateEncryptionInstance();
 
             HybrdiScriptableBuildPipeline pipeline = new HybrdiScriptableBuildPipeline();
             var buildResult = pipeline.Run(buildParameters, true);
             if (buildResult.Success)
             {
-                EditorUtility.RevealInFinder(buildResult.OutputPackageDirectory);
+                if (isBuildAsset)
+                {
+                    _hybridBuilderSettings.RuntimeSettings.AssetPackageName = _hybridBuilderSettings.AssetPackageName;
+                    _hybridBuilderSettings.RuntimeSettings.AssetBuildVersion = _hybridBuilderSettings.AssetBuildVersion;
+                    _hybridBuilderSettings.AssetBuildVersion++;
+                }
+                else
+                {
+                    _hybridBuilderSettings.RuntimeSettings.ScriptPackageName = _hybridBuilderSettings.ScriptPackageName;
+                    _hybridBuilderSettings.RuntimeSettings.ScriptBuildVersion =
+                        _hybridBuilderSettings.ScriptBuildVersion;
+                    _hybridBuilderSettings.ScriptBuildVersion++;
+                }
+
+                EditorUtility.SetDirty(_hybridBuilderSettings.RuntimeSettings);
+
+                switch (_hybridBuilderSettings.hybridBuildOption)
+                {
+                    case HybridBuildOption.BuildAsset:
+                    case HybridBuildOption.BuildScript:
+                        EditorUtility.RevealInFinder(buildResult.OutputPackageDirectory);
+                        break;
+                }
+
+                _hybridBuilderSettings.RuntimeSettings.EncryptionServices = buildParameters.EncryptionServices.GetType();
             }
         }
 
-        void UpdateBuildVersion()
-        {
-            switch (_hybridBuilderSetting.hybridBuildOption)
-            {
-                case HybridBuildOption.BuildAll:
-                    _hybridBuilderSetting.AssetBuildVersion++;
-                    _hybridBuilderSetting.ScriptBuildVersion++;
-                    break;
-                case HybridBuildOption.BuildApplication:
-                    _hybridBuilderSetting.AssetBuildVersion++;
-                    _hybridBuilderSetting.ScriptBuildVersion++;
-                    _hybridBuilderSetting.ReleaseBuildVersion++;
-                    break;
-                case HybridBuildOption.BuildAsset:
-                    _hybridBuilderSetting.AssetBuildVersion++;
-                    break;
-                case HybridBuildOption.BuildScript:
-                    _hybridBuilderSetting.ScriptBuildVersion++;
-                    break;
-            }
-        }
 
         /// <summary>
         /// 内置着色器资源包名称
@@ -204,7 +243,7 @@ namespace YooAsset.Editor
         {
             var uniqueBundleName = AssetBundleCollectorSettingData.Setting.UniqueBundleName;
             var packRuleResult = DefaultPackRule.CreateShadersPackRuleResult();
-            return packRuleResult.GetBundleName(packageName, uniqueBundleName);//todo
+            return packRuleResult.GetBundleName(packageName, uniqueBundleName); //todo
         }
     }
 }

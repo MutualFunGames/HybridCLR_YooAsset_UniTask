@@ -9,7 +9,9 @@ using System.Linq;
 using Newtonsoft.Json;
 using System.Xml;
 using HybridCLR.Editor.AOT;
+using HybridCLR.Editor.HotUpdate;
 using HybridCLR.Editor.Meta;
+using UnityEditor.Build.Reporting;
 
 
 public class BuildHelper
@@ -33,8 +35,36 @@ public class BuildHelper
 
         return names.ToArray();
     }
+    
+    [MenuItem("整合工具/验证元数据是否需要补充")]
+    public static bool CheckAccessMissingMetadata()
+    {
+        BuildTarget target = EditorUserBuildSettings.activeBuildTarget;
+        // aotDir指向 构建主包时生成的裁剪aot dll目录，而不是最新的SettingsUtil.GetAssembliesPostIl2CppStripDir(target)目录。
+        // 一般来说，发布热更新包时，由于中间可能调用过generate/all，SettingsUtil.GetAssembliesPostIl2CppStripDir(target)目录中包含了最新的aot dll，
+        // 肯定无法检查出类型或者函数裁剪的问题。
+        // 需要在构建完主包后，将当时的aot dll保存下来，供后面补充元数据或者裁剪检查。
+        //换句话说,验证一定要在打包之前,或者Generate/AotDlls之前执行
+        string aotDir = SettingsUtil.GetAssembliesPostIl2CppStripDir(target);
 
+        // 第2个参数hotUpdateAssNames为热更新程序集列表。对于旗舰版本，该列表需要包含DHE程序集，即SettingsUtil.HotUpdateAndDHEAssemblyNamesIncludePreserved。
+        var checker = new MissingMetadataChecker(aotDir, SettingsUtil.HotUpdateAssemblyNamesIncludePreserved);
 
+        string hotUpdateDir = SettingsUtil.GetHotUpdateDllsOutputDirByTarget(target);
+        bool notAnyMissing = false;
+        foreach (var dll in SettingsUtil.HotUpdateAssemblyFilesExcludePreserved)
+        {
+            string dllPath = $"{hotUpdateDir}/{dll}";
+            notAnyMissing = checker.Check(dllPath);
+            if (!notAnyMissing)
+            {
+                Debug.unityLogger.LogError("验证元数据",$"验证{dll}失败");
+                return false;
+            }
+        }
+
+        return true;
+    }
     [MenuItem("整合工具/打APK包")]
     public static void Debug_BuildAPK()
     {
@@ -50,7 +80,7 @@ public class BuildHelper
     /// </summary>
     /// <param name="outputPath">  APK/Project输出路径  </param>
     /// <param name="isExportProject">  是否导出AndroidProject  </param>
-    public static void BuildAPK(string outputPath, string version, bool isExportProject = false)
+    public static void BuildAPK(string outputPath, string version,Action callBack=null, bool isExportProject = false)
     {
         BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions();
         buildPlayerOptions.scenes = GetBuildScenes();
@@ -75,7 +105,12 @@ public class BuildHelper
         Debug.unityLogger.Log(buildPath);
         buildPlayerOptions.locationPathName = buildPath;
         //执行打包 场景名字，打包路径
-        BuildPipeline.BuildPlayer(buildPlayerOptions);
+        var report=  BuildPipeline.BuildPlayer(buildPlayerOptions);
+        
+        if (report.summary.result == BuildResult.Succeeded)
+        {
+            callBack?.Invoke();
+        }
 
         EditorUtility.ClearProgressBar();
     }
@@ -83,6 +118,9 @@ public class BuildHelper
     /// <summary>
     /// 获取AOT之前,应先编译热更新代码
     /// 执行之前需要先编译热更新代码 CompileDllCommand.CompileDllActiveBuildTarget()
+    ///
+    /// 通过对比热更新DLL和AOTDLL,获取需要补充元数据的AOTDLL
+    /// 并将结果写入HybridCLRSettings中
     /// </summary>
     public static void GetPatchedAOTAssemblyListToHybridCLRSettings()
     {
@@ -142,7 +180,7 @@ public class BuildHelper
             var targetFileName = $"{originFileName}.bytes";
             var dllRawFilePath = Path.Combine(targetDir, targetFileName);
             File.Copy(dllFilePath, dllRawFilePath, true);
-            bytesFiles.Add(targetFileName);
+            bytesFiles.Add(originFileName);
         }
 
         return bytesFiles;

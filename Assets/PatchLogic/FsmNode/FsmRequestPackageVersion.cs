@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UniFramework.Machine;
 using YooAsset;
@@ -8,28 +9,28 @@ internal class FsmRequestPackageVersion : IStateNode
 {
     private StateMachine _machine;
 
-    void IStateNode.OnCreate(StateMachine machine)
+    async UniTaskVoid IStateNode.OnCreate(StateMachine machine)
     {
         _machine = machine;
     }
-    void IStateNode.OnEnter()
+    async UniTaskVoid IStateNode.OnEnter()
     {
         PatchEventDefine.PatchStepsChange.SendEventMessage("请求资源版本 !");
-        GameManager.Instance.StartCoroutine(UpdatePackageVersion());
+        await  UpdatePackageVersion();
     }
-    void IStateNode.OnUpdate()
+    async UniTaskVoid IStateNode.OnUpdate()
     {
     }
-    void IStateNode.OnExit()
+    async UniTaskVoid IStateNode.OnExit()
     {
     }
 
-    private IEnumerator UpdatePackageVersion()
+    async UniTask UpdatePackageVersion()
     {
         var packageName = (string)_machine.GetBlackboardValue("PackageName");
         var package = YooAssets.GetPackage(packageName);
         var operation = package.RequestPackageVersionAsync();
-        yield return operation;
+        await operation;
 
         if (operation.Status != EOperationStatus.Succeed)
         {

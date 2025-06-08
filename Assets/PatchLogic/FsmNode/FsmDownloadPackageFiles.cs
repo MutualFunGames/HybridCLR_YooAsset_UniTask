@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UniFramework.Machine;
 using YooAsset;
@@ -7,33 +8,33 @@ public class FsmDownloadPackageFiles : IStateNode
 {
     private StateMachine _machine;
 
-    void IStateNode.OnCreate(StateMachine machine)
+    async UniTaskVoid IStateNode.OnCreate(StateMachine machine)
     {
         _machine = machine;
     }
-    void IStateNode.OnEnter()
+    async UniTaskVoid IStateNode.OnEnter()
     {
         PatchEventDefine.PatchStepsChange.SendEventMessage("开始下载资源文件！");
-        GameManager.Instance.StartCoroutine(BeginDownload());
+        await BeginDownload();
     }
-    void IStateNode.OnUpdate()
+    async UniTaskVoid IStateNode.OnUpdate()
     {
     }
-    void IStateNode.OnExit()
+    async UniTaskVoid IStateNode.OnExit()
     {
     }
 
-    private IEnumerator BeginDownload()
+    async UniTask BeginDownload()
     {
         var downloader = (ResourceDownloaderOperation)_machine.GetBlackboardValue("Downloader");
         downloader.DownloadErrorCallback = PatchEventDefine.WebFileDownloadFailed.SendEventMessage;
         downloader.DownloadUpdateCallback = PatchEventDefine.DownloadUpdate.SendEventMessage;
         downloader.BeginDownload();
-        yield return downloader;
+        await downloader;
 
         // 检测下载结果
         if (downloader.Status != EOperationStatus.Succeed)
-            yield break;
+            return;
 
         _machine.ChangeState<FsmDownloadPackageOver>();
     }

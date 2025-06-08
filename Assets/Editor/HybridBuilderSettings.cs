@@ -36,7 +36,7 @@ public enum HybridBuildOption
 }
 
 [CreateAssetMenu(fileName = "HybridBuilderSettings", menuName = "Scriptable Objects/HybridBuilderSettings")]
-public class HybridBuilderSetting : ScriptableObject
+public class HybridBuilderSettings : ScriptableObject
 {
     void OnEnable()
     {
@@ -45,6 +45,8 @@ public class HybridBuilderSetting : ScriptableObject
             _buildOutputPath = AssetBundleBuilderHelper.GetDefaultBuildOutputRoot();
         }
     }
+    
+    public HybridRuntimeSettings RuntimeSettings;
 
     /// <summary>
     /// 资产包包名
@@ -367,7 +369,7 @@ public class HybridBuilderSetting : ScriptableObject
     [SerializeField] private HybridBuildOption _hybridBuildOption;
 
 
-    public string GetApplicationBuildVersion(bool isBuild)
+    public string GetCurrentVersion(bool isBuild)
     {
         var buildVersion = string.Empty;
         if (isBuild)

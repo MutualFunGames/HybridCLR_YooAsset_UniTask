@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UniFramework.Machine;
 using YooAsset;
@@ -8,35 +9,34 @@ public class FsmUpdatePackageManifest : IStateNode
 {
     private StateMachine _machine;
 
-    void IStateNode.OnCreate(StateMachine machine)
+    async UniTaskVoid IStateNode.OnCreate(StateMachine machine)
     {
         _machine = machine;
     }
-    void IStateNode.OnEnter()
+    async UniTaskVoid IStateNode.OnEnter()
     {
         PatchEventDefine.PatchStepsChange.SendEventMessage("更新资源清单！");
-        GameManager.Instance.StartCoroutine(UpdateManifest());
+        await UpdateManifest();
     }
-    void IStateNode.OnUpdate()
+    async UniTaskVoid IStateNode.OnUpdate()
     {
     }
-    void IStateNode.OnExit()
+    async UniTaskVoid IStateNode.OnExit()
     {
     }
 
-    private IEnumerator UpdateManifest()
+    async UniTask UpdateManifest()
     {
         var packageName = (string)_machine.GetBlackboardValue("PackageName");
         var packageVersion = (string)_machine.GetBlackboardValue("PackageVersion");
         var package = YooAssets.GetPackage(packageName);
         var operation = package.UpdatePackageManifestAsync(packageVersion);
-        yield return operation;
+        await operation;
 
         if (operation.Status != EOperationStatus.Succeed)
         {
             Debug.LogWarning(operation.Error);
             PatchEventDefine.PackageManifestUpdateFailed.SendEventMessage();
-            yield break;
         }
         else
         {

@@ -3,7 +3,6 @@ using System.IO;
 using System.Text;
 using System.Collections;
 using UnityEngine;
-using NUnit.Framework;
 using YooAsset;
 
 public class SampleBundleEncryption

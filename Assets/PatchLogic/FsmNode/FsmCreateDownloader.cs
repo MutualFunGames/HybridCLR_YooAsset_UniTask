@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UniFramework.Machine;
 using YooAsset;
@@ -8,23 +9,23 @@ public class FsmCreateDownloader : IStateNode
 {
     private StateMachine _machine;
 
-    void IStateNode.OnCreate(StateMachine machine)
+    async UniTaskVoid IStateNode.OnCreate(StateMachine machine)
     {
         _machine = machine;
     }
-    void IStateNode.OnEnter()
+    async UniTaskVoid IStateNode.OnEnter()
     {
         PatchEventDefine.PatchStepsChange.SendEventMessage("创建资源下载器！");
-        CreateDownloader();
+        await CreateDownloader();
     }
-    void IStateNode.OnUpdate()
+    async UniTaskVoid IStateNode.OnUpdate()
     {
     }
-    void IStateNode.OnExit()
+    async UniTaskVoid IStateNode.OnExit()
     {
     }
 
-    void CreateDownloader()
+    async UniTask CreateDownloader()
     {
         var packageName = (string)_machine.GetBlackboardValue("PackageName");
         var package = YooAssets.GetPackage(packageName);
@@ -36,7 +37,7 @@ public class FsmCreateDownloader : IStateNode
         if (downloader.TotalDownloadCount == 0)
         {
             Debug.Log("Not found any download files !");
-            _machine.ChangeState<FsmStartGame>();
+            _machine.ChangeState<FsmEndPatch>();
         }
         else
         {
