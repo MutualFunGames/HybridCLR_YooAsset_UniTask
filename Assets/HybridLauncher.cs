@@ -53,7 +53,6 @@ public class HybridLauncher : MonoBehaviour
                 RuntimeSettings.AssetPackageName
             }
             ;
-
         foreach (var package in packages)
         {
             // 开始补丁更新流程
@@ -89,6 +88,11 @@ public class HybridLauncher : MonoBehaviour
         SceneEventDefine.ChangeToHomeScene.SendEventMessage();
     }
 
+    /// <summary>
+    /// 加载补充元数据的AOTDLL
+    /// </summary>
+    /// <param name="scriptPackage"></param>
+    /// <returns></returns>
     public async UniTask<bool> LoadMetadataForAOTAssemblies(ResourcePackage scriptPackage)
     {
         HomologousImageMode mode = HomologousImageMode.SuperSet;
@@ -124,6 +128,11 @@ public class HybridLauncher : MonoBehaviour
         return true;
     }
     
+    /// <summary>
+    /// 加载热更新DLL
+    /// </summary>
+    /// <param name="scriptPackage"></param>
+    /// <returns></returns>
     async UniTask<bool> LoadHotUpdateAssemblies(ResourcePackage scriptPackage)
     {
         var handle = scriptPackage.LoadRawFileSync("HotUpdateDLLs");

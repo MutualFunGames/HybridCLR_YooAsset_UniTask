@@ -11,6 +11,9 @@ internal class FsmInitializePackage : IStateNode
 {
     private StateMachine _machine;
 
+    private HybridRuntimeSettings _runtimeSettings;
+
+    private string _packageName;
     async UniTaskVoid IStateNode.OnCreate(StateMachine machine)
     {
         _machine = machine;
@@ -18,6 +21,8 @@ internal class FsmInitializePackage : IStateNode
     async UniTaskVoid IStateNode.OnEnter()
     {
         PatchEventDefine.PatchStepsChange.SendEventMessage("初始化资源包！");
+        
+        _runtimeSettings=  (HybridRuntimeSettings)_machine.GetBlackboardValue("HybridRuntimeSettings");
         await InitPackage();
     }
     async UniTaskVoid IStateNode.OnUpdate()
@@ -30,18 +35,18 @@ internal class FsmInitializePackage : IStateNode
     async UniTask InitPackage()
     {
         var playMode = (EPlayMode)_machine.GetBlackboardValue("PlayMode");
-        var packageName = (string)_machine.GetBlackboardValue("PackageName");
+        _packageName = (string)_machine.GetBlackboardValue("PackageName");
 
         // 创建资源包裹类
-        var package = YooAssets.TryGetPackage(packageName);
+        var package = YooAssets.TryGetPackage(_packageName);
         if (package == null)
-            package = YooAssets.CreatePackage(packageName);
+            package = YooAssets.CreatePackage(_packageName);
 
         // 编辑器下的模拟模式
         InitializationOperation initializationOperation = null;
         if (playMode == EPlayMode.EditorSimulateMode)
         {
-            var buildResult = EditorSimulateModeHelper.SimulateBuild(packageName);
+            var buildResult = EditorSimulateModeHelper.SimulateBuild(_packageName);
             var packageRoot = buildResult.PackageRootDirectory;
             var createParameters = new EditorSimulateModeParameters();
             createParameters.EditorFileSystemParameters = FileSystemParameters.CreateDefaultEditorFileSystemParameters(packageRoot);
@@ -63,7 +68,7 @@ internal class FsmInitializePackage : IStateNode
             string fallbackHostServer = GetHostServerURL();
             IRemoteServices remoteServices = new RemoteServices(defaultHostServer, fallbackHostServer);
             var createParameters = new HostPlayModeParameters();
-            createParameters.BuildinFileSystemParameters = FileSystemParameters.CreateDefaultBuildinFileSystemParameters();
+            createParameters.BuildinFileSystemParameters = null;
             createParameters.CacheFileSystemParameters = FileSystemParameters.CreateDefaultCacheFileSystemParameters(remoteServices);
             initializationOperation = package.InitializeAsync(createParameters);
         }
@@ -106,27 +111,27 @@ internal class FsmInitializePackage : IStateNode
     private string GetHostServerURL()
     {
         //string hostServerIP = "http://10.0.2.2"; //安卓模拟器地址
-        string hostServerIP = "http://127.0.0.1";
-        string appVersion = "v1.0";
+        string hostServerIP = _runtimeSettings.HostServerIP;
+        string appVersion =_runtimeSettings.ReleaseBuildVersion.ToString();
+        string packageVersion=string.Empty;
+        if (string.Equals(_packageName, _runtimeSettings.AssetPackageName))
+        {
+            packageVersion = _runtimeSettings.AssetBuildVersion.ToString();
+        }
+        else
+        {
+            packageVersion = _runtimeSettings.ScriptBuildVersion.ToString();
+        }
+
 
 #if UNITY_EDITOR
-        if (UnityEditor.EditorUserBuildSettings.activeBuildTarget == UnityEditor.BuildTarget.Android)
-            return $"{hostServerIP}/CDN/Android/{appVersion}";
-        else if (UnityEditor.EditorUserBuildSettings.activeBuildTarget == UnityEditor.BuildTarget.iOS)
-            return $"{hostServerIP}/CDN/IPhone/{appVersion}";
-        else if (UnityEditor.EditorUserBuildSettings.activeBuildTarget == UnityEditor.BuildTarget.WebGL)
-            return $"{hostServerIP}/CDN/WebGL/{appVersion}";
-        else
-            return $"{hostServerIP}/CDN/PC/{appVersion}";
+        var activeBuildTarget = UnityEditor.EditorUserBuildSettings.activeBuildTarget;
+        var hostPath=Path.Combine(hostServerIP,"Bundles", appVersion, activeBuildTarget.ToString(),_packageName,packageVersion);
+        Debug.unityLogger.Log(hostPath);
+        return hostPath;
 #else
-        if (Application.platform == RuntimePlatform.Android)
-            return $"{hostServerIP}/CDN/Android/{appVersion}";
-        else if (Application.platform == RuntimePlatform.IPhonePlayer)
-            return $"{hostServerIP}/CDN/IPhone/{appVersion}";
-        else if (Application.platform == RuntimePlatform.WebGLPlayer)
-            return $"{hostServerIP}/CDN/WebGL/{appVersion}";
-        else
-            return $"{hostServerIP}/CDN/PC/{appVersion}";
+        var activeBuildTarget = Application.platform;
+         return Path.Combine(hostServerIP, appVersion, activeBuildTarget.ToString());
 #endif
     }
 

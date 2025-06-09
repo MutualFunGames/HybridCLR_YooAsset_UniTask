@@ -99,7 +99,7 @@ public class HybridBuilderSettings : ScriptableObject
                 return;
             }
 
-            _buildOutputPath = value;
+            _buildOutputPath=Path.Combine(value,_releaseBuildVersion.ToString());
             EditorUtility.SetDirty(this);
         }
     }
@@ -385,21 +385,5 @@ public class HybridBuilderSettings : ScriptableObject
 
         return buildVersion;
     }
-
-    public string GetBuildVersions(bool isBuildAsset)
-    {
-        var buildVersion = string.Empty;
-
-        if (isBuildAsset)
-        {
-            buildVersion=
-                $"{_releaseBuildVersion}_{_assetBuildVersion}";
-        }
-        else
-        {
-            buildVersion=
-                $"{_releaseBuildVersion}_{_scriptBuildVersion}";
-        }
-        return buildVersion;
-    }
+    
 }

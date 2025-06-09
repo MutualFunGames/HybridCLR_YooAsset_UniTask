@@ -76,7 +76,7 @@ namespace YooAsset.Editor
                 BrowserFolder(defaultPath, (selectPath) =>
                 {
                     _hybridBuilderSettings.buildOutputPath = selectPath;
-                    _buildOutputField.SetValueWithoutNotify(selectPath);
+                    _buildOutputField.SetValueWithoutNotify(_hybridBuilderSettings.buildOutputPath);
                 });
             };
             

@@ -183,15 +183,16 @@ namespace YooAsset.Editor
                 buildParameters.BuiltinShadersBundleName = GetBuiltinShaderBundleName(_hybridBuilderSettings.AssetPackageName);
                 buildParameters.BuildPipeline = BuildPipeline.ToString();
                 buildParameters.BuildBundleType = (int) EBuildBundleType.AssetBundle;
+                buildParameters.PackageVersion = _hybridBuilderSettings.AssetBuildVersion.ToString();
             }
             else
             {
                 buildParameters.PackageName = _hybridBuilderSettings.ScriptPackageName;
                 buildParameters.BuildBundleType = (int)EBuildBundleType.RawBundle;
                 buildParameters.BuildPipeline = nameof(EBuildPipeline.RawFileBuildPipeline);
+                buildParameters.PackageVersion = _hybridBuilderSettings.ScriptBuildVersion.ToString();
             }
             
-            buildParameters.PackageVersion = _hybridBuilderSettings.GetBuildVersions(isBuildAsset);
             buildParameters.EnableSharePackRule = true;
             buildParameters.VerifyBuildingResult = true;
             buildParameters.FileNameStyle = _hybridBuilderSettings.assetFileNameStyle;
