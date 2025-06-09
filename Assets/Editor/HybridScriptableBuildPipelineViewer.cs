@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using HybridCLR.Editor.Commands;
+using Newtonsoft.Json;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -59,7 +60,14 @@ namespace YooAsset.Editor
                     BuildApplication();
                     StartBuild(false);
                     StartBuild(true);
-                    EditorUtility.RevealInFinder(_hybridBuilderSettings.buildOutputPath);
+                                         
+                    //为了保证一次打包所有的包Release版本一致，应该在打完所有包之后增加Release版本
+                    _hybridBuilderSettings.RuntimeSettings.ReleaseBuildVersion =
+                        _hybridBuilderSettings.ReleaseBuildVersion;
+                    _hybridBuilderSettings.ReleaseBuildVersion++;
+                    EditorUtility.SetDirty(_hybridBuilderSettings.RuntimeSettings);
+                    
+                    EditorUtility.RevealInFinder(_hybridBuilderSettings. GetBuildOutputPath());
                     break;
                 case HybridBuildOption.BuildAll:
                     if (CheckScriptPathExsist())
@@ -74,12 +82,14 @@ namespace YooAsset.Editor
 
                     StartBuild(false);
                     StartBuild(true);
-                    EditorUtility.RevealInFinder(_hybridBuilderSettings.buildOutputPath);
+                    EditorUtility.RevealInFinder(_hybridBuilderSettings. GetBuildOutputPath());
                     break;
                 case HybridBuildOption.BuildAsset:
                     StartBuild(true);
                     break;
             }
+            var json = JsonConvert.SerializeObject(_hybridBuilderSettings.RuntimeSettings);
+            File.WriteAllText(Path.Combine(_hybridBuilderSettings. buildOutputPath, "RuntimeSettings.json"), json);
         }
 
 
@@ -87,39 +97,11 @@ namespace YooAsset.Editor
         {
             var activeBuildTarget = EditorUserBuildSettings.activeBuildTarget;
             
-            //如果是生成代码，则只需要更新AOT和热更新代码即可
-            Il2CppDefGeneratorCommand.GenerateIl2CppDef();
-            //由于该方法中已经执行了生成热更新dll，因此无需重复执行生成热更新DLL
-            LinkGeneratorCommand.GenerateLinkXml();
-            
-            //补全热更新预制体依赖
-            BuildHelper.SupplementPrefabDependent();
-            
-            
             switch (activeBuildTarget)
             {
                 case BuildTarget.Android:
-                    BuildHelper.BuildAPK(_hybridBuilderSettings.buildOutputPath,
-                        _hybridBuilderSettings.GetCurrentVersion(true),
-                        () =>
-                        {
-                            //获取需要补充元数据的AOTDLL列表
-                            //这里为什么不执行Generate/AOTGenericReference和Generate/AotDlls
-                            //因为前者本身就是生成用于参考的文件,和下面这个方法一致
-                            //为什么不执行Generate/AotDlls,是因为执行AOT本质上就是打一次包并把裁剪后的AOTDLL拷贝到HybridCLRData目录下
-                            //因此如果要打包,直接在打包后通过TaskBuildScript_SBP将AOTDLL拷贝到Package目录即可
-                            BuildHelper.GetPatchedAOTAssemblyListToHybridCLRSettings();
-                            
-                            //生成桥接函数
-                            MethodBridgeGeneratorCommand.GenerateMethodBridgeAndReversePInvokeWrapper();
-            
-                            //以上是必须要在打包Application之前完成的方法
-                            
-                            _hybridBuilderSettings.RuntimeSettings.ReleaseBuildVersion =
-                                _hybridBuilderSettings.ReleaseBuildVersion;
-                            _hybridBuilderSettings.ReleaseBuildVersion++;
-                            EditorUtility.SetDirty(_hybridBuilderSettings.RuntimeSettings);
-                        });
+                    BuildHelper.BuildAPK(_hybridBuilderSettings.GetBuildOutputPath(),
+                        _hybridBuilderSettings.GetCurrentVersion(true));
                     break;
                 case BuildTarget.StandaloneWindows:
                     break;
@@ -171,7 +153,7 @@ namespace YooAsset.Editor
             HybridScriptableBuildParameters buildParameters = new HybridScriptableBuildParameters();
             buildParameters.PatchedAOTDLLCollectPath = _hybridBuilderSettings.PatchedAOTDLLCollectPath;
             buildParameters.HotUpdateDLLCollectPath = _hybridBuilderSettings.HotUpdateDLLCollectPath;
-            buildParameters.BuildOutputRoot = _hybridBuilderSettings.buildOutputPath;
+            buildParameters.BuildOutputRoot = _hybridBuilderSettings. GetBuildOutputPath();
             buildParameters.IsBuildAsset = isBuildAsset;
 
             //打包后的拷贝目录,有需求可以自行更改,建议不要设置StreamingAsset，会随包打出

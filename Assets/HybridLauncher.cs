@@ -7,6 +7,7 @@ using HybridCLR;
 using Newtonsoft.Json;
 using UnityEngine;
 using UniFramework.Event;
+using UnityEngine.Networking;
 using YooAsset;
 
 public class HybridLauncher : MonoBehaviour
@@ -18,6 +19,11 @@ public class HybridLauncher : MonoBehaviour
 
     public HybridRuntimeSettings RuntimeSettings;
 
+    /// <summary>
+    /// 
+    /// </summary>
+    public string RuntimeSettingsPath;
+
     void Awake()
     {
         Debug.Log($"资源系统运行模式：{PlayMode}");
@@ -28,12 +34,8 @@ public class HybridLauncher : MonoBehaviour
 
     async UniTask Start()
     {
-        if (!RuntimeSettings)
-        {
-            Debug.unityLogger.LogError("RuntimeSettings", "RuntimeSettings == Null");
-            return;
-        }
-
+        await LoadHybridRuntimeSettings();
+        
         // 游戏管理器
         GameManager.Instance.Behaviour = this;
 
@@ -56,29 +58,29 @@ public class HybridLauncher : MonoBehaviour
         foreach (var package in packages)
         {
             // 开始补丁更新流程
-            var operation = new PatchOperation(package,PlayMode, RuntimeSettings);
+            var operation = new PatchOperation(package, PlayMode, RuntimeSettings);
             YooAssets.StartOperation(operation);
             await operation;
         }
-        
+
         var scriptPackage = YooAssets.GetPackage(RuntimeSettings.ScriptPackageName);
         if (scriptPackage.InitializeStatus != EOperationStatus.Succeed)
         {
             Debug.unityLogger.LogError("ScriptPackage", "InitializeStatus is Falied");
             return;
         }
-        
+
         if (!await LoadMetadataForAOTAssemblies(scriptPackage))
         {
             Debug.unityLogger.LogError("LoadMetadataForAOTAssemblies", "Load Falied");
             return;
         }
-        
+
         if (!await LoadHotUpdateAssemblies(scriptPackage))
         {
             Debug.unityLogger.LogError("LoadHotUpdateAssemblies", "Load Falied");
         }
-        
+
 
         // 设置默认的资源包
         var gamePackage = YooAssets.GetPackage(RuntimeSettings.AssetPackageName);
@@ -86,6 +88,33 @@ public class HybridLauncher : MonoBehaviour
 
         // 切换到主页面场景
         SceneEventDefine.ChangeToHomeScene.SendEventMessage();
+    }
+
+
+    public async UniTask LoadHybridRuntimeSettings()
+    {
+        if (string.IsNullOrEmpty(RuntimeSettingsPath))
+        {
+            Debug.unityLogger.LogError("LoadHybridRuntimeSettings", "RuntimeSettingsPath == Null");
+            return;
+        }
+        UnityWebRequest request = UnityWebRequest.Get(RuntimeSettingsPath);
+        request.timeout = 2;
+        request.downloadHandler = new DownloadHandlerBuffer();
+        await request.SendWebRequest();
+        if (request.result != UnityWebRequest.Result.Success)
+        {
+            Debug.unityLogger.LogError("LoadHybridRuntimeSettings", "Load Failed");
+            return;
+        }
+
+        var data = request.downloadHandler.text;
+        if (string.IsNullOrEmpty(data))
+        {
+            Debug.unityLogger.LogError("LoadHybridRuntimeSettings", "data is Null");
+        }
+        Debug.unityLogger.Log(data);
+        RuntimeSettings = JsonConvert.DeserializeObject<HybridRuntimeSettings>(data);
     }
 
     /// <summary>
@@ -96,7 +125,7 @@ public class HybridLauncher : MonoBehaviour
     public async UniTask<bool> LoadMetadataForAOTAssemblies(ResourcePackage scriptPackage)
     {
         HomologousImageMode mode = HomologousImageMode.SuperSet;
-        
+
         var handle = scriptPackage.LoadRawFileSync("AOTDLLs");
         await handle;
         if (handle.Status != EOperationStatus.Succeed)
@@ -104,30 +133,34 @@ public class HybridLauncher : MonoBehaviour
             Debug.unityLogger.LogError("ScriptPackageName", $"AOTDLLs LoadRawFileSync {handle.LastError}");
             return false;
         }
+
         var data = handle.GetRawFileText();
         if (string.IsNullOrEmpty(data))
         {
             Debug.unityLogger.LogError("ScriptPackageName", "AOTDLLs is null or empty");
             return false;
         }
+
         var dllNames = JsonConvert.DeserializeObject<List<string>>(data);
         foreach (var name in dllNames)
         {
             var dataHandle = scriptPackage.LoadRawFileAsync(name);
             await dataHandle.ToUniTask();
             var dllData = dataHandle.GetRawFileData();
-            if (dllData == null|| dllData.Length == 0)
+            if (dllData == null || dllData.Length == 0)
             {
                 Debug.unityLogger.LogError("ScriptPackageName", $"{name} is null or empty");
                 continue;
             }
+
             // 加载assembly对应的dll，会自动为它hook。一旦aot泛型函数的native函数不存在，用解释器版本代码
             LoadImageErrorCode err = RuntimeApi.LoadMetadataForAOTAssembly(dllData, mode);
             Debug.unityLogger.Log($"LoadMetadataForAOTAssembly:{name}. mode:{mode} ret:{err}");
         }
+
         return true;
     }
-    
+
     /// <summary>
     /// 加载热更新DLL
     /// </summary>
@@ -143,6 +176,7 @@ public class HybridLauncher : MonoBehaviour
             Debug.unityLogger.LogError("LoadHotUpdateAssemblies", "HotUpdateDLLs is null or empty");
             return false;
         }
+
         var dllNames = JsonConvert.DeserializeObject<List<string>>(data);
         foreach (var DllName in dllNames)
         {
@@ -153,17 +187,20 @@ public class HybridLauncher : MonoBehaviour
                 Debug.unityLogger.LogError("LoadHotUpdateAssemblies", $"资源加载失败 {DllName}");
                 return false;
             }
+
             var dllData = dataHandle.GetRawFileData();
-            if (dllData == null|| dllData.Length == 0)
+            if (dllData == null || dllData.Length == 0)
             {
                 Debug.unityLogger.LogError("LoadHotUpdateAssemblies", $"获取Dll数据失败 {DllName}");
                 return false;
             }
+
             Assembly assembly = Assembly.Load(dllData);
-            
+
             Debug.unityLogger.Log(assembly.GetTypes());
             Debug.unityLogger.Log($"加载热更新Dll:{DllName}");
         }
+
         return true;
     }
 }

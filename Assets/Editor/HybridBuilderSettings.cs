@@ -99,12 +99,17 @@ public class HybridBuilderSettings : ScriptableObject
                 return;
             }
 
-            _buildOutputPath=Path.Combine(value,_releaseBuildVersion.ToString());
+            _buildOutputPath = value;
             EditorUtility.SetDirty(this);
         }
     }
 
     [SerializeField] private string _buildOutputPath;
+
+    public string GetBuildOutputPath()
+    {
+        return Path.Combine(buildOutputPath,_releaseBuildVersion.ToString());
+    }
 
     /// <summary>
     /// 补充元数据AOTDLL路径 收集器组合 名称
@@ -210,13 +215,7 @@ public class HybridBuilderSettings : ScriptableObject
             EditorUtility.SetDirty(this);
         }
     }
-
-
-    /// <summary>
-    /// 版本文件名
-    /// </summary>
-    public string versionFileName = "VERSION.txt";
-
+    
     /// <summary>
     /// 是否使用自增版本
     /// </summary>

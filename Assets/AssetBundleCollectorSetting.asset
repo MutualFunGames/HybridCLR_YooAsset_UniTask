@@ -89,32 +89,6 @@ MonoBehaviour:
         FilterRuleName: CollectAll
         AssetTags: 
         UserData: 
-    - GroupName: PatchedAOTDLL
-      GroupDesc: 
-      AssetTags: 
-      ActiveRuleName: EnableGroup
-      Collectors:
-      - CollectPath: Assets/HotUpdateAssets/AOTDLL
-        CollectorGUID: 11b7f96fc9278374ba086b0d6bd5c1cb
-        CollectorType: 0
-        AddressRuleName: AddressByFileName
-        PackRuleName: PackRawFile
-        FilterRuleName: CollectAll
-        AssetTags: 
-        UserData: 
-    - GroupName: HotUpdateDLL
-      GroupDesc: 
-      AssetTags: 
-      ActiveRuleName: EnableGroup
-      Collectors:
-      - CollectPath: Assets/HotUpdateAssets/HotUpdateDLL
-        CollectorGUID: a95223861ef7ae44da819502f678b5a3
-        CollectorType: 0
-        AddressRuleName: AddressByFileName
-        PackRuleName: PackRawFile
-        FilterRuleName: CollectAll
-        AssetTags: 
-        UserData: 
   - PackageName: SampleScript
     PackageDesc: "\u4EE3\u7801\u5305"
     EnableAddressable: 1
@@ -128,8 +102,8 @@ MonoBehaviour:
       AssetTags: 
       ActiveRuleName: EnableGroup
       Collectors:
-      - CollectPath: Assets/HotUpdateAssets/AOTDLL
-        CollectorGUID: 11b7f96fc9278374ba086b0d6bd5c1cb
+      - CollectPath: Assets/HotUpdateAssets/PatchedAOTDLL
+        CollectorGUID: 102f55701a56e2d4cb11f0bf1e5b472a
         CollectorType: 0
         AddressRuleName: AddressByFileName
         PackRuleName: PackRawFile
@@ -142,7 +116,7 @@ MonoBehaviour:
       ActiveRuleName: EnableGroup
       Collectors:
       - CollectPath: Assets/HotUpdateAssets/HotUpdateDLL
-        CollectorGUID: a95223861ef7ae44da819502f678b5a3
+        CollectorGUID: f4260c78318878841b48f22e19aef9a7
         CollectorType: 0
         AddressRuleName: AddressByFileName
         PackRuleName: PackRawFile

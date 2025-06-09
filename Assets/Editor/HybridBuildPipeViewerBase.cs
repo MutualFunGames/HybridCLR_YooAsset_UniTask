@@ -66,17 +66,17 @@ namespace YooAsset.Editor
             // 输出目录
             var assetOutputPar = Root.Q("AssetOutputPar");
             _buildOutputField = assetOutputPar.Q<TextField>("BuildOutput");
-            _buildOutputField.SetValueWithoutNotify(_hybridBuilderSettings.buildOutputPath);
+            _buildOutputField.SetValueWithoutNotify(_hybridBuilderSettings.GetBuildOutputPath());
             _buildOutputField.SetEnabled(false);
             
             var buildOutputPathBrowserButton = assetOutputPar.Q<Button>("BrowseButton");
             buildOutputPathBrowserButton.clicked += () =>
             {
-                var defaultPath=_hybridBuilderSettings.buildOutputPath;
+                var defaultPath=_hybridBuilderSettings.GetBuildOutputPath();
                 BrowserFolder(defaultPath, (selectPath) =>
                 {
                     _hybridBuilderSettings.buildOutputPath = selectPath;
-                    _buildOutputField.SetValueWithoutNotify(_hybridBuilderSettings.buildOutputPath);
+                    _buildOutputField.SetValueWithoutNotify(_hybridBuilderSettings. GetBuildOutputPath());
                 });
             };
             

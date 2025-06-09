@@ -6,11 +6,11 @@ using HybridCLR.Editor.Commands;
 using HybridCLR.Editor;
 using System.IO;
 using System.Linq;
-using Newtonsoft.Json;
 using System.Xml;
 using HybridCLR.Editor.AOT;
 using HybridCLR.Editor.HotUpdate;
 using HybridCLR.Editor.Meta;
+using Newtonsoft.Json;
 using UnityEditor.Build.Reporting;
 
 
@@ -68,9 +68,6 @@ public class BuildHelper
     [MenuItem("整合工具/打APK包")]
     public static void Debug_BuildAPK()
     {
-        CompileDllCommand.CompileDllActiveBuildTarget();
-        PrebuildCommand.GenerateAll();
-        
         var sampleOutputPath = Path.Combine(ProjectPath, "Bundles");
         BuildAPK(sampleOutputPath, "9999");
     }
@@ -80,8 +77,16 @@ public class BuildHelper
     /// </summary>
     /// <param name="outputPath">  APK/Project输出路径  </param>
     /// <param name="isExportProject">  是否导出AndroidProject  </param>
-    public static void BuildAPK(string outputPath, string version,Action callBack=null, bool isExportProject = false)
+    public static void BuildAPK(string outputPath, string version, bool isExportProject = false)
     {
+        //如果是生成代码，则只需要更新AOT和热更新代码即可
+        Il2CppDefGeneratorCommand.GenerateIl2CppDef();
+        //由于该方法中已经执行了生成热更新dll，因此无需重复执行生成热更新DLL
+        LinkGeneratorCommand.GenerateLinkXml();
+            
+        //补全热更新预制体依赖
+        BuildHelper.SupplementPrefabDependent();
+        
         BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions();
         buildPlayerOptions.scenes = GetBuildScenes();
         EditorUserBuildSettings.exportAsGoogleAndroidProject = isExportProject;
@@ -109,7 +114,17 @@ public class BuildHelper
         
         if (report.summary.result == BuildResult.Succeeded)
         {
-            callBack?.Invoke();
+            //获取需要补充元数据的AOTDLL列表
+            //这里为什么不执行Generate/AOTGenericReference和Generate/AotDlls
+            //因为前者本身就是生成用于参考的文件,和下面这个方法一致
+            //为什么不执行Generate/AotDlls,是因为执行AOT本质上就是打一次包并把裁剪后的AOTDLL拷贝到HybridCLRData目录下
+            //因此如果要打包,直接在打包后通过TaskBuildScript_SBP将AOTDLL拷贝到Package目录即可
+            BuildHelper.GetPatchedAOTAssemblyListToHybridCLRSettings();
+                            
+            //生成桥接函数
+            MethodBridgeGeneratorCommand.GenerateMethodBridgeAndReversePInvokeWrapper();
+            
+            //以上是必须要在打包Application时完成的方法
         }
 
         EditorUtility.ClearProgressBar();

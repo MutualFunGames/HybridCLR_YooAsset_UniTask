@@ -131,7 +131,7 @@ internal class FsmInitializePackage : IStateNode
         return hostPath;
 #else
         var activeBuildTarget = Application.platform;
-         return Path.Combine(hostServerIP, appVersion, activeBuildTarget.ToString());
+         return Path.Combine(hostServerIP,"Bundles", appVersion, activeBuildTarget.ToString(),_packageName,packageVersion);
 #endif
     }
 
