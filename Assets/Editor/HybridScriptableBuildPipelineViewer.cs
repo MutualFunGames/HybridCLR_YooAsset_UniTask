@@ -14,7 +14,6 @@ namespace YooAsset.Editor
     internal class HybridScriptableBuildPipelineViewer : HybridBuildPipeViewerBase
     {
         private HybridBuilderSettings _hybridBuilderSettings;
-
         public HybridScriptableBuildPipelineViewer(BuildTarget buildTarget,
             HybridBuilderSettings hybridBuilderSettings, VisualElement parent)
             : base(EBuildPipeline.ScriptableBuildPipeline, buildTarget, hybridBuilderSettings, parent)
@@ -31,7 +30,12 @@ namespace YooAsset.Editor
             {
                 return;
             }
-
+            var _buildPakcageInfos = new Dictionary<string, int>();
+            _buildPakcageInfos.Add(_hybridBuilderSettings.ScriptPackageName,_hybridBuilderSettings.ScriptBuildVersion);
+            _buildPakcageInfos.Add(_hybridBuilderSettings.AssetPackageName,_hybridBuilderSettings.AssetBuildVersion);
+            
+            var json = JsonConvert.SerializeObject(_buildPakcageInfos);
+            _hybridBuilderSettings.RuntimeSettings.PackageInfos= json;
             switch (_hybridBuilderSettings.hybridBuildOption)
             {
                 case HybridBuildOption.BuildScript:
@@ -57,6 +61,7 @@ namespace YooAsset.Editor
                         Debug.unityLogger.LogError("CheckScriptPathExsist", $"CheckScriptPathExsist Failed");
                         return;
                     }
+
                     BuildApplication();
                     StartBuild(false);
                     StartBuild(true);
@@ -74,21 +79,24 @@ namespace YooAsset.Editor
 
                     StartBuild(false);
                     StartBuild(true);
-                    EditorUtility.RevealInFinder(_hybridBuilderSettings. GetBuildOutputPath());
+                    EditorUtility.RevealInFinder(_hybridBuilderSettings.GetBuildOutputPath());
                     break;
                 case HybridBuildOption.BuildAsset:
                     StartBuild(true);
                     break;
             }
-            var json = JsonConvert.SerializeObject(_hybridBuilderSettings.RuntimeSettings);
-            File.WriteAllText(Path.Combine(_hybridBuilderSettings. buildOutputPath, "RuntimeSettings.json"), json);
+            
+            EditorUtility.SetDirty(_hybridBuilderSettings.RuntimeSettings);
+
+            json = JsonConvert.SerializeObject(_hybridBuilderSettings.RuntimeSettings);
+            File.WriteAllText(Path.Combine(_hybridBuilderSettings.buildOutputPath, "RuntimeSettings.json"), json);
         }
 
 
         void BuildApplication()
         {
             var activeBuildTarget = EditorUserBuildSettings.activeBuildTarget;
-            
+
             switch (activeBuildTarget)
             {
                 case BuildTarget.Android:
@@ -98,14 +106,14 @@ namespace YooAsset.Editor
                 case BuildTarget.StandaloneWindows:
                     break;
             }
-                                                     
+
             //为了保证一次打包所有的包Release版本一致，应该在打完所有包之后增加Release版本
             _hybridBuilderSettings.ReleaseBuildVersion++;
             _hybridBuilderSettings.RuntimeSettings.ReleaseBuildVersion =
                 _hybridBuilderSettings.ReleaseBuildVersion;
             EditorUtility.SetDirty(_hybridBuilderSettings.RuntimeSettings);
-                    
-            EditorUtility.RevealInFinder(_hybridBuilderSettings. GetBuildOutputPath());
+
+            EditorUtility.RevealInFinder(_hybridBuilderSettings.GetBuildOutputPath());
         }
 
         /// <summary>
@@ -153,7 +161,7 @@ namespace YooAsset.Editor
             HybridScriptableBuildParameters buildParameters = new HybridScriptableBuildParameters();
             buildParameters.PatchedAOTDLLCollectPath = _hybridBuilderSettings.PatchedAOTDLLCollectPath;
             buildParameters.HotUpdateDLLCollectPath = _hybridBuilderSettings.HotUpdateDLLCollectPath;
-            buildParameters.BuildOutputRoot = _hybridBuilderSettings. GetBuildOutputPath();
+            buildParameters.BuildOutputRoot = _hybridBuilderSettings.GetBuildOutputPath();
             buildParameters.IsBuildAsset = isBuildAsset;
 
             //打包后的拷贝目录,有需求可以自行更改,建议不要设置StreamingAsset，会随包打出
@@ -162,7 +170,8 @@ namespace YooAsset.Editor
             if (isBuildAsset)
             {
                 buildParameters.PackageName = _hybridBuilderSettings.AssetPackageName;
-                buildParameters.BuiltinShadersBundleName = GetBuiltinShaderBundleName(_hybridBuilderSettings.AssetPackageName);
+                buildParameters.BuiltinShadersBundleName =
+                    GetBuiltinShaderBundleName(_hybridBuilderSettings.AssetPackageName);
                 buildParameters.BuildPipeline = BuildPipeline.ToString();
                 buildParameters.BuildBundleType = (int) EBuildBundleType.AssetBundle;
                 buildParameters.PackageVersion = _hybridBuilderSettings.AssetBuildVersion.ToString();
@@ -170,11 +179,11 @@ namespace YooAsset.Editor
             else
             {
                 buildParameters.PackageName = _hybridBuilderSettings.ScriptPackageName;
-                buildParameters.BuildBundleType = (int)EBuildBundleType.RawBundle;
+                buildParameters.BuildBundleType = (int) EBuildBundleType.RawBundle;
                 buildParameters.BuildPipeline = nameof(EBuildPipeline.RawFileBuildPipeline);
                 buildParameters.PackageVersion = _hybridBuilderSettings.ScriptBuildVersion.ToString();
             }
-            
+
             buildParameters.EnableSharePackRule = true;
             buildParameters.VerifyBuildingResult = true;
             buildParameters.FileNameStyle = _hybridBuilderSettings.assetFileNameStyle;
@@ -197,9 +206,6 @@ namespace YooAsset.Editor
                 {
                     _hybridBuilderSettings.ScriptBuildVersion++;
                 }
-                _hybridBuilderSettings.RuntimeSettings.Packages.Add(buildParameters.PackageName,int.Parse(buildParameters.PackageVersion));
-                
-                EditorUtility.SetDirty(_hybridBuilderSettings.RuntimeSettings);
 
                 switch (_hybridBuilderSettings.hybridBuildOption)
                 {

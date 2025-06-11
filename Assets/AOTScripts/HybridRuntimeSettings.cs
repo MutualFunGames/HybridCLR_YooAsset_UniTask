@@ -18,11 +18,10 @@ public class HybridRuntimeSettings : ScriptableObject
     /// 发行版本
     /// </summary>
     public int ReleaseBuildVersion;
-    
-    
+
+
     /// <summary>
     /// 所有需要加载的包名以及对应的版本
     /// </summary>
-    public Dictionary<string,int> Packages=new Dictionary<string, int>();
-
+    public string PackageInfos;
 }

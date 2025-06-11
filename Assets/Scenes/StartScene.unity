@@ -167,7 +167,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   PlayMode: 2
-  RuntimeSettings: {fileID: 0}
+  RuntimeSettings: {fileID: 11400000, guid: 4107dd3a4c218484bb43db01bd18a82b, type: 2}
   RuntimeSettingsPath: http://192.168.5.2:8888/Bundles/RuntimeSettings.json
 --- !u!1 &612841249
 GameObject:

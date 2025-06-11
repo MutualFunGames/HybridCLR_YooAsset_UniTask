@@ -35,7 +35,16 @@ public class HybridLauncher : MonoBehaviour
 
     async UniTask Start()
     {
-        await LoadHybridRuntimeSettings();
+        if (PlayMode == EPlayMode.HostPlayMode)
+        {
+            await LoadHybridRuntimeSettings();   
+        }
+
+        if (!RuntimeSettings)
+        {
+            Debug.unityLogger.LogError("HybridLauncher", "HybridRuntimeSettings is Null");
+            return;
+        }
         
         // 游戏管理器
         GameManager.Instance.Behaviour = this;
@@ -50,15 +59,17 @@ public class HybridLauncher : MonoBehaviour
         var go = Resources.Load<GameObject>("PatchWindow");
         GameObject.Instantiate(go);
 
-        foreach (var package in RuntimeSettings.Packages.Keys)
+        var packageInfos = JsonConvert.DeserializeObject<Dictionary<string,int>>(RuntimeSettings.PackageInfos);
+        
+        foreach (var package in packageInfos)
         {
             // 开始补丁更新流程
-            var operation = new PatchOperation(package,RuntimeSettings.Packages[package], PlayMode, RuntimeSettings);
+            var operation = new PatchOperation(package.Key,package.Value, PlayMode, RuntimeSettings);
             YooAssets.StartOperation(operation);
             await operation;
         }
 
-        var scriptPackage = YooAssets.GetPackage(RuntimeSettings.Packages.Keys.ToArray()[0]);
+        var scriptPackage = YooAssets.GetPackage(packageInfos.Keys.ToArray()[0]);
         
         if (scriptPackage.InitializeStatus != EOperationStatus.Succeed)
         {
@@ -79,7 +90,7 @@ public class HybridLauncher : MonoBehaviour
 
 
         // 设置默认的资源包
-        var gamePackage = YooAssets.GetPackage(RuntimeSettings.Packages.Keys.ToArray()[1]);
+        var gamePackage = YooAssets.GetPackage(packageInfos.Keys.ToArray()[1]);
         YooAssets.SetDefaultPackage(gamePackage);
 
         // 切换到主页面场景

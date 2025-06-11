@@ -14,3 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   HostServerIP: http://192.168.5.2:8888/
   ReleaseBuildVersion: 26
+  PackageInfos: '{"SampleScript":58,"SmapleAsset":41}'
