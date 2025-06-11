@@ -19,8 +19,11 @@ public class HybridRuntimeSettings : ScriptableObject
     /// </summary>
     public string HostServerIP;
 
-
-
+    /// <summary>
+    /// 所有需要加载的包名
+    /// </summary>
+    public string[] Packages;
+    
     /// <summary>
     /// 发行版本
     /// </summary>

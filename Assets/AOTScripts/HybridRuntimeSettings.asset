@@ -13,8 +13,9 @@ MonoBehaviour:
   m_Name: HybridRuntimeSettings
   m_EditorClassIdentifier: 
   HostServerIP: http://192.168.5.2:8888/
+  Packages: []
   ReleaseBuildVersion: 26
   AssetBuildVersion: 36
-  ScriptBuildVersion: 51
+  ScriptBuildVersion: 52
   ScriptPackageName: SampleScript
   AssetPackageName: SmapleAsset

@@ -80,6 +80,11 @@ namespace YooAsset.Editor
                     StartBuild(true);
                     break;
             }
+            _hybridBuilderSettings.RuntimeSettings.Packages=new string[]
+            {
+                _hybridBuilderSettings.RuntimeSettings.ScriptPackageName,
+                _hybridBuilderSettings.RuntimeSettings.AssetPackageName
+            };
             var json = JsonConvert.SerializeObject(_hybridBuilderSettings.RuntimeSettings);
             File.WriteAllText(Path.Combine(_hybridBuilderSettings. buildOutputPath, "RuntimeSettings.json"), json);
         }

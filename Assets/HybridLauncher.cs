@@ -49,13 +49,7 @@ public class HybridLauncher : MonoBehaviour
         var go = Resources.Load<GameObject>("PatchWindow");
         GameObject.Instantiate(go);
 
-        string[] packages = new string[]
-            {
-                RuntimeSettings.ScriptPackageName,
-                RuntimeSettings.AssetPackageName
-            }
-            ;
-        foreach (var package in packages)
+        foreach (var package in RuntimeSettings.Packages)
         {
             // 开始补丁更新流程
             var operation = new PatchOperation(package, PlayMode, RuntimeSettings);
