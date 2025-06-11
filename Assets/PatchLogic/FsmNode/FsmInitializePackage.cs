@@ -113,25 +113,17 @@ internal class FsmInitializePackage : IStateNode
         //string hostServerIP = "http://10.0.2.2"; //安卓模拟器地址
         string hostServerIP = _runtimeSettings.HostServerIP;
         string appVersion =_runtimeSettings.ReleaseBuildVersion.ToString();
-        string packageVersion=string.Empty;
-        if (string.Equals(_packageName, _runtimeSettings.AssetPackageName))
-        {
-            packageVersion = _runtimeSettings.AssetBuildVersion.ToString();
-        }
-        else
-        {
-            packageVersion = _runtimeSettings.ScriptBuildVersion.ToString();
-        }
-
+        var packageVersion=(int)_machine.GetBlackboardValue("Version");
+        
 
 #if UNITY_EDITOR
         var activeBuildTarget = UnityEditor.EditorUserBuildSettings.activeBuildTarget;
-        var hostPath=Path.Combine(hostServerIP,"Bundles", appVersion, activeBuildTarget.ToString(),_packageName,packageVersion);
+        var hostPath=Path.Combine(hostServerIP,"Bundles", appVersion, activeBuildTarget.ToString(),_packageName,packageVersion.ToString());
         Debug.unityLogger.Log(hostPath);
         return hostPath;
 #else
         var activeBuildTarget = Application.platform;
-         return Path.Combine(hostServerIP,"Bundles", appVersion, activeBuildTarget.ToString(),_packageName,packageVersion);
+         return Path.Combine(hostServerIP,"Bundles", appVersion, activeBuildTarget.ToString(),_packageName,packageVersion.ToString());
 #endif
     }
 

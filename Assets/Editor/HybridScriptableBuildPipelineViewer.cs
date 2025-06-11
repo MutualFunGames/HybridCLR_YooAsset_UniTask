@@ -80,11 +80,6 @@ namespace YooAsset.Editor
                     StartBuild(true);
                     break;
             }
-            _hybridBuilderSettings.RuntimeSettings.Packages=new string[]
-            {
-                _hybridBuilderSettings.RuntimeSettings.ScriptPackageName,
-                _hybridBuilderSettings.RuntimeSettings.AssetPackageName
-            };
             var json = JsonConvert.SerializeObject(_hybridBuilderSettings.RuntimeSettings);
             File.WriteAllText(Path.Combine(_hybridBuilderSettings. buildOutputPath, "RuntimeSettings.json"), json);
         }
@@ -196,18 +191,14 @@ namespace YooAsset.Editor
             {
                 if (isBuildAsset)
                 {
-                    _hybridBuilderSettings.RuntimeSettings.AssetPackageName = _hybridBuilderSettings.AssetPackageName;
-                    _hybridBuilderSettings.RuntimeSettings.AssetBuildVersion = _hybridBuilderSettings.AssetBuildVersion;
                     _hybridBuilderSettings.AssetBuildVersion++;
                 }
                 else
                 {
-                    _hybridBuilderSettings.RuntimeSettings.ScriptPackageName = _hybridBuilderSettings.ScriptPackageName;
-                    _hybridBuilderSettings.RuntimeSettings.ScriptBuildVersion =
-                        _hybridBuilderSettings.ScriptBuildVersion;
                     _hybridBuilderSettings.ScriptBuildVersion++;
                 }
-
+                _hybridBuilderSettings.RuntimeSettings.Packages.Add(buildParameters.PackageName,int.Parse(buildParameters.PackageVersion));
+                
                 EditorUtility.SetDirty(_hybridBuilderSettings.RuntimeSettings);
 
                 switch (_hybridBuilderSettings.hybridBuildOption)
@@ -217,8 +208,6 @@ namespace YooAsset.Editor
                         EditorUtility.RevealInFinder(buildResult.OutputPackageDirectory);
                         break;
                 }
-
-                _hybridBuilderSettings.RuntimeSettings.EncryptionServices = buildParameters.EncryptionServices.GetType();
             }
         }
 

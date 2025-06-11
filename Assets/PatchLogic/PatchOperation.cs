@@ -18,7 +18,7 @@ public class PatchOperation : GameAsyncOperation
     private HybridRuntimeSettings _runtimeSettings;
     private ESteps _steps = ESteps.None;
 
-    public PatchOperation(string packageName,EPlayMode playMode,HybridRuntimeSettings hybridRuntimeSettings)
+    public PatchOperation(string packageName,int version,EPlayMode playMode,HybridRuntimeSettings hybridRuntimeSettings)
     {
         _packageName = packageName;
         _runtimeSettings=hybridRuntimeSettings;
@@ -41,6 +41,7 @@ public class PatchOperation : GameAsyncOperation
         _machine.AddNode<FsmEndPatch>();
         
         _machine.SetBlackboardValue("PackageName", packageName);
+        _machine.SetBlackboardValue("Version",version);
         _machine.SetBlackboardValue("HybridRuntimeSettings", hybridRuntimeSettings);
         _machine.SetBlackboardValue("PlayMode", playMode);
     }

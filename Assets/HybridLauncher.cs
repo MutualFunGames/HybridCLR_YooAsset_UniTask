@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using Cysharp.Threading.Tasks;
 using HybridCLR;
@@ -49,15 +50,16 @@ public class HybridLauncher : MonoBehaviour
         var go = Resources.Load<GameObject>("PatchWindow");
         GameObject.Instantiate(go);
 
-        foreach (var package in RuntimeSettings.Packages)
+        foreach (var package in RuntimeSettings.Packages.Keys)
         {
             // 开始补丁更新流程
-            var operation = new PatchOperation(package, PlayMode, RuntimeSettings);
+            var operation = new PatchOperation(package,RuntimeSettings.Packages[package], PlayMode, RuntimeSettings);
             YooAssets.StartOperation(operation);
             await operation;
         }
 
-        var scriptPackage = YooAssets.GetPackage(RuntimeSettings.ScriptPackageName);
+        var scriptPackage = YooAssets.GetPackage(RuntimeSettings.Packages.Keys.ToArray()[0]);
+        
         if (scriptPackage.InitializeStatus != EOperationStatus.Succeed)
         {
             Debug.unityLogger.LogError("ScriptPackage", "InitializeStatus is Falied");
@@ -77,7 +79,7 @@ public class HybridLauncher : MonoBehaviour
 
 
         // 设置默认的资源包
-        var gamePackage = YooAssets.GetPackage(RuntimeSettings.AssetPackageName);
+        var gamePackage = YooAssets.GetPackage(RuntimeSettings.Packages.Keys.ToArray()[1]);
         YooAssets.SetDefaultPackage(gamePackage);
 
         // 切换到主页面场景
