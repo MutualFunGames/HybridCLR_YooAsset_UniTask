@@ -60,14 +60,6 @@ namespace YooAsset.Editor
                     BuildApplication();
                     StartBuild(false);
                     StartBuild(true);
-                                         
-                    //为了保证一次打包所有的包Release版本一致，应该在打完所有包之后增加Release版本
-                    _hybridBuilderSettings.RuntimeSettings.ReleaseBuildVersion =
-                        _hybridBuilderSettings.ReleaseBuildVersion;
-                    _hybridBuilderSettings.ReleaseBuildVersion++;
-                    EditorUtility.SetDirty(_hybridBuilderSettings.RuntimeSettings);
-                    
-                    EditorUtility.RevealInFinder(_hybridBuilderSettings. GetBuildOutputPath());
                     break;
                 case HybridBuildOption.BuildAll:
                     if (CheckScriptPathExsist())
@@ -106,6 +98,14 @@ namespace YooAsset.Editor
                 case BuildTarget.StandaloneWindows:
                     break;
             }
+                                                     
+            //为了保证一次打包所有的包Release版本一致，应该在打完所有包之后增加Release版本
+            _hybridBuilderSettings.ReleaseBuildVersion++;
+            _hybridBuilderSettings.RuntimeSettings.ReleaseBuildVersion =
+                _hybridBuilderSettings.ReleaseBuildVersion;
+            EditorUtility.SetDirty(_hybridBuilderSettings.RuntimeSettings);
+                    
+            EditorUtility.RevealInFinder(_hybridBuilderSettings. GetBuildOutputPath());
         }
 
         /// <summary>

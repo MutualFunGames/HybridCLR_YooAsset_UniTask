@@ -26,6 +26,10 @@ public class TaskBuildScript_SBP : IBuildTask
             //获取需要补充元数据的AOTDLL列表
             BuildHelper.GetPatchedAOTAssemblyListToHybridCLRSettings();
         }
+        else
+        {
+            CompileDllCommand.CompileDllActiveBuildTarget();
+        }
         
 
         var projectPath = Directory.GetParent(Application.dataPath).FullName;
