@@ -36,7 +36,7 @@ public class BuildHelper
         return names.ToArray();
     }
     
-    [MenuItem("整合工具/验证元数据是否需要补充")]
+    [MenuItem("HybridTool/验证元数据是否需要补充")]
     public static bool CheckAccessMissingMetadata()
     {
         BuildTarget target = EditorUserBuildSettings.activeBuildTarget;
@@ -65,7 +65,7 @@ public class BuildHelper
 
         return true;
     }
-    [MenuItem("整合工具/打APK包")]
+    [MenuItem("HybridTool/打APK包")]
     public static void Debug_BuildAPK()
     {
         var sampleOutputPath = Path.Combine(ProjectPath, "Bundles");
@@ -172,7 +172,7 @@ public class BuildHelper
         gs.patchAOTAssemblies = patchtedAOTAssemblys.ToArray();
     }
 
-    [MenuItem("整合工具/获取需要补充元数据的Dll")]
+    [MenuItem("HybridTool/获取需要补充元数据的Dll")]
     public static void Debug_GetPatchedAOTAssemblyList()
     {
         CompileDllCommand.CompileDllActiveBuildTarget();
@@ -235,7 +235,7 @@ public class BuildHelper
         }
     }
 
-    [MenuItem("整合工具/生成AOT补充文件并复制进文件夹")]
+    [MenuItem("HybridTool/生成AOT补充文件并复制进文件夹")]
     public static void Debug_GenerateAOTDllListFile()
     {
         //先生成AOT文件
@@ -249,7 +249,7 @@ public class BuildHelper
         CopyPatchedAOTDllToCollectPath(aotDllRawFileCollectPath);
     }
 
-    [MenuItem("整合工具/生成热更新Dll并复制进文件夹")]
+    [MenuItem("HybridTool/生成热更新Dll并复制进文件夹")]
     public static void Debug_GenerateHotUpdateDllListFile()
     {
         CompileDllCommand.CompileDllActiveBuildTarget();
@@ -307,7 +307,7 @@ public class BuildHelper
         Debug.Log("沙盒文件夹删除成功");
     }
 
-    [MenuItem("整合工具/补全热更新预制体依赖")]
+    [MenuItem("HybridTool/补全热更新预制体依赖")]
     public static void Debug_SupplementPrefabDependent()
     {
         EditorUtility.DisplayProgressBar("Progress", "Find Class...", 0);

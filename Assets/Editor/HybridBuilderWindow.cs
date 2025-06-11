@@ -19,7 +19,7 @@ public class HybridBuilderWindow : EditorWindow
     private ToolbarMenu _hybridRuntimeSettingMenu;
     private VisualElement _container;
 
-    [MenuItem("整合工具/Hybrid Builder", false, 102)]
+    [MenuItem("HybridTool/Hybrid Builder", false, 102)]
     public static void OpenWindow()
     {
         HybridBuilderWindow window =
