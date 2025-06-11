@@ -40,7 +40,7 @@ public class BuildHelper
     /// 一般来说，发布热更新包时，由于中间可能调用过generate/all，SettingsUtil.GetAssembliesPostIl2CppStripDir(target)目录中包含了最新的aot dll，
     /// 肯定无法检查出类型或者函数裁剪的问题。
     /// 需要在构建完主包后，将当时的aot dll保存下来，供后面补充元数据或者裁剪检查。
-    ///  换句话说,验证一定要在打包之前,或者Generate/AotDlls之前执行
+    ///  换句话说,验证的可靠性是建立在当前热更新数据对比上次构建应用时已被裁切后的AOTDLL进行对比得到的
     /// </summary>
     /// <returns></returns>
     [MenuItem("HybridTool/验证元数据是否需要补充")]

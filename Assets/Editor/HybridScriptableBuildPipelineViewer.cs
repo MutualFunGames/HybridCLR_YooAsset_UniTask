@@ -30,6 +30,7 @@ namespace YooAsset.Editor
             {
                 return;
             }
+            
             var _buildPakcageInfos = new Dictionary<string, int>();
             _buildPakcageInfos.Add(_hybridBuilderSettings.ScriptPackageName,_hybridBuilderSettings.ScriptBuildVersion);
             _buildPakcageInfos.Add(_hybridBuilderSettings.AssetPackageName,_hybridBuilderSettings.AssetBuildVersion);
@@ -39,6 +40,11 @@ namespace YooAsset.Editor
             switch (_hybridBuilderSettings.hybridBuildOption)
             {
                 case HybridBuildOption.BuildScript:
+                    if (!BuildHelper.CheckAccessMissingMetadata())
+                    {
+                        Debug.unityLogger.LogError("BuildPiepeline", $"热更新代码引用了被裁切的类,应执行Build Application流程");
+                        return;
+                    }
                     if (CheckScriptPathExsist())
                     {
                         Debug.unityLogger.Log($"CheckScriptPathExsist Success");
@@ -67,6 +73,11 @@ namespace YooAsset.Editor
                     StartBuild(true);
                     break;
                 case HybridBuildOption.BuildAll:
+                    if (!BuildHelper.CheckAccessMissingMetadata())
+                    {
+                        Debug.unityLogger.LogError("BuildPiepeline", $"热更新代码引用了被裁切的类,应执行Build Application流程");
+                        return;
+                    }
                     if (CheckScriptPathExsist())
                     {
                         Debug.unityLogger.Log($"CheckScriptPathExsist Success");
