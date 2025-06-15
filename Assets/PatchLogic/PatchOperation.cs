@@ -18,7 +18,7 @@ public class PatchOperation : GameAsyncOperation
     private HybridRuntimeSettings _runtimeSettings;
     private ESteps _steps = ESteps.None;
 
-    public PatchOperation(string packageName,int version,EPlayMode playMode,HybridRuntimeSettings hybridRuntimeSettings)
+    public PatchOperation(string packageName,string version,EPlayMode playMode,HybridRuntimeSettings hybridRuntimeSettings)
     {
         _packageName = packageName;
         _runtimeSettings=hybridRuntimeSettings;

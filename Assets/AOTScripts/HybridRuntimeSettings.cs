@@ -23,5 +23,5 @@ public class HybridRuntimeSettings : ScriptableObject
     /// <summary>
     /// 所有需要加载的包名以及对应的版本
     /// </summary>
-    public string PackageInfos;
+    public string Packages;
 }

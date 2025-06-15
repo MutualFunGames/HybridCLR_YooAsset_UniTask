@@ -117,25 +117,6 @@ namespace YooAsset.Editor
             var assetBundlePackageContainer = Root.Q("AssetBundlePackageContainer");
             
             int assetPakcageIndex = 0;
-            var assetPakcageOption = new PopupField<string>(packageNames, assetPakcageIndex);
-            assetPakcageOption.label="Asset Package";
-            assetPakcageOption.style.width = StyleWidth;
-            assetPakcageOption.RegisterValueChangedCallback(evt =>
-            {
-                _hybridBuilderSettings.AssetPackageName = evt.newValue;
-            });
-            
-            if (string.IsNullOrEmpty(_hybridBuilderSettings.AssetPackageName))
-            {
-                _hybridBuilderSettings.AssetPackageName = packageNames[0];
-            }
-            else
-            {
-                assetPakcageOption.SetValueWithoutNotify(_hybridBuilderSettings.AssetPackageName);
-            }
-            assetBundlePackageContainer.Add(assetPakcageOption);
-            
-            
             var scriptPackageOption = new PopupField<string>(packageNames, assetPakcageIndex);
             scriptPackageOption.label="Script Package";
             scriptPackageOption.style.width = StyleWidth;
@@ -152,6 +133,42 @@ namespace YooAsset.Editor
                 scriptPackageOption.SetValueWithoutNotify(_hybridBuilderSettings.ScriptPackageName);
             }
             assetBundlePackageContainer.Add(scriptPackageOption);
+
+            #region 构建资源包
+
+            var buildPackageFolderout = new Foldout();
+            buildPackageFolderout.text = "Select Build Asset Packages";
+            assetBundlePackageContainer.Add(buildPackageFolderout);
+            buildPackageFolderout.style.width = StyleWidth;
+
+            var selectablePackages = new List<string>(packageNames);
+            selectablePackages.Remove(_hybridBuilderSettings.ScriptPackageName);
+            foreach (var package in selectablePackages)
+            {
+                var packageToggle = new Toggle(package);
+                packageToggle.style.width = StyleWidth;
+                packageToggle.RegisterValueChangedCallback(select =>
+                {
+                    if (select.newValue)
+                    {
+                        _hybridBuilderSettings.AssetPackages.Add(package);
+                    }
+                    else
+                    {
+                        _hybridBuilderSettings.AssetPackages.Remove(package);
+                    }
+                });
+                if (_hybridBuilderSettings.AssetPackages.Contains(package))
+                {
+                    packageToggle.SetValueWithoutNotify(true);
+                }
+
+                buildPackageFolderout.Add(packageToggle);
+                
+            }           
+
+            #endregion
+ 
             
             // 加密方法
             {
@@ -300,7 +317,7 @@ namespace YooAsset.Editor
             UIElementsTools.SetElementLabelMinWidth(_clearBuildCacheToggle, LabelMinWidth);
             UIElementsTools.SetElementLabelMinWidth(_useAssetDependencyDBToggle, LabelMinWidth);
             UIElementsTools.SetElementLabelMinWidth(hybridBuildOption, LabelMinWidth);
-            UIElementsTools.SetElementLabelMinWidth(assetPakcageOption, LabelMinWidth);
+            UIElementsTools.SetElementLabelMinWidth(buildPackageFolderout, LabelMinWidth);
             UIElementsTools.SetElementLabelMinWidth(scriptPackageOption, LabelMinWidth);
             UIElementsTools.SetElementLabelMinWidth(_patchedAOTDLLFolderField, LabelMinWidth);
             UIElementsTools.SetElementLabelMinWidth(_hotUpdateDLLFolderField, LabelMinWidth);

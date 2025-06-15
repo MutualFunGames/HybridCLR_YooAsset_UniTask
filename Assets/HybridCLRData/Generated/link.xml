@@ -26,8 +26,6 @@
     <type fullname="UnityEngine.MonoBehaviour" preserve="all" />
     <type fullname="UnityEngine.Object" preserve="all" />
     <type fullname="UnityEngine.Quaternion" preserve="all" />
-    <type fullname="UnityEngine.SceneManagement.LoadSceneMode" preserve="all" />
-    <type fullname="UnityEngine.SceneManagement.LocalPhysicsMode" preserve="all" />
     <type fullname="UnityEngine.Texture" preserve="all" />
     <type fullname="UnityEngine.Texture2D" preserve="all" />
     <type fullname="UnityEngine.Transform" preserve="all" />
@@ -45,7 +43,6 @@
     <type fullname="YooAsset.EOperationStatus" preserve="all" />
     <type fullname="YooAsset.HandleBase" preserve="all" />
     <type fullname="YooAsset.InstantiateOperation" preserve="all" />
-    <type fullname="YooAsset.SceneHandle" preserve="all" />
     <type fullname="YooAsset.YooAssets" preserve="all" />
   </assembly>
   <assembly fullname="mscorlib">

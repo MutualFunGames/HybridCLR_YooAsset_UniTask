@@ -37,7 +37,15 @@ public class HybridLauncher : MonoBehaviour
     {
         if (PlayMode == EPlayMode.HostPlayMode)
         {
-            await LoadHybridRuntimeSettings();   
+            try
+            {
+                await LoadHybridRuntimeSettings();   
+            }
+            catch (Exception e)
+            {
+                Debug.unityLogger.LogError("HybridLauncher", $"HybridRuntimeSettings {e}");
+                throw;
+            }
         }
 
         if (!RuntimeSettings)
@@ -59,24 +67,22 @@ public class HybridLauncher : MonoBehaviour
         var go = Resources.Load<GameObject>("PatchWindow");
         GameObject.Instantiate(go);
 
-        var packageInfos = JsonConvert.DeserializeObject<Dictionary<string,int>>(RuntimeSettings.PackageInfos);
-        
-        foreach (var package in packageInfos)
+        var packages = JsonConvert.DeserializeObject<Dictionary<string, string>>(RuntimeSettings.Packages);
+
+        foreach (var package in packages)
         {
             // 开始补丁更新流程
             var operation = new PatchOperation(package.Key,package.Value, PlayMode, RuntimeSettings);
             YooAssets.StartOperation(operation);
             await operation;
+            if (operation.Status != EOperationStatus.Succeed)
+            {
+                Debug.unityLogger.LogError("ScriptPackage", "InitializeStatus is Falied");
+                return;
+            }
         }
-
-        var scriptPackage = YooAssets.GetPackage(packageInfos.Keys.ToArray()[0]);
+        var scriptPackage = YooAssets.GetPackage("SampleScript");
         
-        if (scriptPackage.InitializeStatus != EOperationStatus.Succeed)
-        {
-            Debug.unityLogger.LogError("ScriptPackage", "InitializeStatus is Falied");
-            return;
-        }
-
         if (!await LoadMetadataForAOTAssemblies(scriptPackage))
         {
             Debug.unityLogger.LogError("LoadMetadataForAOTAssemblies", "Load Falied");
@@ -87,10 +93,9 @@ public class HybridLauncher : MonoBehaviour
         {
             Debug.unityLogger.LogError("LoadHotUpdateAssemblies", "Load Falied");
         }
-
-
+        
         // 设置默认的资源包
-        var gamePackage = YooAssets.GetPackage(packageInfos.Keys.ToArray()[1]);
+        var gamePackage = YooAssets.GetPackage("SmapleAsset");
         YooAssets.SetDefaultPackage(gamePackage);
 
         // 切换到主页面场景
@@ -123,8 +128,8 @@ public class HybridLauncher : MonoBehaviour
         Debug.unityLogger.Log(data);
         RuntimeSettings = JsonConvert.DeserializeObject<HybridRuntimeSettings>(data);
     }
-
-    /// <summary>
+    
+            /// <summary>
     /// 加载补充元数据的AOTDLL
     /// </summary>
     /// <param name="scriptPackage"></param>
@@ -210,4 +215,5 @@ public class HybridLauncher : MonoBehaviour
 
         return true;
     }
+    
 }

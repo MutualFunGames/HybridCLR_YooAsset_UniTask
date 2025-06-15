@@ -7,9 +7,13 @@ using System.Threading;
 using System;
 using YooAsset;
 using System.IO;
+using System.Reflection;
+using HybridCLR;
+using Newtonsoft.Json;
 
 public class HotUpdateLauncher : MonoBehaviour
 {
+    public Text SampleText;
     public static void Run()
     {
         
@@ -17,11 +21,12 @@ public class HotUpdateLauncher : MonoBehaviour
     // Start is called before the first frame update
     public async UniTaskVoid Start()
     {
-        //await YooAssets.LoadSceneAsync("HotUpdateScene");
-        await YooAssets.LoadSceneAsync("HotUpdateScene");
-        //Debug.Log("热更新测试");
+        var gamePackage = YooAssets.GetPackage("SmapleAsset");
+        var scriptPackage = YooAssets.GetPackage("SampleScript");
+        SampleText.text=$"CurrentAssetVersion:{gamePackage.GetPackageVersion()},CurrentScriptVersion:{scriptPackage.GetPackageVersion()}";
     }
     void Update()
     {
     }
+    
 }

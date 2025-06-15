@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -48,24 +49,12 @@ public class HybridBuilderSettings : ScriptableObject
     
     public HybridRuntimeSettings RuntimeSettings;
 
+    
     /// <summary>
-    /// 资产包包名
+    /// 构建的所有资源包包名
     /// </summary>
-    public string AssetPackageName
-    {
-        get => assetPackageName;
-        set
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                return;
-            }
-            assetPackageName = value;
-            EditorUtility.SetDirty(this);
-        }
-    }
-    [SerializeField] private string assetPackageName;
-
+    public List<string> AssetPackages=new List<string>();
+    
 
     /// <summary>
     /// 代码包包名

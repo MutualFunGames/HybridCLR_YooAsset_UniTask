@@ -10,16 +10,6 @@ public class HybridScriptableBuildParameters : BuildParameters
         /// </summary>
         public ECompressOption CompressOption = ECompressOption.Uncompressed;
         
-        /// <summary>
-        /// 混合构建选项
-        /// </summary>
-        public HybridBuildOption HybridBuildOption= HybridBuildOption.None;
-
-        
-        /// <summary>
-        /// 是否构建纯资产包
-        /// </summary>
-        public bool IsBuildAsset;
         
         /// <summary>
         /// 热更新DLL打包路径

@@ -81,7 +81,7 @@ public class BuildHelper
     /// </summary>
     /// <param name="outputPath">  APK/Project输出路径  </param>
     /// <param name="isExportProject">  是否导出AndroidProject  </param>
-    public static void BuildAPK(string outputPath, string version, bool isExportProject = false)
+    public static bool BuildAPK(string outputPath, string version, bool isExportProject = false)
     {
         //如果是生成代码，则只需要更新AOT和热更新代码即可
         Il2CppDefGeneratorCommand.GenerateIl2CppDef();
@@ -128,10 +128,12 @@ public class BuildHelper
             //生成桥接函数
             MethodBridgeGeneratorCommand.GenerateMethodBridgeAndReversePInvokeWrapper();
             
+            EditorUtility.ClearProgressBar();
             //以上是必须要在打包Application时完成的方法
+            return true;
         }
-
         EditorUtility.ClearProgressBar();
+        return false;
     }
 
     /// <summary>
