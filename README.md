@@ -197,7 +197,7 @@ StripAOTDllCommand.GenerateStripedAOTDlls();
 
 当项目中少于2个Packages,会导致报错
 
-![image-20250616004848917](E:\UnityProject\HybridCLR_YooAsset_UniTask\README\Packages.png)
+![README\Packages](README\Packages.png)
 
 此处可选的Package是通过扫描整个工程得到
 
