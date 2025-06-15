@@ -197,7 +197,9 @@ StripAOTDllCommand.GenerateStripedAOTDlls();
 
 当项目中少于2个Packages,会导致报错
 
-![README\Packages.png](README\Packages.png)
+![Packages](README/Packages.png)
+
+
 
 此处可选的Package是通过扫描整个工程得到
 
