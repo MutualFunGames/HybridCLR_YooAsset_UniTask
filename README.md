@@ -6,7 +6,7 @@
 
 
 
-本仓库基于`Unity2022.3.5.7f1c2` ,`HybridCLR8.2.0`,``YooAsset2.3.9`,`UniTask2.5.10`版本进行整合
+本仓库基于`Unity2022.3.5.7f1c2` ,`HybridCLR8.2.0`,`YooAsset2.3.9`,`UniTask2.5.10`版本进行整合
 
 提供一个较为简单的上手文档
 
