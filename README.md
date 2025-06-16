@@ -409,16 +409,16 @@ https://docs.unity.cn/cn/2020.3/Manual/ManagedCodeStripping.html
 3. 直接关闭代码裁剪,会导致包体大5M左右,这种方式最方便
 4. 使用整合工具-补全热更新预制体依赖,这种方式可以在AOT更新前,人为的将所有没有被HybridCLR引用的组件和类添加到link.xml中,在我的测试中,包体大概大了400K左右,大概处于较方便,且对包体影响较小,还能保持代码的简洁,缺点就是可能会添加很多无用的类进link.xml中,且需要根据项目手动的修改方法
 
-## 相关文档引用
+## 相关仓库
 
 ### HybridCLR
 
-https://hybridclr.doc.code-philosophy.com/#/README
+https://github.com/focus-creative-games/hybridclr
 
 ### YooAsset
 
-https://www.yooasset.com/docs/Introduce
+https://github.com/tuyoogame/YooAsset
 
 ### UniTask
 
-https://github.com/Cysharp/UniTask/blob/master/README_CN.md
+https://github.com/Cysharp/UniTask
