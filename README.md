@@ -84,7 +84,7 @@ HybridCLR在每次出包时,需要编译热更新代码,执行`CompileDll-Activi
 
 ### 初次运行工程
 
-1. 执行`HybridCLR-Installer`安装HybridCLR环境
+1. 执行`HybridCLR-Installer`安装HybridCLR环境,并执行Gemerate-All
 2. 在`YooAsset-AssetBundleCollector`中配置资源与代码包
 3. 通过`Project-Create-ScriptableObject`创建`HybridBuilderSettings`与`HybridRuntimeSettings`
 4. 在StartScene的Boot物体上,配置`YooAsset运行模式`,如果是`HostPlayMode`,则需要添加`HybridRuntimeSettings`
