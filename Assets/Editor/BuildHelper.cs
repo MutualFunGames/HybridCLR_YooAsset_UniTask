@@ -33,6 +33,8 @@ public class BuildHelper
                 names.Add(e.path);
         }
 
+        HotUpdateLauncher launcher = new HotUpdateLauncher();
+        launcher.test();
         return names.ToArray();
     }
 

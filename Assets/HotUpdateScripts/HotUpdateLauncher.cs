@@ -10,6 +10,7 @@ using System.IO;
 using System.Reflection;
 using HybridCLR;
 using Newtonsoft.Json;
+using UnityEngine.Networking;
 
 public class HotUpdateLauncher : MonoBehaviour
 {
@@ -24,6 +25,11 @@ public class HotUpdateLauncher : MonoBehaviour
         var gamePackage = YooAssets.GetPackage("SmapleAsset");
         var scriptPackage = YooAssets.GetPackage("SampleScript");
         SampleText.text=$"CurrentAssetVersion:{gamePackage.GetPackageVersion()},CurrentScriptVersion:{scriptPackage.GetPackageVersion()}";
+    }
+
+    public void test()
+    {
+        
     }
     void Update()
     {
